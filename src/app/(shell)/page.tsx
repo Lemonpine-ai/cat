@@ -53,7 +53,7 @@ function aggregateDailySummary(rows: DailySummaryRow[]): CatDailySummaryItem[] {
 }
 
 /**
- * CATvisor 민트 홈 — Supabase cats + cat_logs + 2×2 카메라 격자.
+ * CATvisor 민트 홈 — Supabase cats + cat_logs + 카메라 관리.
  */
 export default async function HomePage() {
   let cats: CatProfileRow[] = [];
@@ -61,9 +61,21 @@ export default async function HomePage() {
   let activityLogs: ActivityLogListItem[] = [];
   let activityLogsFetchError: string | null = null;
   let dailySummary: CatDailySummaryItem[] = [];
+  let homeId: string | null = null;
 
   try {
     const supabase = await createSupabaseServerClient();
+
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (user) {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("home_id")
+        .eq("id", user.id)
+        .single();
+      homeId = profile?.home_id ?? null;
+    }
 
     const { data: catRows, error: catsError } = await supabase
       .from("cats")
@@ -125,6 +137,7 @@ export default async function HomePage() {
 
   return (
     <CatvisorHomeDashboard
+      homeId={homeId ?? ""}
       initialActivityLogs={activityLogs}
       activityLogsFetchError={activityLogsFetchError}
       catsLookupForActivity={catsLookupForActivity}

@@ -180,3 +180,67 @@
   padding: 0 1rem;
   word-break: break-all;
 }
+
+/* ── 로딩 ── */
+.loadingSpinner {
+  width: 36px;
+  height: 36px;
+  border: 3px solid #3d444d;
+  border-top-color: #34d399;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  align-self: center;
+  margin: auto;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── 미페어링 상태 ── */
+.unpairedCard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  padding: 2.5rem 2rem;
+  margin: auto;
+  max-width: 320px;
+  text-align: center;
+}
+
+.unpairedIcon {
+  font-size: 4rem;
+  line-height: 1;
+}
+
+.unpairedTitle {
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: #f0f6fc;
+}
+
+.unpairedDesc {
+  margin: 0;
+  font-size: 0.88rem;
+  color: #8b949e;
+  line-height: 1.6;
+}
+
+.btnPairLink {
+  display: block;
+  width: 100%;
+  padding: 0.9rem 1.5rem;
+  background: #22d3ee;
+  color: #0d1117;
+  font-size: 0.95rem;
+  font-weight: 700;
+  border-radius: 12px;
+  text-decoration: none;
+  transition: background 0.15s;
+}
+
+.btnPairLink:active {
+  background: #06b6d4;
+}

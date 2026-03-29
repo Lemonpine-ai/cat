@@ -1,0 +1,203 @@
+.page {
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #f0fdf4 0%, #ccfbf1 50%, #e0f2fe 100%);
+  padding: 1.5rem;
+}
+
+.container {
+  width: 100%;
+  max-width: 420px;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  align-items: center;
+}
+
+.progressRow {
+  display: flex;
+  align-items: center;
+  gap: 0;
+}
+
+.progressDot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #cbd5e1;
+  flex-shrink: 0;
+  transition: background 0.3s;
+}
+
+.progressDotActive {
+  background: #0d9488;
+}
+
+.progressLine {
+  width: 40px;
+  height: 2px;
+  background: #cbd5e1;
+}
+
+.card {
+  width: 100%;
+  background: #fff;
+  border-radius: 20px;
+  padding: 2rem 1.75rem 1.75rem;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.iconWrap {
+  font-size: 2.8rem;
+  line-height: 1;
+  text-align: center;
+  margin-bottom: 0.25rem;
+}
+
+.title {
+  margin: 0;
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: #0f172a;
+  text-align: center;
+  line-height: 1.35;
+}
+
+.desc {
+  margin: 0;
+  font-size: 0.88rem;
+  color: #64748b;
+  text-align: center;
+  line-height: 1.55;
+}
+
+.error {
+  margin: 0;
+  font-size: 0.84rem;
+  color: #dc2626;
+  background: #fef2f2;
+  border: 1px solid #fca5a5;
+  border-radius: 8px;
+  padding: 0.6rem 0.85rem;
+}
+
+.fieldGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #475569;
+}
+
+.input {
+  width: 100%;
+  padding: 0.7rem 0.9rem;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 10px;
+  font-size: 0.95rem;
+  color: #0f172a;
+  background: #f8fafc;
+  transition: border-color 0.15s;
+  box-sizing: border-box;
+}
+
+.input:focus {
+  outline: none;
+  border-color: #0d9488;
+  background: #fff;
+}
+
+.catList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.catRow {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.inputBreed {
+  flex: 0 0 38%;
+}
+
+.btnRemove {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: #fef2f2;
+  color: #dc2626;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btnAddCat {
+  align-self: flex-start;
+  border: none;
+  background: none;
+  color: #0d9488;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0.25rem 0;
+}
+
+.actionRow {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 0.25rem;
+}
+
+.btnPrimary {
+  flex: 1;
+  padding: 0.85rem 1.5rem;
+  background: #0d9488;
+  color: #fff;
+  font-size: 0.95rem;
+  font-weight: 700;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+}
+
+.btnPrimary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btnPrimary:not(:disabled):active {
+  background: #0f766e;
+  transform: scale(0.97);
+}
+
+.btnSkip {
+  padding: 0.85rem 1rem;
+  background: transparent;
+  color: #94a3b8;
+  font-size: 0.88rem;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.btnSkip:hover {
+  background: #f8fafc;
+}

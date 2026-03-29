@@ -3,12 +3,16 @@ import { NextResponse, type NextRequest } from "next/server";
 
 /**
  * 보호 대상에서 제외할 경로 프리픽스.
- * /login, /auth/callback 은 인증 없이 접근 가능해야 합니다.
+ * - /login, /auth: 인증 전용 페이지
+ * - /camera/pair: 로그인 없이 4자리 코드로 카메라 페어링
+ * - /camera/broadcast: device_token으로 자체 인증하는 방송 페이지
  */
 function isPublicPath(pathname: string): boolean {
   return (
     pathname.startsWith("/login") ||
-    pathname.startsWith("/auth")
+    pathname.startsWith("/auth") ||
+    pathname.startsWith("/camera/pair") ||
+    pathname.startsWith("/camera/broadcast")
   );
 }
 

@@ -5,8 +5,8 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 /**
  * 메인 셸 — 헤더·하단 탭이 있는 화면(홈·리포트 등).
- * Middleware 이후 2차 서버 사이드 인증 검사를 수행합니다.
- * 로그인 등 인증 전용 화면은 이 레이아웃 밖에 둡니다.
+ * 1) 로그인 여부 확인 → 미로그인 시 /login
+ * 2) home_id 여부 확인 → 홈 미설정 시 /onboarding
  */
 export default async function MainShellLayout({
   children,
@@ -14,6 +14,7 @@ export default async function MainShellLayout({
   children: React.ReactNode;
 }>) {
   let userExists = false;
+  let hasHome = false;
 
   try {
     const supabase = await createSupabaseServerClient();
@@ -21,6 +22,15 @@ export default async function MainShellLayout({
       data: { user },
     } = await supabase.auth.getUser();
     userExists = Boolean(user);
+
+    if (user) {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("home_id")
+        .eq("id", user.id)
+        .single();
+      hasHome = Boolean(profile?.home_id);
+    }
   } catch (supabaseInitError) {
     const isEnvMissing =
       supabaseInitError instanceof Error &&
@@ -32,6 +42,10 @@ export default async function MainShellLayout({
 
   if (!userExists) {
     redirect("/login");
+  }
+
+  if (!hasHome) {
+    redirect("/onboarding");
   }
 
   return (

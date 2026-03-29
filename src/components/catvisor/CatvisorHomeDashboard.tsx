@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { type ReactNode, useEffect, useId, useRef, useState } from "react";
+import { CameraDeviceManager } from "@/components/catvisor/CameraDeviceManager";
 import { CameraLiveViewer } from "@/components/catvisor/CameraLiveViewer";
 import { RecentCatActivityLog } from "@/components/catvisor/RecentCatActivityLog";
 import { TodaySummaryCards } from "@/components/catvisor/TodaySummaryCards";
@@ -58,6 +59,7 @@ type CatLookupForActivity = {
 
 type CatvisorHomeDashboardProps = {
   children?: ReactNode;
+  homeId: string;
   initialActivityLogs: ActivityLogListItem[];
   activityLogsFetchError: string | null;
   catsLookupForActivity: CatLookupForActivity[];
@@ -65,10 +67,11 @@ type CatvisorHomeDashboardProps = {
 };
 
 /**
- * 카메라 중심 홈 — 흐름: 고양이 카드 → 오늘 요약 → 환경 → 카메라 → 활동.
+ * 카메라 중심 홈 — 흐름: 고양이 카드 → 오늘 요약 → 환경 → 카메라 기기 관리 → 활동.
  */
 export function CatvisorHomeDashboard({
   children,
+  homeId,
   initialActivityLogs,
   activityLogsFetchError,
   catsLookupForActivity,
@@ -226,8 +229,11 @@ export function CatvisorHomeDashboard({
           </button>
         </div>
 
-        {/* ② 카메라 — 라이브 뷰어 + 2×2 타일 */}
+        {/* ② 카메라 — 기기 관리 + 라이브 뷰어 + 2×2 타일 */}
         <section className={styles.cameraSection} aria-label="카메라 뷰">
+          {/* 등록된 카메라 기기 목록 및 페어링 코드 발급 */}
+          {homeId ? <CameraDeviceManager homeId={homeId} /> : null}
+
           {/* 라이브 방송이 있으면 자동 연결해서 영상을 보여줌 */}
           <CameraLiveViewer />
 

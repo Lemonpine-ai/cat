@@ -11,7 +11,12 @@ const WEBRTC_ICE_SERVERS: RTCIceServer[] = [
   { urls: "stun:stun.cloudflare.com:3478" },
 ];
 
+const DEVICE_TOKEN_STORAGE_KEY = "catvisor_device_token";
+const DEVICE_NAME_STORAGE_KEY = "catvisor_device_name";
+
 type BroadcastPhase =
+  | "loading"
+  | "unpaired"
   | "idle"
   | "acquiring"
   | "ready"
@@ -19,22 +24,20 @@ type BroadcastPhase =
   | "live"
   | "error";
 
-type CameraBroadcastClientProps = {
-  userId: string;
-  homeId: string;
-  broadcasterDisplayName: string;
+type DeviceIdentity = {
+  deviceToken: string;
+  deviceName: string;
 };
 
 /**
  * 남는 폰에서 실행하는 WebRTC 방송 클라이언트.
- * getUserMedia → RTCPeerConnection(offerer) → Supabase Realtime 시그널링.
+ * localStorage의 device_token으로 인증 → SECURITY DEFINER 함수로 세션 생성 → Realtime 시그널링.
  */
-export function CameraBroadcastClient({
-  userId,
-  homeId,
-  broadcasterDisplayName,
-}: CameraBroadcastClientProps) {
-  const [broadcastPhase, setBroadcastPhase] = useState<BroadcastPhase>("idle");
+export function CameraBroadcastClient() {
+  const supabase = createSupabaseBrowserClient();
+
+  const [broadcastPhase, setBroadcastPhase] = useState<BroadcastPhase>("loading");
+  const [deviceIdentity, setDeviceIdentity] = useState<DeviceIdentity | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [peerConnectionState, setPeerConnectionState] =
     useState<RTCPeerConnectionState>("new");
@@ -47,7 +50,20 @@ export function CameraBroadcastClient({
   const sessionIdRef = useRef<string | null>(null);
   const isCleaningUpRef = useRef(false);
 
-  const supabase = createSupabaseBrowserClient();
+  useEffect(() => {
+    const storedToken = localStorage.getItem(DEVICE_TOKEN_STORAGE_KEY);
+    const storedName = localStorage.getItem(DEVICE_NAME_STORAGE_KEY);
+
+    if (storedToken) {
+      setDeviceIdentity({
+        deviceToken: storedToken,
+        deviceName: storedName ?? "카메라",
+      });
+      setBroadcastPhase("idle");
+    } else {
+      setBroadcastPhase("unpaired");
+    }
+  }, []);
 
   const cleanupSession = useCallback(
     async (keepCameraStream: boolean) => {
@@ -67,11 +83,10 @@ export function CameraBroadcastClient({
           signalingChannelRef.current = null;
         }
 
-        if (sessionIdRef.current) {
-          await supabase
-            .from("camera_sessions")
-            .update({ status: "idle" })
-            .eq("id", sessionIdRef.current);
+        if (deviceIdentity && sessionIdRef.current) {
+          await supabase.rpc("stop_device_broadcast", {
+            input_device_token: deviceIdentity.deviceToken,
+          });
           sessionIdRef.current = null;
           setActiveSessionId(null);
         }
@@ -87,7 +102,7 @@ export function CameraBroadcastClient({
         isCleaningUpRef.current = false;
       }
     },
-    [supabase],
+    [supabase, deviceIdentity],
   );
 
   useEffect(() => {
@@ -137,36 +152,16 @@ export function CameraBroadcastClient({
   }
 
   async function startBroadcast() {
-    if (!localStreamRef.current) return;
+    if (!localStreamRef.current || !deviceIdentity) return;
     setBroadcastPhase("connecting");
     setErrorMessage(null);
 
     try {
-      const { data: session, error: sessionError } = await supabase
-        .from("camera_sessions")
-        .insert({
-          home_id: homeId,
-          broadcaster_user_id: userId,
-          status: "live",
-        })
-        .select("id")
-        .single();
-
-      if (sessionError || !session) {
-        throw new Error(sessionError?.message ?? "세션을 생성할 수 없어요.");
-      }
-
-      sessionIdRef.current = session.id;
-      setActiveSessionId(session.id);
-
       const pc = new RTCPeerConnection({ iceServers: WEBRTC_ICE_SERVERS });
       peerConnectionRef.current = pc;
 
       pc.onconnectionstatechange = () => {
         setPeerConnectionState(pc.connectionState);
-        if (pc.connectionState === "connected") {
-          setBroadcastPhase("live");
-        }
         if (
           pc.connectionState === "failed" ||
           pc.connectionState === "closed"
@@ -180,45 +175,64 @@ export function CameraBroadcastClient({
         pc.addTrack(track, localStreamRef.current!);
       });
 
-      const channel = supabase.channel(`broadcast-${session.id}`);
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
 
-      channel
+      const { data: broadcastResult, error: broadcastError } = await supabase.rpc(
+        "start_device_broadcast",
+        {
+          input_device_token: deviceIdentity.deviceToken,
+          input_offer_sdp: JSON.stringify(offer),
+        },
+      );
+
+      if (broadcastError || !broadcastResult || broadcastResult.error) {
+        throw new Error(
+          broadcastResult?.error ?? broadcastError?.message ?? "방송 세션 생성 실패",
+        );
+      }
+
+      const sessionId = broadcastResult.session_id as string;
+      sessionIdRef.current = sessionId;
+      setActiveSessionId(sessionId);
+
+      const signalingChannel = supabase.channel(`broadcast-${sessionId}`);
+
+      signalingChannel
         .on(
           "postgres_changes",
           {
             event: "UPDATE",
             schema: "public",
             table: "camera_sessions",
-            filter: `id=eq.${session.id}`,
+            filter: `id=eq.${sessionId}`,
           },
           async (payload) => {
-            const updated = payload.new as {
-              answer_sdp?: string | null;
-            };
+            const updated = payload.new as { answer_sdp?: string | null };
             if (updated.answer_sdp && pc.remoteDescription === null) {
               try {
                 await pc.setRemoteDescription(
                   new RTCSessionDescription(JSON.parse(updated.answer_sdp)),
                 );
+
                 const { data: bufferedCandidates } = await supabase
                   .from("ice_candidates")
                   .select("candidate")
-                  .eq("session_id", session.id)
+                  .eq("session_id", sessionId)
                   .eq("sender", "viewer");
 
                 for (const row of bufferedCandidates ?? []) {
                   try {
                     await pc.addIceCandidate(
-                      new RTCIceCandidate(
-                        row.candidate as RTCIceCandidateInit,
-                      ),
+                      new RTCIceCandidate(row.candidate as RTCIceCandidateInit),
                     );
                   } catch {
-                    // 오래된 후보자는 무시
+                    // 오래된 후보자 무시
                   }
                 }
-              } catch (e) {
-                console.error("[broadcaster] setRemoteDescription 오류", e);
+                setBroadcastPhase("live");
+              } catch (remoteDescError) {
+                console.error("[broadcaster] setRemoteDescription 오류", remoteDescError);
               }
             }
           },
@@ -229,7 +243,7 @@ export function CameraBroadcastClient({
             event: "INSERT",
             schema: "public",
             table: "ice_candidates",
-            filter: `session_id=eq.${session.id}`,
+            filter: `session_id=eq.${sessionId}`,
           },
           async (payload) => {
             const row = payload.new as {
@@ -247,25 +261,17 @@ export function CameraBroadcastClient({
         )
         .subscribe();
 
-      signalingChannelRef.current = channel;
+      signalingChannelRef.current = signalingChannel;
 
       pc.onicecandidate = async ({ candidate }) => {
         if (candidate && sessionIdRef.current) {
-          await supabase.from("ice_candidates").insert({
-            session_id: sessionIdRef.current,
-            sender: "broadcaster",
-            candidate: candidate.toJSON(),
+          await supabase.rpc("add_device_ice_candidate", {
+            input_device_token: deviceIdentity.deviceToken,
+            input_session_id: sessionIdRef.current,
+            input_candidate: candidate.toJSON(),
           });
         }
       };
-
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-
-      await supabase
-        .from("camera_sessions")
-        .update({ offer_sdp: JSON.stringify(offer) })
-        .eq("id", session.id);
 
       setBroadcastPhase("live");
     } catch (err) {
@@ -283,21 +289,49 @@ export function CameraBroadcastClient({
     setPeerConnectionState("new");
   }
 
-  const peerStatusLabel = {
+  const peerStatusLabel: Record<RTCPeerConnectionState, string> = {
     new: "대기 중",
     connecting: "연결 중…",
     connected: "연결됨 ✅",
     disconnected: "연결 끊김",
     failed: "연결 실패",
     closed: "종료됨",
-  }[peerConnectionState];
+  };
+
+  if (broadcastPhase === "loading") {
+    return (
+      <div className={styles.page}>
+        <div className={styles.loadingSpinner} aria-label="로딩 중" />
+      </div>
+    );
+  }
+
+  if (broadcastPhase === "unpaired") {
+    return (
+      <div className={styles.page}>
+        <div className={styles.unpairedCard}>
+          <span className={styles.unpairedIcon} aria-hidden>🔗</span>
+          <h2 className={styles.unpairedTitle}>먼저 페어링이 필요해요</h2>
+          <p className={styles.unpairedDesc}>
+            대시보드에서 <strong>카메라 추가</strong>를 눌러<br />
+            4자리 코드를 받은 뒤 연결해 주세요.
+          </p>
+          <a href="/camera/pair" className={styles.btnPairLink}>
+            📷 4자리 코드 입력하러 가기
+          </a>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={styles.page}>
       <header className={styles.header}>
         <div className={styles.headerLeft}>
           <span className={styles.appName}>다보냥 · 방송국</span>
-          <span className={styles.broadcasterLabel}>{broadcasterDisplayName}</span>
+          <span className={styles.broadcasterLabel}>
+            {deviceIdentity?.deviceName ?? "카메라"}
+          </span>
         </div>
         {(broadcastPhase === "live" || broadcastPhase === "connecting") && (
           <span className={styles.liveBadge} aria-live="polite">
@@ -331,9 +365,7 @@ export function CameraBroadcastClient({
 
       <div className={styles.controls}>
         {errorMessage ? (
-          <p className={styles.errorText} role="alert">
-            {errorMessage}
-          </p>
+          <p className={styles.errorText} role="alert">{errorMessage}</p>
         ) : null}
 
         {broadcastPhase === "idle" ? (
@@ -364,8 +396,8 @@ export function CameraBroadcastClient({
           <div className={styles.liveControls}>
             <p className={styles.statusText}>
               {peerConnectionState === "connected"
-                ? `🟢 ${broadcasterDisplayName} 방송 중`
-                : `📡 시청자 기다리는 중… (${peerStatusLabel})`}
+                ? `🟢 ${deviceIdentity?.deviceName ?? "카메라"} 방송 중`
+                : `📡 시청자 기다리는 중… (${peerStatusLabel[peerConnectionState]})`}
             </p>
             <button
               type="button"
@@ -392,9 +424,7 @@ export function CameraBroadcastClient({
       </div>
 
       {activeSessionId ? (
-        <p className={styles.sessionHint}>
-          세션 {activeSessionId.slice(0, 8)}
-        </p>
+        <p className={styles.sessionHint}>세션 {activeSessionId.slice(0, 8)}</p>
       ) : null}
     </div>
   );
