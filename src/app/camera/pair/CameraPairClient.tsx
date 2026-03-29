@@ -104,6 +104,19 @@ export function CameraPairClient() {
 
     persistPairedDeviceCredentials(data);
 
+    const tokenReadable =
+      typeof window !== "undefined" &&
+      (window.localStorage.getItem(DEVICE_TOKEN_STORAGE_KEY) ??
+        window.sessionStorage.getItem(DEVICE_TOKEN_STORAGE_KEY));
+
+    if (!tokenReadable) {
+      setErrorMessage(
+        "이 브라우저가 저장소(로컬/세션)를 막아 카메라 연결을 완료할 수 없어요. Safari·Chrome 등 일반 브라우저에서 열거나, 카카오톡 ⋮ 메뉴에서 「다른 브라우저로 열기」를 시도해 주세요.",
+      );
+      setPairingPhase("error");
+      return;
+    }
+
     setPairedDeviceName(String(data.device_name ?? "카메라"));
     setPairingPhase("success");
 
