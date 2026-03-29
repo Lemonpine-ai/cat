@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { type ReactNode, useEffect, useId, useRef, useState } from "react";
+import { CameraLiveViewer } from "@/components/catvisor/CameraLiveViewer";
 import { RecentCatActivityLog } from "@/components/catvisor/RecentCatActivityLog";
 import { TodaySummaryCards } from "@/components/catvisor/TodaySummaryCards";
 import type { CatDailySummaryItem } from "@/types/catDailySummary";
@@ -225,8 +226,11 @@ export function CatvisorHomeDashboard({
           </button>
         </div>
 
-        {/* ② 카메라 2×2 */}
+        {/* ② 카메라 — 라이브 뷰어 + 2×2 타일 */}
         <section className={styles.cameraSection} aria-label="카메라 뷰">
+          {/* 라이브 방송이 있으면 자동 연결해서 영상을 보여줌 */}
+          <CameraLiveViewer />
+
           <div className={styles.cameraGrid}>
             {CAMERA_TILES.map((tile) => (
               <button

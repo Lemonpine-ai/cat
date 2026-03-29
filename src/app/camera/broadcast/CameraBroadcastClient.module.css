@@ -1,0 +1,182 @@
+/* 방송국 페이지 — 다크 모드, 모바일 전체 화면 */
+.page {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: #0d1117;
+  color: #f0f6fc;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  user-select: none;
+}
+
+/* ── 헤더 ── */
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.9rem 1.1rem 0.6rem;
+  flex-shrink: 0;
+}
+
+.headerLeft {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.appName {
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #34d399;
+}
+
+.broadcasterLabel {
+  font-size: 0.78rem;
+  color: #8b949e;
+}
+
+.liveBadge {
+  background: #ef4444;
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  padding: 0.25rem 0.65rem;
+  border-radius: 999px;
+  animation: pulseLive 1.5s ease-in-out infinite;
+}
+
+@keyframes pulseLive {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+/* ── 비디오 영역 ── */
+.videoWrap {
+  position: relative;
+  flex: 1;
+  background: #010409;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.localVideo {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.videoPlaceholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #010409;
+  pointer-events: none;
+}
+
+.placeholderIcon {
+  font-size: 5rem;
+  opacity: 0.25;
+}
+
+.viewerBadge {
+  position: absolute;
+  bottom: 0.9rem;
+  right: 0.9rem;
+  background: rgba(16, 185, 129, 0.9);
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  backdrop-filter: blur(6px);
+}
+
+/* ── 컨트롤 영역 ── */
+.controls {
+  padding: 1rem 1.25rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.65rem;
+  flex-shrink: 0;
+}
+
+.liveControls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.btnPrimary {
+  width: 100%;
+  padding: 0.9rem 1.5rem;
+  background: #34d399;
+  color: #0d1117;
+  font-size: 1rem;
+  font-weight: 700;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.btnPrimary:active {
+  background: #10b981;
+  transform: scale(0.97);
+}
+
+.btnStop {
+  width: 100%;
+  padding: 0.85rem 1.5rem;
+  background: transparent;
+  color: #f87171;
+  font-size: 0.95rem;
+  font-weight: 600;
+  border: 1.5px solid #f87171;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.btnStop:active {
+  background: rgba(248, 113, 113, 0.1);
+  transform: scale(0.97);
+}
+
+.statusText {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #8b949e;
+  text-align: center;
+  line-height: 1.5;
+}
+
+.errorText {
+  margin: 0;
+  font-size: 0.88rem;
+  color: #f87171;
+  background: rgba(248, 113, 113, 0.08);
+  border: 1px solid rgba(248, 113, 113, 0.25);
+  border-radius: 8px;
+  padding: 0.65rem 0.85rem;
+  line-height: 1.5;
+}
+
+.sessionHint {
+  text-align: center;
+  font-size: 0.7rem;
+  color: #3d444d;
+  margin: 0 0 0.5rem;
+  padding: 0 1rem;
+  word-break: break-all;
+}

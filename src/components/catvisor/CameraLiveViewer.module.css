@@ -1,0 +1,119 @@
+/* ─── 라이브 카메라 뷰어 섹션 ─── */
+.section {
+  width: 100%;
+}
+
+.titleRow {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.6rem;
+}
+
+.title {
+  margin: 0;
+  font-family: var(--font-display, sans-serif);
+  font-size: 0.88rem;
+  font-weight: 500;
+  color: var(--color-primary-dark, #0f766e);
+  letter-spacing: 0.01em;
+}
+
+.livePill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  background: #ef4444;
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+  animation: pulseLive 1.5s ease-in-out infinite;
+}
+
+@keyframes pulseLive {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+.connectingPill {
+  background: rgba(251, 191, 36, 0.15);
+  color: #b45309;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+}
+
+.offlinePill {
+  background: rgba(148, 163, 184, 0.12);
+  color: #94a3b8;
+  font-size: 0.7rem;
+  font-weight: 500;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+}
+
+/* ── 비디오 컨테이너 ── */
+.videoContainer {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: #0f172a;
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.18);
+}
+
+.remoteVideo {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  border-radius: 14px;
+}
+
+/* ── 오버레이 (대기·연결중·오류 상태) ── */
+.videoOverlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  background: rgba(15, 23, 42, 0.88);
+  padding: 1.5rem;
+  text-align: center;
+}
+
+.overlayIcon {
+  font-size: 2.2rem;
+  line-height: 1;
+}
+
+.overlayText {
+  font-size: 0.82rem;
+  color: #94a3b8;
+  line-height: 1.55;
+  max-width: 22ch;
+}
+
+.broadcastLink {
+  display: inline-block;
+  margin-top: 0.25rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #34d399;
+  text-decoration: none;
+  padding: 0.4rem 0.9rem;
+  border: 1.5px solid rgba(52, 211, 153, 0.4);
+  border-radius: 8px;
+  transition: background 0.15s;
+}
+
+.broadcastLink:hover {
+  background: rgba(52, 211, 153, 0.1);
+}
