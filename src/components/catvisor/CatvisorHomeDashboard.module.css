@@ -64,6 +64,79 @@
   border: 1px solid var(--color-border);
 }
 
+/* ─── 고양이 등록 안내 카드 ─── */
+.catRegistrationGuide {
+  padding: 1rem 1rem 1.1rem;
+  border-radius: var(--radius-lg);
+  background: rgba(240, 253, 250, 0.92);
+  border: 1.5px dashed rgba(16, 185, 129, 0.35);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0.5rem;
+  animation: fadeInUp 0.4s ease both;
+}
+
+.catRegistrationIconWrap {
+  font-size: 2rem;
+  line-height: 1;
+}
+
+.catRegistrationTitle {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 400;
+  color: var(--color-primary-dark);
+}
+
+.catRegistrationDesc {
+  margin: 0;
+  font-size: 0.84rem;
+  color: var(--color-text-sub);
+  line-height: 1.55;
+}
+
+.catRegistrationSteps {
+  margin: 0.25rem 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  width: 100%;
+  text-align: left;
+}
+
+.catRegistrationSteps li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  font-size: 0.82rem;
+  color: var(--color-text-sub);
+  line-height: 1.5;
+  padding: 0.38rem 0.65rem;
+  background: rgba(255, 255, 255, 0.75);
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(16, 185, 129, 0.15);
+}
+
+.catRegistrationStepNum {
+  flex-shrink: 0;
+  width: 1.2rem;
+  height: 1.2rem;
+  border-radius: 50%;
+  background: var(--color-primary);
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 0.08rem;
+}
+
 .catCardGrid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(7rem, 1fr));

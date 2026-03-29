@@ -22,14 +22,14 @@ const CAMERA_TILES: CameraTileData[] = [
   {
     id: "cam-1",
     placeLabel: "거실",
-    catLabel: "보리",
+    catLabel: null,
     isOnline: true,
     imageUrl: "https://placekitten.com/480/360",
   },
   {
     id: "cam-2",
     placeLabel: "캣타워",
-    catLabel: "찹쌀이",
+    catLabel: null,
     isOnline: false,
     imageUrl: "https://placekitten.com/481/361",
   },
@@ -169,7 +169,7 @@ export function CatvisorHomeDashboard({
       const kindLabel =
         pendingEnvironmentKind === "water_change" ? "식수 교체" : "화장실 청소";
       showToast(
-        `기록 완료! ${kindLabel}${noteValue ? ` — "${noteValue}"` : ""} 💚 보리가 아주 좋아할 거예요!`,
+        `기록 완료! ${kindLabel}${noteValue ? ` — "${noteValue}"` : ""} 💚 고양이들이 아주 좋아할 거예요!`,
       );
     } catch (unknownError) {
       const message =

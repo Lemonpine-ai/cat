@@ -18,7 +18,7 @@ export default function MainShellLayout({
             <span className="app-header-brand">다보냥</span>
             <span className="app-header-sub">CATvisor</span>
           </div>
-          <span className="app-header-badge">보리 &amp; 찹쌀이네 🐾</span>
+          <span className="app-header-badge">집사 대시보드 🐾</span>
         </div>
       </header>
       <div className="app-main">{children}</div>

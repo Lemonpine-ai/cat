@@ -20,7 +20,7 @@ const notoSansKr = Noto_Sans_KR({
 
 export const metadata: Metadata = {
   title: "다보냥 · CATvisor",
-  description: "보리·찹쌀이 — 고양이 모니터링 홈",
+  description: "우리 고양이 모니터링 대시보드",
 };
 
 export default function RootLayout({
