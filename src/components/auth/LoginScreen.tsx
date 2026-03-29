@@ -177,9 +177,9 @@ export function LoginScreen() {
           <WelcomeCatIcon />
         </div>
         <h1 className={styles.welcome}>
-          보리·찹쌀이네 오신 걸
+          다보냥 CATvisor에
           <br />
-          환영합니다!
+          오신 걸 환영합니다!
         </h1>
 
         {alertMessage ? (
