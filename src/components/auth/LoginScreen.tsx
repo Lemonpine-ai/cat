@@ -1,5 +1,6 @@
 "use client";
 
+import type { User } from "@supabase/supabase-js";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { mapSupabaseAuthErrorMessage } from "@/lib/auth/mapSupabaseAuthErrorMessage";
@@ -11,6 +12,19 @@ type AuthMode = "login" | "signup";
 function isValidEmailFormat(email: string): boolean {
   const trimmed = email.trim();
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed);
+}
+
+/**
+ * Supabase가 이미 가입·이메일 확인까지 끝난 주소로 다시 signUp 할 때
+ * 보안상 오류 대신 "가짜 user"를 주는데 identities 가 비어 있습니다.
+ * 이 경우 실제로는 인증 메일이 재발송되지 않습니다.
+ * @see GoTrueClient.signUp 주석 (existing confirmed user)
+ */
+function isObfuscatedDuplicateEmailSignup(user: User | null): boolean {
+  if (!user) {
+    return false;
+  }
+  return Array.isArray(user.identities) && user.identities.length === 0;
 }
 
 /**
@@ -150,6 +164,14 @@ export function LoginScreen() {
       if (data.session) {
         router.push("/");
         router.refresh();
+        return;
+      }
+
+      if (isObfuscatedDuplicateEmailSignup(data.user)) {
+        setAlertKind("error");
+        setAlertMessage(
+          "이미 가입된 이메일입니다. 인증 메일은 다시 보내지지 않아요. 위에서 「로그인」을 선택한 뒤 같은 비밀번호로 로그인해 주세요.",
+        );
         return;
       }
 
