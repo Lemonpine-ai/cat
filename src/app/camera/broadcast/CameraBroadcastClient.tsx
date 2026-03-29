@@ -2,6 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import {
+  decodeSessionDescriptionPayload,
+  encodeSessionDescriptionForDatabase,
+} from "@/lib/webrtc/sessionDescriptionPayload";
 import styles from "./CameraBroadcastClient.module.css";
 
 const WEBRTC_ICE_SERVERS: RTCIceServer[] = [
@@ -197,7 +201,7 @@ export function CameraBroadcastClient() {
         "start_device_broadcast",
         {
           input_device_token: deviceIdentity.deviceToken,
-          input_offer_sdp: JSON.stringify(offer),
+          input_offer_sdp: encodeSessionDescriptionForDatabase(offer),
         },
       );
 
@@ -240,12 +244,11 @@ export function CameraBroadcastClient() {
             return;
           }
 
-          const answerSdp = signalingPayload.answer_sdp as string | null | undefined;
-          if (answerSdp && currentPc.remoteDescription === null) {
+          const answerSdpRaw = signalingPayload.answer_sdp as string | null | undefined;
+          if (answerSdpRaw && currentPc.remoteDescription === null) {
             try {
-              await currentPc.setRemoteDescription(
-                new RTCSessionDescription(JSON.parse(answerSdp)),
-              );
+              const answerInit = decodeSessionDescriptionPayload(answerSdpRaw);
+              await currentPc.setRemoteDescription(new RTCSessionDescription(answerInit));
               setBroadcastPhase("live");
             } catch (answerErr) {
               console.error("[broadcaster] setRemoteDescription 오류", answerErr);

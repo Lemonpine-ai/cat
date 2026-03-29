@@ -2,6 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import {
+  decodeSessionDescriptionPayload,
+  encodeSessionDescriptionForDatabase,
+} from "@/lib/webrtc/sessionDescriptionPayload";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import styles from "./CameraLiveViewer.module.css";
 
@@ -130,9 +134,8 @@ export function CameraLiveViewer() {
           }
         };
 
-        await pc.setRemoteDescription(
-          new RTCSessionDescription(JSON.parse(session.offer_sdp)),
-        );
+        const offerInit = decodeSessionDescriptionPayload(session.offer_sdp);
+        await pc.setRemoteDescription(new RTCSessionDescription(offerInit));
 
         const { data: existingCandidates } = await supabase
           .from("ice_candidates")
@@ -155,7 +158,9 @@ export function CameraLiveViewer() {
 
         await supabase
           .from("camera_sessions")
-          .update({ answer_sdp: JSON.stringify(answer) })
+          .update({
+            answer_sdp: encodeSessionDescriptionForDatabase(answer),
+          })
           .eq("id", session.id);
       } catch (err) {
         const message =
