@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
-import type { RealtimeChannel } from "@supabase/supabase-js";
 import styles from "./CameraBroadcastClient.module.css";
 
 const WEBRTC_ICE_SERVERS: RTCIceServer[] = [
@@ -31,7 +30,8 @@ type DeviceIdentity = {
 
 /**
  * 남는 폰에서 실행하는 WebRTC 방송 클라이언트.
- * localStorage의 device_token으로 인증 → SECURITY DEFINER 함수로 세션 생성 → Realtime 시그널링.
+ * localStorage의 device_token으로 인증 → SECURITY DEFINER 로 세션 생성 →
+ * (anon 은 RLS 로 DB 행을 볼 수 없으므로) get_broadcaster_signaling_state 폴링으로 answer/ICE 수신.
  */
 export function CameraBroadcastClient() {
   const supabase = createSupabaseBrowserClient();
@@ -46,9 +46,10 @@ export function CameraBroadcastClient() {
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
-  const signalingChannelRef = useRef<RealtimeChannel | null>(null);
   const sessionIdRef = useRef<string | null>(null);
   const isCleaningUpRef = useRef(false);
+  const signalingPollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const appliedViewerIceKeysRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     const storedToken = localStorage.getItem(DEVICE_TOKEN_STORAGE_KEY);
@@ -65,51 +66,65 @@ export function CameraBroadcastClient() {
     }
   }, []);
 
-  const cleanupSession = useCallback(
+  /**
+   * WebRTC·폴링만 정리합니다. DB 의 camera_sessions 는 건드리지 않습니다.
+   * (언마운트·React Strict Mode 에서 stop_device_broadcast 를 호출하면
+   * 세션이 즉시 idle 로 바뀌어 관리자 측에서 live 행이 사라진 것처럼 보입니다.)
+   */
+  const cleanupPeerResourcesOnly = useCallback(
+    async (keepCameraStream: boolean) => {
+      if (signalingPollIntervalRef.current) {
+        clearInterval(signalingPollIntervalRef.current);
+        signalingPollIntervalRef.current = null;
+      }
+      appliedViewerIceKeysRef.current = new Set();
+
+      if (peerConnectionRef.current) {
+        peerConnectionRef.current.onconnectionstatechange = null;
+        peerConnectionRef.current.onicecandidate = null;
+        peerConnectionRef.current.close();
+        peerConnectionRef.current = null;
+      }
+
+      if (!keepCameraStream && localStreamRef.current) {
+        localStreamRef.current.getTracks().forEach((track) => track.stop());
+        localStreamRef.current = null;
+        if (localVideoRef.current) {
+          localVideoRef.current.srcObject = null;
+        }
+      }
+    },
+    [supabase],
+  );
+
+  /** 방송 종료 버튼 — DB 세션을 idle 로 전환합니다. */
+  const cleanupSessionAndStopOnServer = useCallback(
     async (keepCameraStream: boolean) => {
       if (isCleaningUpRef.current) return;
       isCleaningUpRef.current = true;
 
       try {
-        if (peerConnectionRef.current) {
-          peerConnectionRef.current.onconnectionstatechange = null;
-          peerConnectionRef.current.onicecandidate = null;
-          peerConnectionRef.current.close();
-          peerConnectionRef.current = null;
-        }
-
-        if (signalingChannelRef.current) {
-          await supabase.removeChannel(signalingChannelRef.current);
-          signalingChannelRef.current = null;
-        }
+        await cleanupPeerResourcesOnly(keepCameraStream);
 
         if (deviceIdentity && sessionIdRef.current) {
           await supabase.rpc("stop_device_broadcast", {
             input_device_token: deviceIdentity.deviceToken,
           });
-          sessionIdRef.current = null;
-          setActiveSessionId(null);
         }
-
-        if (!keepCameraStream && localStreamRef.current) {
-          localStreamRef.current.getTracks().forEach((track) => track.stop());
-          localStreamRef.current = null;
-          if (localVideoRef.current) {
-            localVideoRef.current.srcObject = null;
-          }
-        }
+        sessionIdRef.current = null;
+        setActiveSessionId(null);
       } finally {
         isCleaningUpRef.current = false;
       }
     },
-    [supabase, deviceIdentity],
+    [supabase, deviceIdentity, cleanupPeerResourcesOnly],
   );
 
   useEffect(() => {
     return () => {
-      void cleanupSession(false);
+      void cleanupPeerResourcesOnly(false);
     };
-  }, [cleanupSession]);
+  }, [cleanupPeerResourcesOnly]);
 
   async function acquireCamera() {
     setBroadcastPhase("acquiring");
@@ -196,73 +211,6 @@ export function CameraBroadcastClient() {
       sessionIdRef.current = sessionId;
       setActiveSessionId(sessionId);
 
-      const signalingChannel = supabase.channel(`broadcast-${sessionId}`);
-
-      signalingChannel
-        .on(
-          "postgres_changes",
-          {
-            event: "UPDATE",
-            schema: "public",
-            table: "camera_sessions",
-            filter: `id=eq.${sessionId}`,
-          },
-          async (payload) => {
-            const updated = payload.new as { answer_sdp?: string | null };
-            if (updated.answer_sdp && pc.remoteDescription === null) {
-              try {
-                await pc.setRemoteDescription(
-                  new RTCSessionDescription(JSON.parse(updated.answer_sdp)),
-                );
-
-                const { data: bufferedCandidates } = await supabase
-                  .from("ice_candidates")
-                  .select("candidate")
-                  .eq("session_id", sessionId)
-                  .eq("sender", "viewer");
-
-                for (const row of bufferedCandidates ?? []) {
-                  try {
-                    await pc.addIceCandidate(
-                      new RTCIceCandidate(row.candidate as RTCIceCandidateInit),
-                    );
-                  } catch {
-                    // 오래된 후보자 무시
-                  }
-                }
-                setBroadcastPhase("live");
-              } catch (remoteDescError) {
-                console.error("[broadcaster] setRemoteDescription 오류", remoteDescError);
-              }
-            }
-          },
-        )
-        .on(
-          "postgres_changes",
-          {
-            event: "INSERT",
-            schema: "public",
-            table: "ice_candidates",
-            filter: `session_id=eq.${sessionId}`,
-          },
-          async (payload) => {
-            const row = payload.new as {
-              sender: string;
-              candidate: RTCIceCandidateInit;
-            };
-            if (row.sender === "viewer" && pc.remoteDescription) {
-              try {
-                await pc.addIceCandidate(new RTCIceCandidate(row.candidate));
-              } catch {
-                // 무시
-              }
-            }
-          },
-        )
-        .subscribe();
-
-      signalingChannelRef.current = signalingChannel;
-
       pc.onicecandidate = async ({ candidate }) => {
         if (candidate && sessionIdRef.current) {
           await supabase.rpc("add_device_ice_candidate", {
@@ -273,18 +221,69 @@ export function CameraBroadcastClient() {
         }
       };
 
+      const pollIntervalMs = 400;
+      signalingPollIntervalRef.current = setInterval(() => {
+        void (async () => {
+          const currentPc = peerConnectionRef.current;
+          const currentSessionId = sessionIdRef.current;
+          if (!currentPc || !currentSessionId) return;
+
+          const { data: signalingPayload, error: signalingError } = await supabase.rpc(
+            "get_broadcaster_signaling_state",
+            {
+              p_device_token: deviceIdentity.deviceToken,
+              p_session_id: currentSessionId,
+            },
+          );
+
+          if (signalingError || !signalingPayload || signalingPayload.error) {
+            return;
+          }
+
+          const answerSdp = signalingPayload.answer_sdp as string | null | undefined;
+          if (answerSdp && currentPc.remoteDescription === null) {
+            try {
+              await currentPc.setRemoteDescription(
+                new RTCSessionDescription(JSON.parse(answerSdp)),
+              );
+              setBroadcastPhase("live");
+            } catch (answerErr) {
+              console.error("[broadcaster] setRemoteDescription 오류", answerErr);
+            }
+          }
+
+          const viewerIceList = signalingPayload.viewer_ice as
+            | RTCIceCandidateInit[]
+            | null
+            | undefined;
+          if (!viewerIceList || !Array.isArray(viewerIceList)) return;
+
+          for (const rawCandidate of viewerIceList) {
+            const dedupeKey = JSON.stringify(rawCandidate);
+            if (appliedViewerIceKeysRef.current.has(dedupeKey)) continue;
+            appliedViewerIceKeysRef.current.add(dedupeKey);
+            if (!currentPc.remoteDescription) continue;
+            try {
+              await currentPc.addIceCandidate(new RTCIceCandidate(rawCandidate));
+            } catch {
+              // 중복 후보 등은 무시
+            }
+          }
+        })();
+      }, pollIntervalMs);
+
       setBroadcastPhase("live");
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "방송 시작에 실패했어요.";
       setErrorMessage(message);
       setBroadcastPhase("error");
-      await cleanupSession(true);
+      await cleanupSessionAndStopOnServer(true);
     }
   }
 
   async function stopBroadcast() {
-    await cleanupSession(true);
+    await cleanupSessionAndStopOnServer(true);
     setBroadcastPhase("ready");
     setPeerConnectionState("new");
   }
