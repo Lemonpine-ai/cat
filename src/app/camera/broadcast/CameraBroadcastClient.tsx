@@ -15,7 +15,44 @@ const WEBRTC_ICE_SERVERS: RTCIceServer[] = [
 ];
 
 const DEVICE_TOKEN_STORAGE_KEY = "catvisor_device_token";
+const DEVICE_ID_STORAGE_KEY = "catvisor_device_id";
 const DEVICE_NAME_STORAGE_KEY = "catvisor_device_name";
+const DEVICE_HOME_ID_STORAGE_KEY = "catvisor_home_id";
+
+function readDeviceCredentialsFromBrowserStorage(): {
+  token: string | null;
+  name: string | null;
+} {
+  let token =
+    typeof window !== "undefined"
+      ? window.localStorage.getItem(DEVICE_TOKEN_STORAGE_KEY)
+      : null;
+  let name =
+    typeof window !== "undefined"
+      ? window.localStorage.getItem(DEVICE_NAME_STORAGE_KEY)
+      : null;
+
+  if (!token && typeof window !== "undefined") {
+    token = window.sessionStorage.getItem(DEVICE_TOKEN_STORAGE_KEY);
+    name = window.sessionStorage.getItem(DEVICE_NAME_STORAGE_KEY);
+    if (token) {
+      try {
+        window.localStorage.setItem(DEVICE_TOKEN_STORAGE_KEY, token);
+        if (name) {
+          window.localStorage.setItem(DEVICE_NAME_STORAGE_KEY, name);
+        }
+        const id = window.sessionStorage.getItem(DEVICE_ID_STORAGE_KEY);
+        const home = window.sessionStorage.getItem(DEVICE_HOME_ID_STORAGE_KEY);
+        if (id) window.localStorage.setItem(DEVICE_ID_STORAGE_KEY, id);
+        if (home) window.localStorage.setItem(DEVICE_HOME_ID_STORAGE_KEY, home);
+      } catch {
+        // 인앱 브라우저 storage 동기화 실패
+      }
+    }
+  }
+
+  return { token, name };
+}
 
 type BroadcastPhase =
   | "loading"
@@ -56,8 +93,8 @@ export function CameraBroadcastClient() {
   const appliedViewerIceKeysRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
-    const storedToken = localStorage.getItem(DEVICE_TOKEN_STORAGE_KEY);
-    const storedName = localStorage.getItem(DEVICE_NAME_STORAGE_KEY);
+    const { token: storedToken, name: storedName } =
+      readDeviceCredentialsFromBrowserStorage();
 
     if (storedToken) {
       setDeviceIdentity({

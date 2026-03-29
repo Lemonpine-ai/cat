@@ -1,7 +1,6 @@
 "use client";
 
 import { useRef, useState, useCallback } from "react";
-import { useRouter } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import styles from "./CameraPairClient.module.css";
 
@@ -13,11 +12,41 @@ const DEVICE_NAME_STORAGE_KEY = "catvisor_device_name";
 const DEVICE_HOME_ID_STORAGE_KEY = "catvisor_home_id";
 const CODE_LENGTH = 4;
 
+function persistPairedDeviceCredentials(data: {
+  device_token: unknown;
+  device_id: unknown;
+  device_name: unknown;
+  home_id: unknown;
+}) {
+  const token = String(data.device_token);
+  const id = String(data.device_id);
+  const name = String(data.device_name ?? "카메라");
+  const home = String(data.home_id);
+
+  try {
+    localStorage.setItem(DEVICE_TOKEN_STORAGE_KEY, token);
+    localStorage.setItem(DEVICE_ID_STORAGE_KEY, id);
+    localStorage.setItem(DEVICE_NAME_STORAGE_KEY, name);
+    localStorage.setItem(DEVICE_HOME_ID_STORAGE_KEY, home);
+  } catch {
+    // 일부 인앱 브라우저에서 localStorage 가 막힐 수 있음
+  }
+  try {
+    sessionStorage.setItem(DEVICE_TOKEN_STORAGE_KEY, token);
+    sessionStorage.setItem(DEVICE_ID_STORAGE_KEY, id);
+    sessionStorage.setItem(DEVICE_NAME_STORAGE_KEY, name);
+    sessionStorage.setItem(DEVICE_HOME_ID_STORAGE_KEY, home);
+  } catch {
+    // sessionStorage 백업 실패 시 무시
+  }
+}
+
 /**
- * 4자리 코드 입력 → Supabase 함수로 검증 → device_token 로컬스토리지 저장 → 방송 페이지 이동.
+ * 4자리 코드 입력 → Supabase 함수로 검증 → device_token 저장 → 방송 페이지 이동.
+ * 카카오톡 등 인앱 브라우저는 SPA 전환 직후 storage 가 비는 경우가 있어
+ * sessionStorage 이중 저장 + 전체 페이지 이동(location.assign)을 사용합니다.
  */
 export function CameraPairClient() {
-  const router = useRouter();
   const supabase = createSupabaseBrowserClient();
 
   const [digits, setDigits] = useState<string[]>(Array(CODE_LENGTH).fill(""));
@@ -73,15 +102,15 @@ export function CameraPairClient() {
       return;
     }
 
-    localStorage.setItem(DEVICE_TOKEN_STORAGE_KEY, data.device_token);
-    localStorage.setItem(DEVICE_ID_STORAGE_KEY, data.device_id);
-    localStorage.setItem(DEVICE_NAME_STORAGE_KEY, data.device_name);
-    localStorage.setItem(DEVICE_HOME_ID_STORAGE_KEY, data.home_id);
+    persistPairedDeviceCredentials(data);
 
-    setPairedDeviceName(data.device_name);
+    setPairedDeviceName(String(data.device_name ?? "카메라"));
     setPairingPhase("success");
 
-    setTimeout(() => router.replace("/camera/broadcast"), 1500);
+    const broadcastPath = `${window.location.origin}/camera/broadcast`;
+    window.setTimeout(() => {
+      window.location.assign(broadcastPath);
+    }, 900);
   }
 
   function resetPairing() {
