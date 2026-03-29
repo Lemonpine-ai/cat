@@ -197,11 +197,19 @@ export function CameraBroadcastClient() {
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
 
+      const committedLocalDescription = pc.localDescription;
+      if (!committedLocalDescription?.sdp) {
+        throw new Error("로컬 SDP(offer)를 확정할 수 없어요.");
+      }
+
       const { data: broadcastResult, error: broadcastError } = await supabase.rpc(
         "start_device_broadcast",
         {
           input_device_token: deviceIdentity.deviceToken,
-          input_offer_sdp: encodeSessionDescriptionForDatabase(offer),
+          input_offer_sdp: encodeSessionDescriptionForDatabase({
+            type: committedLocalDescription.type,
+            sdp: committedLocalDescription.sdp,
+          }),
         },
       );
 

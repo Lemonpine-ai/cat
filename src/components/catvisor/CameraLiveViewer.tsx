@@ -156,10 +156,18 @@ export function CameraLiveViewer() {
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
 
+        const committedAnswer = pc.localDescription;
+        if (!committedAnswer?.sdp) {
+          throw new Error("로컬 SDP(answer)를 확정할 수 없어요.");
+        }
+
         await supabase
           .from("camera_sessions")
           .update({
-            answer_sdp: encodeSessionDescriptionForDatabase(answer),
+            answer_sdp: encodeSessionDescriptionForDatabase({
+              type: committedAnswer.type,
+              sdp: committedAnswer.sdp,
+            }),
           })
           .eq("id", session.id);
       } catch (err) {
