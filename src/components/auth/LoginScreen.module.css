@@ -1,0 +1,263 @@
+/* 로그인·회원가입 — 홈과 통일된 민트/청록 톤 */
+
+.page {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem 1.25rem calc(2rem + env(safe-area-inset-bottom, 0px));
+  background: linear-gradient(
+    165deg,
+    #f4fbf9 0%,
+    #ecfdf5 35%,
+    #e0f2fe 100%
+  );
+}
+
+.card {
+  width: 100%;
+  max-width: 22rem;
+  padding: 1.75rem 1.5rem 1.6rem;
+  border-radius: 1.35rem;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(20, 184, 166, 0.22);
+  box-shadow:
+    0 4px 24px rgba(13, 148, 136, 0.1),
+    0 1px 0 rgba(255, 255, 255, 0.8) inset;
+  backdrop-filter: blur(8px);
+}
+
+.iconWrap {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 0.65rem;
+}
+
+.welcome {
+  margin: 0 0 1.25rem;
+  text-align: center;
+  font-size: 1.05rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.45;
+  color: #0a3d38;
+}
+
+.modeToggle {
+  display: flex;
+  margin-bottom: 1.1rem;
+  padding: 3px;
+  border-radius: 999px;
+  background: rgba(204, 251, 241, 0.65);
+  border: 1px solid rgba(45, 212, 191, 0.35);
+}
+
+.modeButton {
+  flex: 1;
+  padding: 0.45rem 0.5rem;
+  border: none;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  font: inherit;
+  color: #5c7d79;
+  background: transparent;
+  transition:
+    background 0.18s,
+    color 0.18s,
+    box-shadow 0.18s;
+}
+
+.modeButton:hover {
+  color: #0f766e;
+}
+
+.modeButtonActive {
+  color: #fff;
+  background: linear-gradient(135deg, #0d9488 0%, #0891b2 55%, #06b6d4 100%);
+  box-shadow: 0 2px 12px rgba(13, 148, 136, 0.35);
+}
+
+.field {
+  margin-bottom: 0.85rem;
+}
+
+.label {
+  display: block;
+  margin-bottom: 0.35rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #134e4a;
+  letter-spacing: 0.02em;
+}
+
+.input {
+  width: 100%;
+  padding: 0.65rem 0.85rem;
+  border-radius: 0.85rem;
+  border: 1.5px solid rgba(13, 148, 136, 0.28);
+  background: #fafefd;
+  font: inherit;
+  font-size: 0.9rem;
+  color: #0c2825;
+  outline: none;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
+}
+
+.input::placeholder {
+  color: #94a3b8;
+}
+
+.input:focus {
+  border-color: #14b8a6;
+  box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.22);
+}
+
+.submit {
+  width: 100%;
+  margin-top: 0.35rem;
+  padding: 0.75rem 1rem;
+  border: none;
+  border-radius: 0.9rem;
+  font: inherit;
+  font-size: 0.92rem;
+  font-weight: 800;
+  color: #fff;
+  cursor: pointer;
+  background: linear-gradient(135deg, #0d9488 0%, #0891b2 50%, #06b6d4 100%);
+  box-shadow: 0 6px 22px rgba(13, 148, 136, 0.32);
+  transition: filter 0.15s;
+}
+
+.submit:hover:not(:disabled) {
+  filter: brightness(1.06);
+}
+
+.submit:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* ─── 간편 로그인 (이메일 버튼보다 작게) ─── */
+.oauthBlock {
+  margin-top: 1.15rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(13, 148, 136, 0.14);
+}
+
+.oauthCaption {
+  margin: 0 0 0.55rem;
+  text-align: center;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: #5c7d79;
+}
+
+.oauthRow {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+@media (min-width: 320px) {
+  .oauthRow {
+    flex-direction: row;
+    align-items: stretch;
+  }
+}
+
+.oauthBtn {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-height: 2.35rem;
+  padding: 0.4rem 0.65rem;
+  border-radius: 0.72rem;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition:
+    filter 0.15s,
+    box-shadow 0.15s,
+    transform 0.1s;
+}
+
+.oauthBtn:hover:not(:disabled) {
+  filter: brightness(1.03);
+}
+
+.oauthBtn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.oauthBtn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.oauthBtnGoogle {
+  color: #3c4043;
+  background: #ffffff;
+  border-color: #dadce0;
+  box-shadow: 0 1px 2px rgba(60, 64, 67, 0.12);
+}
+
+.oauthBtnKakao {
+  color: #191919;
+  background: #fee500;
+  border-color: rgba(0, 0, 0, 0.06);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+.oauthIcon {
+  flex-shrink: 0;
+  display: block;
+}
+
+/* 민트 톤 알림 (토스트 스타일) */
+.alertMint {
+  margin-bottom: 1rem;
+  padding: 0.72rem 0.9rem;
+  border-radius: 0.85rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  line-height: 1.45;
+  color: #0f766e;
+  background: linear-gradient(180deg, #ecfdf5 0%, #d1fae5 100%);
+  border: 1px solid rgba(94, 234, 212, 0.85);
+  box-shadow: 0 2px 12px rgba(13, 148, 136, 0.12);
+}
+
+.alertMintSuccess {
+  color: #0f766e;
+  border-color: rgba(45, 212, 191, 0.65);
+}
+
+.footerHint {
+  margin-top: 1rem;
+  text-align: center;
+  font-size: 0.72rem;
+  color: #5c7d79;
+  line-height: 1.4;
+}
+
+.envMissing {
+  margin-top: 0.75rem;
+  padding: 0.65rem 0.75rem;
+  border-radius: 0.75rem;
+  font-size: 0.75rem;
+  color: #b45309;
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+}

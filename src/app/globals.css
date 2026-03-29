@@ -1,0 +1,219 @@
+/* ================================================================
+   CATvisor Design System
+   Cozy Modern × Mint Green
+   폰트: Jua (디스플레이) + Noto Sans KR (본문)
+================================================================ */
+
+/* ─── CSS 커스텀 프로퍼티 ─── */
+:root {
+  /* 색상 팔레트 */
+  --mint-50:  #f0fdf9;
+  --mint-100: #ccfbef;
+  --mint-200: #99f6e0;
+  --mint-400: #34d399;
+  --mint-500: #10b981;
+  --mint-600: #059669;
+  --mint-700: #047857;
+  --mint-900: #064e3b;
+
+  /* 의미 색상 */
+  --color-bg:        #f5fcf9;
+  --color-surface:   rgba(255, 255, 255, 0.82);
+  --color-surface-solid: #ffffff;
+  --color-border:    rgba(16, 185, 129, 0.18);
+  --color-border-hover: rgba(16, 185, 129, 0.38);
+  --color-shadow:    rgba(16, 185, 129, 0.14);
+  --color-primary:   #10b981;
+  --color-primary-dark: #047857;
+  --color-text:      #0f2d27;
+  --color-text-sub:  #4b6a62;
+  --color-text-muted: #9eb8b0;
+
+  /* 폰트 */
+  --font-display: var(--font-jua), "Jua", system-ui, sans-serif;
+  --font-body:    var(--font-noto), "Noto Sans KR", system-ui, sans-serif;
+
+  /* 레이아웃 */
+  --radius-sm:  0.65rem;
+  --radius-md:  1.1rem;
+  --radius-lg:  1.5rem;
+  --radius-xl:  2rem;
+
+  /* 그림자 */
+  --shadow-card: 0 4px 24px var(--color-shadow), 0 1px 4px rgba(0,0,0,0.04);
+  --shadow-card-hover: 0 8px 32px rgba(16,185,129,0.2), 0 2px 8px rgba(0,0,0,0.06);
+  --shadow-header: 0 8px 32px rgba(16,185,129,0.1);
+}
+
+/* ─── 애니메이션 키프레임 ─── */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeInDown {
+  from { opacity: 0; transform: translateY(-10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideInLeft {
+  from { opacity: 0; transform: translateX(-16px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes countBump {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(1.35); color: var(--mint-500); }
+  100% { transform: scale(1); }
+}
+
+@keyframes shimmer {
+  from { background-position: -200% 0; }
+  to   { background-position: 200% 0; }
+}
+
+/* ─── 베이스 ─── */
+html, body {
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 1rem;
+  line-height: 1.6;
+  color: var(--color-text);
+  background: var(--color-bg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* { box-sizing: border-box; }
+
+button { font: inherit; }
+
+/* ─── 상단 헤더 (높이 약 1/2 — 스크롤 여유 확보) ─── */
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: rgba(240, 253, 250, 0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid rgba(16, 185, 129, 0.12);
+  box-shadow: 0 4px 16px rgba(16, 185, 129, 0.06);
+}
+
+.app-header-inner {
+  margin: 0 auto;
+  max-width: 56rem;
+  padding: 0.14rem 0.7rem 0.16rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 0;
+}
+
+.app-header-titles {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+/* 브랜드 — 읽기 좋은 크기 유지 */
+.app-header-brand {
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  font-weight: 400;
+  color: var(--color-primary-dark);
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+}
+
+.app-header-sub {
+  font-size: 0.6rem;
+  font-weight: 700;
+  color: var(--mint-500);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  background: var(--mint-100);
+  padding: 0.1rem 0.38rem;
+  border-radius: 999px;
+  opacity: 0.95;
+  line-height: 1.2;
+}
+
+/* 보리·찹쌀이네 — 가독성 우선 */
+.app-header-badge {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  font-weight: 600;
+  line-height: 1.25;
+  text-align: right;
+  flex-shrink: 1;
+  min-width: 0;
+}
+
+/* ─── 본문 영역 (헤더·탭바 제외, 홈은 한 화면 가시성 우선) ─── */
+.app-main {
+  min-height: calc(100dvh - 1.65rem);
+  padding-top: 0;
+  padding-bottom: calc(4.75rem + env(safe-area-inset-bottom, 0px));
+}
+
+/* ─── 고정 하단 탭 바 ─── */
+.bottom-tab-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  display: flex;
+  align-items: stretch;
+  justify-content: space-around;
+  max-width: 56rem;
+  margin: 0 auto;
+  padding: 0.45rem 0.5rem calc(0.45rem + env(safe-area-inset-bottom, 0px));
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-top: 1px solid rgba(16, 185, 129, 0.12);
+  box-shadow: 0 -8px 32px rgba(16, 185, 129, 0.1);
+}
+
+.bottom-tab-bar__link {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  min-width: 0;
+  padding: 0.35rem 0.25rem;
+  text-decoration: none;
+  color: var(--color-text-muted);
+  font-family: var(--font-body);
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  border-radius: var(--radius-sm);
+  transition: color 0.18s ease, background 0.18s ease, transform 0.14s ease;
+}
+
+.bottom-tab-bar__link:hover {
+  color: var(--color-primary);
+  background: rgba(16, 185, 129, 0.1);
+}
+
+.bottom-tab-bar__link:active {
+  transform: scale(0.92);
+}
+
+.bottom-tab-bar__link.is-active {
+  color: var(--color-primary-dark);
+  background: rgba(16, 185, 129, 0.12);
+}
+
+.bottom-tab-bar__label { line-height: 1.1; text-align: center; }
+.bottom-tab-bar__icon  { flex-shrink: 0; }
