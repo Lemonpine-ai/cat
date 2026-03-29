@@ -16,7 +16,7 @@
   padding: 0.06rem 0.75rem 0.55rem;
   display: flex;
   flex-direction: column;
-  gap: 0.32rem;
+  gap: 0.42rem;
 }
 
 /* ─── 섹션 공통 제목 ─── */
@@ -26,7 +26,7 @@
   gap: 0.4rem;
   margin: 0 0 0.75rem;
   font-family: var(--font-display);
-  font-size: 0.82rem;
+  font-size: 0.92rem;
   font-weight: 400;
   letter-spacing: 0.02em;
   color: var(--color-primary-dark);
@@ -41,13 +41,13 @@
   flex-shrink: 0;
 }
 
-/* ─── 우리 고양이 카드 섹션 (세로 점유 축소) ─── */
+/* ─── 우리 고양이 카드 섹션 (세로·가로 점유 축소 → 아래 본문 가독성) ─── */
 .catSection { width: 100%; }
 
 .catSectionTitle {
-  margin: 0 0 0.04rem;
+  margin: 0 0 0.06rem;
   font-family: var(--font-display);
-  font-size: 0.68rem;
+  font-size: 0.62rem;
   font-weight: 400;
   line-height: 1.1;
   color: var(--color-primary-dark);
@@ -55,9 +55,9 @@
 
 .catSectionHint {
   margin: 0;
-  padding: 0.7rem 1rem;
+  padding: 0.55rem 0.85rem;
   border-radius: var(--radius-md);
-  font-size: 0.8rem;
+  font-size: 0.88rem;
   line-height: 1.5;
   color: var(--color-text-sub);
   background: rgba(240, 253, 250, 0.9);
@@ -66,8 +66,8 @@
 
 .catCardGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(9.25rem, 1fr));
-  gap: 0.32rem;
+  grid-template-columns: repeat(auto-fill, minmax(7rem, 1fr));
+  gap: 0.22rem;
 }
 
 .catCard {
@@ -93,11 +93,11 @@
   border-color: var(--color-border-hover);
 }
 
-/* 스크롤 최소화: 미리보기 영역 최대한 낮게 */
+/* 스크롤 최소화: 우리 고양이 블록만 얇게 */
 .catCardPhotoWrap {
   position: relative;
-  aspect-ratio: 2 / 1;
-  max-height: 3.85rem;
+  aspect-ratio: 2.1 / 1;
+  max-height: 2.65rem;
   overflow: hidden;
   background: var(--mint-100);
 }
@@ -121,19 +121,19 @@
 }
 
 .catCardFallbackSvg {
-  width: 34px;
-  height: 34px;
+  width: 28px;
+  height: 28px;
   opacity: 0.9;
 }
 
 /* 사진 위 상태 뱃지 */
 .catCardStatusBadge {
   position: absolute;
-  bottom: 0.12rem;
-  left: 0.22rem;
-  padding: 0.04rem 0.28rem;
+  bottom: 0.08rem;
+  left: 0.16rem;
+  padding: 0.03rem 0.22rem;
   border-radius: 999px;
-  font-size: 0.52rem;
+  font-size: 0.48rem;
   font-weight: 700;
   color: var(--color-primary-dark);
   background: rgba(255, 255, 255, 0.88);
@@ -144,13 +144,13 @@
 }
 
 .catCardBody {
-  padding: 0.2rem 0.4rem 0.26rem;
+  padding: 0.12rem 0.32rem 0.18rem;
 }
 
 .catCardName {
-  margin: 0 0 0.1rem;
+  margin: 0 0 0.06rem;
   font-family: var(--font-display);
-  font-size: 0.8rem;
+  font-size: 0.72rem;
   font-weight: 400;
   color: var(--color-text);
   letter-spacing: -0.01em;
@@ -158,7 +158,7 @@
 }
 
 .catCardMeta {
-  margin: 0 0 0.22rem;
+  margin: 0 0 0.14rem;
   display: flex;
   flex-wrap: wrap;
   gap: 0.1rem 0.28rem;
@@ -167,7 +167,7 @@
 .catCardMetaRow {
   display: flex;
   gap: 0.12rem;
-  font-size: 0.58rem;
+  font-size: 0.52rem;
 }
 
 .catCardMetaRow dt {
@@ -184,16 +184,16 @@
 .catStatusBtnGroup {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.12rem;
-  margin-bottom: 0.12rem;
+  gap: 0.08rem;
+  margin-bottom: 0.08rem;
 }
 
 .catStatusBtn {
   flex: 0 1 auto;
-  padding: 0.1rem 0.32rem;
+  padding: 0.06rem 0.26rem;
   border: 1.5px solid transparent;
   border-radius: 999px;
-  font-size: 0.52rem;
+  font-size: 0.5rem;
   font-weight: 700;
   cursor: pointer;
   transition: transform 0.14s ease, box-shadow 0.14s ease, opacity 0.14s ease;
@@ -247,9 +247,9 @@
 /* 피드백 메시지 */
 .catCardFeedbackOk {
   margin: 0;
-  padding: 0.18rem 0.35rem;
+  padding: 0.12rem 0.28rem;
   border-radius: var(--radius-sm);
-  font-size: 0.58rem;
+  font-size: 0.52rem;
   font-weight: 600;
   color: var(--color-primary-dark);
   background: var(--mint-100);
@@ -259,9 +259,9 @@
 
 .catCardFeedbackErr {
   margin: 0;
-  padding: 0.18rem 0.35rem;
+  padding: 0.12rem 0.28rem;
   border-radius: var(--radius-sm);
-  font-size: 0.58rem;
+  font-size: 0.52rem;
   font-weight: 600;
   color: #9f1239;
   background: #fff1f2;
@@ -275,7 +275,7 @@
 .summarySectionTitle {
   margin: 0 0 0.18rem;
   font-family: var(--font-display);
-  font-size: 0.82rem;
+  font-size: 0.95rem;
   font-weight: 400;
   line-height: 1.2;
   color: var(--color-primary-dark);
@@ -314,13 +314,13 @@
 }
 
 .summaryCatPaw {
-  font-size: 0.95rem;
+  font-size: 1.05rem;
   line-height: 1;
 }
 
 .summaryCatName {
   font-family: var(--font-display);
-  font-size: 0.95rem;
+  font-size: 1.05rem;
   font-weight: 400;
   color: var(--color-primary-dark);
 }
@@ -342,20 +342,20 @@
 }
 
 .summaryStatIcon {
-  font-size: 0.88rem;
+  font-size: 0.98rem;
   line-height: 1;
   flex-shrink: 0;
 }
 
 .summaryStatLabel {
-  font-size: 0.68rem;
+  font-size: 0.78rem;
   color: var(--color-text-muted);
   font-weight: 600;
   white-space: nowrap;
 }
 
 .summaryStatCount {
-  font-size: 0.92rem;
+  font-size: 1.02rem;
   font-weight: 800;
   color: var(--color-primary);
   margin-left: auto;
@@ -368,7 +368,7 @@
 
 .summaryCardComment {
   margin: 0;
-  font-size: 0.68rem;
+  font-size: 0.8rem;
   color: var(--color-text-sub);
   line-height: 1.4;
   padding-top: 0.35rem;
@@ -379,7 +379,7 @@
   margin: 0;
   padding: 0.85rem 1.1rem;
   border-radius: var(--radius-md);
-  font-size: 0.82rem;
+  font-size: 0.92rem;
   color: var(--color-text-sub);
   background: rgba(240, 253, 250, 0.85);
   border: 1.5px dashed rgba(16, 185, 129, 0.25);
@@ -434,13 +434,13 @@
 }
 
 .envChipLabel {
-  font-size: 0.72rem;
+  font-size: 0.82rem;
   font-weight: 700;
   color: var(--color-text);
 }
 
 .envChipEta {
-  font-size: 0.65rem;
+  font-size: 0.74rem;
   color: var(--color-text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -453,7 +453,7 @@
 .cameraSectionTitle {
   margin: 0 0 0.7rem;
   font-family: var(--font-display);
-  font-size: 0.88rem;
+  font-size: 1rem;
   font-weight: 400;
   color: var(--color-primary-dark);
 }
@@ -557,7 +557,7 @@
 }
 
 .cameraLabel {
-  font-size: 0.76rem;
+  font-size: 0.86rem;
   font-weight: 800;
   color: #fff;
   text-shadow: 0 1px 4px rgba(0,0,0,0.5);
@@ -565,7 +565,7 @@
 }
 
 .cameraCatLabel {
-  font-size: 0.62rem;
+  font-size: 0.72rem;
   font-weight: 600;
   color: rgba(255,255,255,0.8);
   text-shadow: 0 1px 3px rgba(0,0,0,0.4);
@@ -576,7 +576,7 @@
 .statusBar {
   padding: 0.55rem 0.85rem;
   border-radius: var(--radius-sm);
-  font-size: 0.78rem;
+  font-size: 0.88rem;
   font-weight: 600;
   color: var(--color-text-sub);
   background: rgba(240, 253, 250, 0.8);
@@ -828,7 +828,7 @@
 .activitySectionTitle {
   margin: 0 0 0.2rem;
   font-family: var(--font-display);
-  font-size: 0.82rem;
+  font-size: 0.95rem;
   font-weight: 400;
   line-height: 1.2;
   color: var(--color-primary-dark);
@@ -892,14 +892,14 @@
 }
 
 .activityTime {
-  font-size: 0.68rem;
+  font-size: 0.78rem;
   color: var(--color-text-muted);
   font-weight: 500;
 }
 
 .activityText {
   margin: 0;
-  font-size: 0.82rem;
+  font-size: 0.94rem;
   color: var(--color-text-sub);
   line-height: 1.45;
   overflow: hidden;
@@ -923,7 +923,7 @@
   margin: 0;
   padding: 0.85rem 1.1rem;
   border-radius: var(--radius-md);
-  font-size: 0.82rem;
+  font-size: 0.92rem;
   color: var(--color-text-sub);
   background: rgba(240, 253, 250, 0.85);
   border: 1px solid var(--color-border);
@@ -934,7 +934,7 @@
   padding: 0.85rem;
   border-radius: var(--radius-md);
   font-family: var(--font-display);
-  font-size: 0.84rem;
+  font-size: 0.94rem;
   font-weight: 400;
   color: var(--color-text-sub);
   background: rgba(240, 253, 250, 0.85);
@@ -958,7 +958,7 @@
   border: 1.5px solid rgba(16, 185, 129, 0.35);
   background: rgba(255, 255, 255, 0.95);
   color: var(--color-primary-dark);
-  font-size: 0.7rem;
+  font-size: 0.78rem;
   font-weight: 700;
   letter-spacing: 0.02em;
   cursor: pointer;
@@ -982,7 +982,7 @@
   }
 
   .catCardGrid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(auto-fill, minmax(8.25rem, 1fr));
   }
 
   .summaryGrid {
@@ -998,16 +998,16 @@
   }
 
   .catCardPhotoWrap {
-    max-height: 3.45rem;
+    max-height: 2.5rem;
   }
 
   .catStatusBtnGroup {
-    gap: 0.1rem;
+    gap: 0.08rem;
   }
 
   .catStatusBtn {
-    font-size: 0.5rem;
-    padding: 0.08rem 0.28rem;
+    font-size: 0.48rem;
+    padding: 0.06rem 0.24rem;
   }
 
   .activityRow {
@@ -1029,7 +1029,7 @@
   }
 
   .catCardGrid {
-    grid-template-columns: repeat(auto-fill, minmax(8.75rem, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(6.75rem, 1fr));
   }
 
   .summaryGrid {
@@ -1045,7 +1045,7 @@
   }
 
   .catCardGrid {
-    grid-template-columns: repeat(auto-fill, minmax(8.5rem, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(6.5rem, 1fr));
   }
 
   .summaryGrid {
@@ -1061,7 +1061,7 @@
   }
 
   .catCardGrid {
-    grid-template-columns: repeat(auto-fill, minmax(8rem, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(6.25rem, 1fr));
   }
 
   .summaryGrid {

@@ -1,4 +1,5 @@
 import { BottomTabBar } from "@/components/shell/BottomTabBar";
+import { ShellSplashGate } from "@/components/shell/ShellSplashGate";
 
 /**
  * 메인 셸 — 헤더·하단 탭이 있는 화면(홈·리포트 등).
@@ -10,7 +11,7 @@ export default function MainShellLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <>
+    <ShellSplashGate>
       <header className="app-header">
         <div className="app-header-inner">
           <div className="app-header-titles">
@@ -22,6 +23,6 @@ export default function MainShellLayout({
       </header>
       <div className="app-main">{children}</div>
       <BottomTabBar />
-    </>
+    </ShellSplashGate>
   );
 }
