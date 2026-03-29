@@ -62,8 +62,9 @@ export function CameraPairClient() {
     setPairingPhase("pairing");
     setErrorMessage(null);
 
+    const normalizedPairingCode = pairingCode.trim();
     const { data, error } = await supabase.rpc("pair_camera_device", {
-      input_pairing_code: pairingCode,
+      input_pairing_code: normalizedPairingCode,
     });
 
     if (error || !data || data.error) {

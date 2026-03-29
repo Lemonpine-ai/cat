@@ -1,13 +1,13 @@
 /**
  * WebRTC SessionDescription 을 DB(TEXT)에 넣을 때 줄바꿈·이스케이프 깨짐을 막기 위한 유틸.
- * - 신규 저장: sdpv2: 접두사 + UTF-8 JSON 의 Base64 (SDP 원문이 JSON 이스케이프로 손상되지 않음)
- * - 구버전: JSON 문자열 그대로 파싱 후 SDP 줄만 정규화
  *
- * 브라우저는 v=0 다음 줄에 o= 가 와야 하는데, 빈 줄·앞쪽 잡문자가 끼면
- * "Expect line: o=" / "Expect line: v=" 파싱 오류가 납니다.
+ * - **rawv1 (권장)**: JSON 을 쓰지 않고 SDP 원문만 UTF-8 Base64 로 저장 → 이스케이프/따옴표로 인한 파손 방지
+ * - **sdpv2**: 구버전 — Base64(JSON) 저장
+ * - **레거시**: 순수 JSON 문자열
  */
 
-const SDP_DATABASE_PREFIX = "sdpv2:" as const;
+const SDP_V2_PREFIX = "sdpv2:" as const;
+const RAW_V1_PREFIX = "rawv1:" as const;
 
 /** DB/네트워크에서 잘못 들어온 리터럴 "\\r\\n" 등을 실제 줄바꿈으로 복구합니다. */
 function repairLiteralEscapesInSdpText(sdpText: string): string {
@@ -18,17 +18,13 @@ function repairLiteralEscapesInSdpText(sdpText: string): string {
 }
 
 /**
- * WebRTC 가 기대하는 SDP 텍스트로 정리합니다.
- * - BOM·앞쪽 불필요 문자 제거 후 첫 `v=` 줄부터 사용
- * - 빈 줄 제거 (v= 와 o= 사이 빈 줄이 있으면 파서 실패)
- * - 줄 끝 공백 제거 후 CRLF 로 통일
+ * v= 줄부터 잡고, 빈 줄을 제거한 뒤 CRLF 로 맞춥니다 (구버전 sdpv2/JSON 경로용).
  */
 export function sanitizeSdpForWebRtc(sdpText: string): string {
   let repaired = repairLiteralEscapesInSdpText(sdpText.trim());
   if (!repaired) {
     return "";
   }
-  // UTF-8 BOM
   if (repaired.charCodeAt(0) === 0xfeff) {
     repaired = repaired.slice(1);
   }
@@ -55,7 +51,7 @@ export function sanitizeSdpForWebRtc(sdpText: string): string {
   return `${lines.join("\r\n")}\r\n`;
 }
 
-/** @deprecated 호환용 — sanitizeSdpForWebRtc 와 동일 */
+/** @deprecated 호환용 */
 export function normalizeSdpLineEndings(sdpText: string): string {
   return sanitizeSdpForWebRtc(sdpText);
 }
@@ -79,21 +75,52 @@ function base64ToUtf8String(base64: string): string {
 }
 
 /**
+ * 브라우저가 준 SDP 원문을 WebRTC 가 읽기 좋게 CRLF 만 정리합니다 (줄 내용은 건드리지 않음).
+ * rawv1 디코드 시 사용합니다.
+ */
+function normalizeSdpLineEndingsOnly(sdpRaw: string): string {
+  let s = sdpRaw;
+  if (s.charCodeAt(0) === 0xfeff) {
+    s = s.slice(1);
+  }
+  const lines = s
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .split("\n")
+    .map((line) => line.replace(/\u0000/g, "").trimEnd());
+  const nonEmptyFromVersion = (() => {
+    const idx = lines.findIndex((line) => line.trimStart().startsWith("v="));
+    if (idx === -1) {
+      return lines.filter((l) => l.length > 0);
+    }
+    return lines.slice(idx).filter((l) => l.length > 0);
+  })();
+  if (nonEmptyFromVersion.length === 0) {
+    throw new Error("SDP 본문이 비어 있습니다.");
+  }
+  return `${nonEmptyFromVersion.join("\r\n")}\r\n`;
+}
+
+/**
  * RTCSessionDescriptionInit 을 DB 컬럼(offer_sdp / answer_sdp)에 저장할 문자열로 직렬화합니다.
+ * JSON 을 끼우지 않고 SDP 원문만 Base64 하여 파싱 깨짐을 방지합니다.
  */
 export function encodeSessionDescriptionForDatabase(
   description: RTCSessionDescriptionInit,
 ): string {
-  const normalizedSdp = sanitizeSdpForWebRtc(description.sdp ?? "");
-  const jsonPayload = JSON.stringify({
-    type: description.type,
-    sdp: normalizedSdp,
-  });
-  return `${SDP_DATABASE_PREFIX}${utf8StringToBase64(jsonPayload)}`;
+  const sdp = description.sdp;
+  if (sdp == null || !sdp.trim()) {
+    throw new Error("SDP가 비어 있습니다.");
+  }
+  const t = description.type;
+  if (t !== "offer" && t !== "answer" && t !== "pranswer") {
+    throw new Error(`지원하지 않는 SDP 타입: ${String(t)}`);
+  }
+  return `${RAW_V1_PREFIX}${t}:${utf8StringToBase64(sdp)}`;
 }
 
 /**
- * DB에서 읽은 문자열을 RTCSessionDescriptionInit 으로 복원합니다 (신규·레거시 모두).
+ * DB에서 읽은 문자열을 RTCSessionDescriptionInit 으로 복원합니다.
  */
 export function decodeSessionDescriptionPayload(
   stored: string | null | undefined,
@@ -104,8 +131,23 @@ export function decodeSessionDescriptionPayload(
 
   const trimmed = stored.trim();
 
-  if (trimmed.startsWith(SDP_DATABASE_PREFIX)) {
-    const base64Part = trimmed.slice(SDP_DATABASE_PREFIX.length);
+  if (trimmed.startsWith(RAW_V1_PREFIX)) {
+    const rest = trimmed.slice(RAW_V1_PREFIX.length);
+    const colonIdx = rest.indexOf(":");
+    if (colonIdx === -1) {
+      throw new Error("rawv1 SDP 형식이 올바르지 않습니다.");
+    }
+    const type = rest.slice(0, colonIdx) as RTCSessionDescriptionInit["type"];
+    const b64 = rest.slice(colonIdx + 1);
+    const sdpRaw = base64ToUtf8String(b64);
+    return {
+      type,
+      sdp: normalizeSdpLineEndingsOnly(sdpRaw),
+    };
+  }
+
+  if (trimmed.startsWith(SDP_V2_PREFIX)) {
+    const base64Part = trimmed.slice(SDP_V2_PREFIX.length);
     const jsonPayload = base64ToUtf8String(base64Part);
     const parsed = JSON.parse(jsonPayload) as RTCSessionDescriptionInit;
     return {

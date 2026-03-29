@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import styles from "./CameraDeviceManager.module.css";
 
@@ -36,6 +36,9 @@ export function CameraDeviceManager({ homeId }: { homeId: string }) {
   const [isLoadingDevices, setIsLoadingDevices] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  /** Realtime 콜백에서 최신 페어링 중 기기 id 참조 (클로저 끊김 방지) */
+  const pairingDeviceIdRef = useRef<string | null>(null);
+
   const fetchCameraDevices = useCallback(async () => {
     const { data, error } = await supabase
       .from("camera_devices")
@@ -52,6 +55,39 @@ export function CameraDeviceManager({ homeId }: { homeId: string }) {
   useEffect(() => {
     void fetchCameraDevices();
   }, [fetchCameraDevices]);
+
+  useEffect(() => {
+    pairingDeviceIdRef.current =
+      pairingModal.kind === "ready" ? pairingModal.deviceId : null;
+  }, [pairingModal]);
+
+  /** 남는 폰에서 페어링 완료 시 DB 가 갱신되면 코드 카드를 자동으로 닫습니다. */
+  useEffect(() => {
+    const channel = supabase
+      .channel(`camera-devices-realtime-${homeId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "camera_devices",
+          filter: `home_id=eq.${homeId}`,
+        },
+        (payload) => {
+          const row = payload.new as { id: string; is_paired: boolean };
+          void fetchCameraDevices();
+          if (row.is_paired && pairingDeviceIdRef.current === row.id) {
+            setPairingModal({ kind: "closed" });
+            pairingDeviceIdRef.current = null;
+          }
+        },
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [supabase, homeId, fetchCameraDevices]);
 
   useEffect(() => {
     if (pairingModal.kind !== "ready") return;
