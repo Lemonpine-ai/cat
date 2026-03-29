@@ -13,16 +13,24 @@ export default async function MainShellLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  let userExists = false;
+
   try {
     const supabase = await createSupabaseServerClient();
     const {
       data: { user },
     } = await supabase.auth.getUser();
-
-    if (!user) {
+    userExists = Boolean(user);
+  } catch (supabaseInitError) {
+    const isEnvMissing =
+      supabaseInitError instanceof Error &&
+      supabaseInitError.message.includes("NEXT_PUBLIC_SUPABASE");
+    if (isEnvMissing) {
       redirect("/login");
     }
-  } catch {
+  }
+
+  if (!userExists) {
     redirect("/login");
   }
 

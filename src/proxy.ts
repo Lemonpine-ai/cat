@@ -22,7 +22,7 @@ export async function proxy(request: NextRequest) {
 
   let supabaseResponse = NextResponse.next({ request });
 
-  const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
+  const supabase = createServerClient(supabaseUrl.trim(), supabaseAnonKey.trim(), {
     cookies: {
       getAll() {
         return request.cookies.getAll();
