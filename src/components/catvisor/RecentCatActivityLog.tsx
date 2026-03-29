@@ -115,7 +115,7 @@ export function RecentCatActivityLog({
     logs.length - ACTIVITY_PREVIEW_ROW_COUNT,
   );
 
-  const TITLE = "보리 & 찹쌀의 냥-모먼트 🐾";
+  const TITLE = "냥-모먼트 일지 🐾";
 
   if (fetchErrorMessage) {
     return (

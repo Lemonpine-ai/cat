@@ -19,7 +19,7 @@ const nextConfig: NextConfig = {
     remotePatterns: [
       {
         protocol: "https",
-        hostname: "placekitten.com",
+        hostname: "picsum.photos",
         pathname: "/**",
       },
       ...(supabaseHost

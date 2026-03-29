@@ -24,28 +24,28 @@ const CAMERA_TILES: CameraTileData[] = [
     placeLabel: "거실",
     catLabel: null,
     isOnline: true,
-    imageUrl: "https://placekitten.com/480/360",
+    imageUrl: "https://picsum.photos/seed/cam1/480/360",
   },
   {
     id: "cam-2",
     placeLabel: "캣타워",
     catLabel: null,
     isOnline: false,
-    imageUrl: "https://placekitten.com/481/361",
+    imageUrl: "https://picsum.photos/seed/cam2/480/360",
   },
   {
     id: "cam-3",
     placeLabel: "화장실",
     catLabel: null,
     isOnline: false,
-    imageUrl: "https://placekitten.com/482/362",
+    imageUrl: "https://picsum.photos/seed/cam3/480/360",
   },
   {
     id: "cam-4",
     placeLabel: "냠냠 구역",
     catLabel: null,
     isOnline: false,
-    imageUrl: "https://placekitten.com/483/363",
+    imageUrl: "https://picsum.photos/seed/cam4/480/360",
   },
 ];
 
