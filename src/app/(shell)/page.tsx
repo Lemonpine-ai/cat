@@ -65,6 +65,8 @@ export default async function HomePage() {
   let homeId: string | null = null;
   let todayMedicineCount = 0;
   let todayMealCount = 0;
+  let lastWaterChangeAt: string | null = null;
+  let lastLitterCleanAt: string | null = null;
 
   try {
     const supabase = await createSupabaseServerClient();
@@ -143,6 +145,27 @@ export default async function HomePage() {
         .gte("created_at", todayStart);
 
       todayMealCount = mealRows ?? 0;
+
+      // 마지막 식수 교체 / 화장실 청소 시각 조회
+      const { data: lastWaterRow } = await supabase
+        .from("cat_care_logs")
+        .select("created_at")
+        .eq("home_id", homeId)
+        .eq("care_kind", "water_change")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      lastWaterChangeAt = lastWaterRow?.created_at ?? null;
+
+      const { data: lastLitterRow } = await supabase
+        .from("cat_care_logs")
+        .select("created_at")
+        .eq("home_id", homeId)
+        .eq("care_kind", "litter_clean")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      lastLitterCleanAt = lastLitterRow?.created_at ?? null;
     }
   } catch (unknownError) {
     const message =
@@ -170,6 +193,8 @@ export default async function HomePage() {
       initialDailySummary={dailySummary}
       initialTodayMedicineCount={todayMedicineCount}
       initialTodayMealCount={todayMealCount}
+      initialLastWaterChangeAt={lastWaterChangeAt}
+      initialLastLitterCleanAt={lastLitterCleanAt}
     >
       <HomeCatCards cats={cats} fetchErrorMessage={catsFetchError} />
     </CatvisorHomeDashboard>

@@ -7,6 +7,7 @@ import { CameraDeviceManager } from "@/components/catvisor/CameraDeviceManager";
 import { CameraLiveViewer } from "@/components/catvisor/CameraLiveViewer";
 import { RecentCatActivityLog } from "@/components/catvisor/RecentCatActivityLog";
 import { TodaySummaryCards } from "@/components/catvisor/TodaySummaryCards";
+import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { CatDailySummaryItem } from "@/types/catDailySummary";
 import type { ActivityLogListItem } from "@/types/catLog";
 import styles from "./CatvisorHomeDashboard.module.css";
@@ -67,7 +68,27 @@ type CatvisorHomeDashboardProps = {
   initialDailySummary: CatDailySummaryItem[];
   initialTodayMedicineCount: number;
   initialTodayMealCount: number;
+  /** 가장 최근 식수 교체 ISO 타임스탬프 (없으면 null) */
+  initialLastWaterChangeAt: string | null;
+  /** 가장 최근 화장실 청소 ISO 타임스탬프 (없으면 null) */
+  initialLastLitterCleanAt: string | null;
 };
+
+/**
+ * 마지막 관리 타임스탬프를 받아 '방금 전', 'n분 전', 'n시간 전', 'n일 전'으로 변환합니다.
+ */
+function formatElapsedTimeLabel(isoTimestamp: string | null): string {
+  if (!isoTimestamp) return "기록 없음";
+  const diffMs = Date.now() - new Date(isoTimestamp).getTime();
+  if (diffMs < 0) return "방금 전";
+  const diffMinutes = Math.floor(diffMs / 60_000);
+  if (diffMinutes < 1) return "방금 전";
+  if (diffMinutes < 60) return `${diffMinutes}분 전`;
+  const diffHours = Math.floor(diffMinutes / 60);
+  if (diffHours < 24) return `${diffHours}시간 전`;
+  const diffDays = Math.floor(diffHours / 24);
+  return `${diffDays}일 전`;
+}
 
 /**
  * 카메라 중심 홈 — 흐름: 고양이 카드 → 오늘 요약 → 환경 → 카메라 기기 관리 → 활동.
@@ -81,9 +102,17 @@ export function CatvisorHomeDashboard({
   initialDailySummary,
   initialTodayMedicineCount,
   initialTodayMealCount,
+  initialLastWaterChangeAt,
+  initialLastLitterCleanAt,
 }: CatvisorHomeDashboardProps) {
-  const [waterEtaLabel, setWaterEtaLabel] = useState("기록 없음");
-  const [litterEtaLabel, setLitterEtaLabel] = useState("기록 없음");
+  const [lastWaterChangeAt, setLastWaterChangeAt] = useState<string | null>(initialLastWaterChangeAt);
+  const [lastLitterCleanAt, setLastLitterCleanAt] = useState<string | null>(initialLastLitterCleanAt);
+
+  // 1분마다 경과 시간 레이블 강제 갱신 (setInterval tick 전용 카운터)
+  const [elapsedTick, setElapsedTick] = useState(0);
+
+  const waterEtaLabel = formatElapsedTimeLabel(lastWaterChangeAt);
+  const litterEtaLabel = formatElapsedTimeLabel(lastLitterCleanAt);
 
   /** 하단 토스트 메시지. 빈 문자열이면 숨김. */
   const [toastMessage, setToastMessage] = useState("");
@@ -118,6 +147,43 @@ export function CatvisorHomeDashboard({
       }
     };
   }, []);
+
+  // 1분 주기로 경과 시간 레이블 갱신
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      setElapsedTick((prev) => prev + 1);
+    }, 60_000);
+    return () => clearInterval(intervalId);
+  }, []);
+
+  // 환경 관리 Realtime 구독 (water_change, litter_clean)
+  useEffect(() => {
+    if (!homeId) return;
+    const supabase = createSupabaseBrowserClient();
+    const channel = supabase
+      .channel(`env_care_realtime_${homeId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "cat_care_logs",
+          filter: `home_id=eq.${homeId}`,
+        },
+        (payload) => {
+          const row = payload.new as { care_kind: string; created_at: string };
+          if (row.care_kind === "water_change") {
+            setLastWaterChangeAt(row.created_at);
+          } else if (row.care_kind === "litter_clean") {
+            setLastLitterCleanAt(row.created_at);
+          }
+        },
+      )
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [homeId]);
 
   /** Esc 키로 환경 모달 닫기 */
   useEffect(() => {
@@ -155,7 +221,7 @@ export function CatvisorHomeDashboard({
 
   async function handleSubmitEnvironment(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!pendingEnvironmentKind || envSaving) return;
+    if (!pendingEnvironmentKind || envSaving || !homeId) return;
 
     const form = event.currentTarget;
     const noteEl = form.elements.namedItem("note");
@@ -163,20 +229,36 @@ export function CatvisorHomeDashboard({
 
     setEnvSaving(true);
     try {
-      // 로컬 상태 즉시 반영
-      const nowLabel = "방금 전";
-      if (pendingEnvironmentKind === "water_change") {
-        setWaterEtaLabel(nowLabel);
-      } else {
-        setLitterEtaLabel(nowLabel);
+      const nowIso = new Date().toISOString();
+      const careKind: "water_change" | "litter_clean" =
+        pendingEnvironmentKind === "water_change" ? "water_change" : "litter_clean";
+
+      // DB에 실제 저장
+      const supabase = createSupabaseBrowserClient();
+      const { error: insertError } = await supabase
+        .from("cat_care_logs")
+        .insert({
+          home_id: homeId,
+          care_kind: careKind,
+          note: noteValue || null,
+        });
+
+      if (insertError) {
+        showToast(`저장 오류: ${insertError.message}`);
+        return;
       }
 
-      // 모달 먼저 닫기 (사용자 경험: 즉시 반응)
+      // 로컬 상태 즉시 반영 (Realtime보다 빠른 UI 응답)
+      if (careKind === "water_change") {
+        setLastWaterChangeAt(nowIso);
+      } else {
+        setLastLitterCleanAt(nowIso);
+      }
+
+      // 모달 먼저 닫기
       closeEnvModal();
 
-      // 성공 토스트 표시
-      const kindLabel =
-        pendingEnvironmentKind === "water_change" ? "식수 교체" : "화장실 청소";
+      const kindLabel = careKind === "water_change" ? "식수 교체" : "화장실 청소";
       showToast(
         `기록 완료! ${kindLabel}${noteValue ? ` — "${noteValue}"` : ""} 💚 고양이들이 아주 좋아할 거예요!`,
       );
