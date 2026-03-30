@@ -224,6 +224,26 @@
   border: 1px solid rgba(167, 139, 250, 0.45);
 }
 
+/* 식수 교체 / 화장실 청소 버튼: 경과 시간 표시를 위한 세로 레이아웃 */
+.broadcastCareBtnEnv {
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.5rem 0.4rem;
+}
+
+.broadcastCareBtnLabel {
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.broadcastCareBtnEta {
+  font-size: 0.6rem;
+  font-weight: 600;
+  opacity: 0.9;
+  line-height: 1;
+}
+
 .broadcastCareFeedback {
   margin: 0;
   font-size: 0.72rem;

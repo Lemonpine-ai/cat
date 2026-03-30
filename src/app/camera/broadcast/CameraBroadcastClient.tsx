@@ -11,6 +11,7 @@ import {
   Radio,
   Sparkles,
   Square,
+  Trash2,
   Volume2,
   VolumeX,
 } from "lucide-react";
@@ -29,6 +30,22 @@ const WEBRTC_ICE_SERVERS: RTCIceServer[] = [
   { urls: "stun:stun1.l.google.com:19302" },
   { urls: "stun:stun.cloudflare.com:3478" },
 ];
+
+/**
+ * 마지막 관리 타임스탬프 → '0분 전' / 'n분 전' / 'n시간 전' / 'n일 전' 변환.
+ * CameraLiveViewer / CatvisorHomeDashboard 와 동일한 규칙을 사용합니다.
+ */
+function formatEnvElapsed(isoTimestamp: string | null): string {
+  if (!isoTimestamp) return "기록 없음";
+  const diffMs = Date.now() - new Date(isoTimestamp).getTime();
+  if (diffMs < 0) return "0분 전";
+  const diffMinutes = Math.floor(diffMs / 60_000);
+  if (diffMinutes < 1) return "0분 전";
+  if (diffMinutes < 60) return `${diffMinutes}분 전`;
+  const diffHours = Math.floor(diffMinutes / 60);
+  if (diffHours < 24) return `${diffHours}시간 전`;
+  return `${Math.floor(diffHours / 24)}일 전`;
+}
 
 const DEVICE_TOKEN_STORAGE_KEY = "catvisor_device_token";
 const DEVICE_ID_STORAGE_KEY = "catvisor_device_id";
@@ -103,6 +120,11 @@ export function CameraBroadcastClient() {
   const [careLogPending, setCareLogPending] = useState(false);
   const [careLogMessage, setCareLogMessage] = useState<string | null>(null);
 
+  // 환경 관리 경과 시간 추적 — 초기값은 RPC 조회 후 설정
+  const [lastWaterChangeAt, setLastWaterChangeAt] = useState<string | null>(null);
+  const [lastLitterCleanAt, setLastLitterCleanAt] = useState<string | null>(null);
+  const [elapsedTick, setElapsedTick] = useState(0);
+
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
@@ -156,13 +178,14 @@ export function CameraBroadcastClient() {
     async ({
       careKind,
     }: {
-      careKind: "meal" | "water" | "toilet" | "medicine";
+      careKind: "meal" | "water_change" | "litter_clean" | "medicine";
     }) => {
       if (!deviceIdentity) return;
       if (isSoundEnabled) playPopSound();
       setCareLogMessage(null);
       setCareLogPending(true);
       try {
+        const nowIso = new Date().toISOString();
         const { data, error } = await supabase.rpc(
           "record_device_cat_care_log",
           {
@@ -184,13 +207,18 @@ export function CameraBroadcastClient() {
           setCareLogMessage("기록을 저장하지 못했어요.");
           return;
         }
+
+        // 환경 관리 항목은 경과 시간 즉시 반영
+        if (careKind === "water_change") setLastWaterChangeAt(nowIso);
+        if (careKind === "litter_clean") setLastLitterCleanAt(nowIso);
+
         const labelByKind: Record<typeof careKind, string> = {
           meal: "맘마 먹기",
-          water: "물 마시기",
-          toilet: "감자 캐기",
+          water_change: "식수 교체",
+          litter_clean: "화장실 청소",
           medicine: "약 먹기",
         };
-        setCareLogMessage(`「${labelByKind[careKind]}」 기록했어요!`);
+        setCareLogMessage(`「${labelByKind[careKind]}」 기록했어요! (0분 전)`);
         window.setTimeout(() => setCareLogMessage(null), 2200);
       } finally {
         setCareLogPending(false);
@@ -198,6 +226,31 @@ export function CameraBroadcastClient() {
     },
     [activeSessionId, deviceIdentity, isSoundEnabled, supabase],
   );
+
+  // 1분 주기로 경과 시간 레이블 강제 갱신
+  useEffect(() => {
+    const id = setInterval(() => setElapsedTick((n) => n + 1), 60_000);
+    return () => clearInterval(id);
+  }, []);
+
+  // 기기 identity 확보 후: 홈의 최신 식수교체/화장실청소 타임스탬프 초기 조회
+  useEffect(() => {
+    if (!deviceIdentity) return;
+    async function fetchInitialEnvTimestamps() {
+      const { data } = await supabase.rpc("get_device_home_env_timestamps", {
+        p_device_token: deviceIdentity!.deviceToken,
+      });
+      const payload = data as {
+        last_water_change_at?: string | null;
+        last_litter_clean_at?: string | null;
+        error?: string;
+      } | null;
+      if (!payload || payload.error) return;
+      if (payload.last_water_change_at) setLastWaterChangeAt(payload.last_water_change_at);
+      if (payload.last_litter_clean_at) setLastLitterCleanAt(payload.last_litter_clean_at);
+    }
+    void fetchInitialEnvTimestamps();
+  }, [deviceIdentity, supabase]);
 
   /**
    * 페어링 직후 `?autostart=1` 로 들어온 경우: 카메라 권한 → offer 생성 → `start_device_broadcast` 까지 한 번에 이어 줍니다.
@@ -627,26 +680,32 @@ export function CameraBroadcastClient() {
                 <button
                   type="button"
                   disabled={careLogPending}
-                  className={`${styles.broadcastCareBtn} ${styles.broadcastCareBtnSky}`}
+                  className={`${styles.broadcastCareBtn} ${styles.broadcastCareBtnSky} ${styles.broadcastCareBtnEnv}`}
                   onClick={() =>
-                    void recordCareLogFromBroadcastDevice({ careKind: "water" })
+                    void recordCareLogFromBroadcastDevice({ careKind: "water_change" })
                   }
                 >
                   <Droplets size={14} strokeWidth={2} aria-hidden />
-                  물 💧
+                  <span className={styles.broadcastCareBtnLabel}>식수 교체 💧</span>
+                  <span className={styles.broadcastCareBtnEta}>
+                    {formatEnvElapsed(lastWaterChangeAt)}
+                  </span>
                 </button>
                 <button
                   type="button"
                   disabled={careLogPending}
-                  className={`${styles.broadcastCareBtn} ${styles.broadcastCareBtnPeach}`}
+                  className={`${styles.broadcastCareBtn} ${styles.broadcastCareBtnPeach} ${styles.broadcastCareBtnEnv}`}
                   onClick={() =>
                     void recordCareLogFromBroadcastDevice({
-                      careKind: "toilet",
+                      careKind: "litter_clean",
                     })
                   }
                 >
-                  <Sparkles size={14} strokeWidth={2} aria-hidden />
-                  감자 💩
+                  <Trash2 size={14} strokeWidth={2} aria-hidden />
+                  <span className={styles.broadcastCareBtnLabel}>화장실 청소 🚽</span>
+                  <span className={styles.broadcastCareBtnEta}>
+                    {formatEnvElapsed(lastLitterCleanAt)}
+                  </span>
                 </button>
                 <button
                   type="button"
