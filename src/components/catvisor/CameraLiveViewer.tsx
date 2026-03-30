@@ -10,11 +10,18 @@ import type { RealtimeChannel } from "@supabase/supabase-js";
 import {
   AlertTriangle,
   ArrowRight,
+  Baby,
+  Droplets,
   Loader2,
   Radio,
   Smartphone,
+  Sparkles,
   Video,
+  Volume2,
+  VolumeX,
 } from "lucide-react";
+import { playPopSound } from "@/lib/sound/playPopSound";
+import { CATVISOR_SOUND_ENABLED_STORAGE_KEY } from "@/lib/sound/soundPreferenceStorageKey";
 
 /** STUN만 사용. 첫 URL은 Google 무료 STUN (요구사항과 동일). */
 const WEBRTC_ICE_SERVERS: RTCIceServer[] = [
@@ -47,6 +54,9 @@ export function CameraLiveViewer() {
   const [homeId, setHomeId] = useState<string | null>(null);
   const [liveSession, setLiveSession] = useState<LiveSession | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isSoundEnabled, setIsSoundEnabled] = useState(true);
+  const [careLogPending, setCareLogPending] = useState(false);
+  const [careLogMessage, setCareLogMessage] = useState<string | null>(null);
 
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
@@ -199,6 +209,71 @@ export function CameraLiveViewer() {
       }
     },
     [supabase, closePeerConnection],
+  );
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(CATVISOR_SOUND_ENABLED_STORAGE_KEY);
+      if (raw === "0") setIsSoundEnabled(false);
+      if (raw === "1") setIsSoundEnabled(true);
+    } catch {
+      // storage 사용 불가
+    }
+  }, []);
+
+  const toggleSoundEnabled = useCallback(() => {
+    setIsSoundEnabled((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem(
+          CATVISOR_SOUND_ENABLED_STORAGE_KEY,
+          next ? "1" : "0",
+        );
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+  }, []);
+
+  const recordCareLog = useCallback(
+    async (careKind: "meal" | "water" | "toilet") => {
+      if (!homeId) return;
+      if (isSoundEnabled) playPopSound();
+      setCareLogMessage(null);
+      setCareLogPending(true);
+      try {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        if (!user) {
+          setCareLogMessage("로그인이 필요해요.");
+          return;
+        }
+        const { error } = await supabase.from("cat_care_logs").insert({
+          home_id: homeId,
+          recorded_by: user.id,
+          cat_id: liveSession?.cat_id ?? null,
+          care_kind: careKind,
+          source: "live_camera_viewer",
+          camera_session_id: liveSession?.id ?? null,
+        });
+        if (error) {
+          setCareLogMessage(error.message);
+          return;
+        }
+        const labelByKind: Record<typeof careKind, string> = {
+          meal: "맘마 먹기",
+          water: "물 마시기",
+          toilet: "감자 캐기",
+        };
+        setCareLogMessage(`「${labelByKind[careKind]}」 기록했어요!`);
+        window.setTimeout(() => setCareLogMessage(null), 2200);
+      } finally {
+        setCareLogPending(false);
+      }
+    },
+    [homeId, isSoundEnabled, liveSession, supabase],
   );
 
   // 1단계: 내 home_id 가져오기
@@ -391,6 +466,67 @@ export function CameraLiveViewer() {
               </>
             ) : null}
           </div>
+        ) : null}
+      </div>
+
+      <div className="mt-4 flex flex-col gap-3">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-xs font-semibold text-[#1e8f83]">
+            빠른 케어 기록
+          </span>
+          <button
+            type="button"
+            onClick={toggleSoundEnabled}
+            className="inline-flex size-9 items-center justify-center rounded-full border border-[#4FD1C5]/35 bg-white text-[#1e8f83] shadow-md transition hover:bg-[#4FD1C5]/10"
+            aria-pressed={isSoundEnabled}
+            aria-label={isSoundEnabled ? "효과음 끄기" : "효과음 켜기"}
+          >
+            {isSoundEnabled ? (
+              <Volume2 className="size-4" strokeWidth={2} aria-hidden />
+            ) : (
+              <VolumeX className="size-4" strokeWidth={2} aria-hidden />
+            )}
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+          <button
+            type="button"
+            disabled={careLogPending}
+            onClick={() => void recordCareLog("meal")}
+            className="inline-flex items-center justify-center gap-2 rounded-3xl border border-[#4FD1C5]/30 bg-gradient-to-r from-[#4FD1C5] to-[#38BDB0] px-3 py-3 text-sm font-bold text-white shadow-lg transition hover:brightness-105 disabled:opacity-50"
+          >
+            <Baby className="size-4 shrink-0" strokeWidth={2} aria-hidden />
+            맘마 먹기 🍼
+          </button>
+          <button
+            type="button"
+            disabled={careLogPending}
+            onClick={() => void recordCareLog("water")}
+            className="inline-flex items-center justify-center gap-2 rounded-3xl border border-sky-200/80 bg-gradient-to-r from-sky-400 to-sky-500 px-3 py-3 text-sm font-bold text-white shadow-lg transition hover:brightness-105 disabled:opacity-50"
+          >
+            <Droplets className="size-4 shrink-0" strokeWidth={2} aria-hidden />
+            물 마시기 💧
+          </button>
+          <button
+            type="button"
+            disabled={careLogPending}
+            onClick={() => void recordCareLog("toilet")}
+            className="inline-flex items-center justify-center gap-2 rounded-3xl border border-[#FFAB91]/50 bg-gradient-to-r from-[#FFAB91] to-[#FF8A65] px-3 py-3 text-sm font-bold text-white shadow-lg transition hover:brightness-105 disabled:opacity-50"
+          >
+            <Sparkles className="size-4 shrink-0" strokeWidth={2} aria-hidden />
+            감자 캐기 💩
+          </button>
+        </div>
+
+        {careLogMessage ? (
+          <p
+            className="text-center text-xs font-medium text-[#1e8f83]"
+            role="status"
+            aria-live="polite"
+          >
+            {careLogMessage}
+          </p>
         ) : null}
       </div>
     </section>
