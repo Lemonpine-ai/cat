@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
-  decodeSessionDescriptionPayload,
-  encodeSessionDescriptionForDatabase,
+  decodeSdpFromDatabaseColumn,
+  encodePlainSdpForDatabaseColumn,
 } from "@/lib/webrtc/sessionDescriptionPayload";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import styles from "./CameraLiveViewer.module.css";
@@ -134,7 +134,7 @@ export function CameraLiveViewer() {
           }
         };
 
-        const offerInit = decodeSessionDescriptionPayload(session.offer_sdp);
+        const offerInit = decodeSdpFromDatabaseColumn(session.offer_sdp, "offer");
         await pc.setRemoteDescription(new RTCSessionDescription(offerInit));
 
         const { data: existingCandidates } = await supabase
@@ -164,10 +164,8 @@ export function CameraLiveViewer() {
         await supabase
           .from("camera_sessions")
           .update({
-            answer_sdp: encodeSessionDescriptionForDatabase({
-              type: committedAnswer.type,
-              sdp: committedAnswer.sdp,
-            }),
+            /** answer_sdp 도 순수 SDP 텍스트만 저장 */
+            answer_sdp: encodePlainSdpForDatabaseColumn(committedAnswer.sdp),
           })
           .eq("id", session.id);
       } catch (err) {

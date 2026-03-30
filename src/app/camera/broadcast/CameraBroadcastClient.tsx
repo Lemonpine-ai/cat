@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
-  decodeSessionDescriptionPayload,
-  encodeSessionDescriptionForDatabase,
+  decodeSdpFromDatabaseColumn,
+  encodePlainSdpForDatabaseColumn,
 } from "@/lib/webrtc/sessionDescriptionPayload";
 import styles from "./CameraBroadcastClient.module.css";
 
@@ -243,10 +243,10 @@ export function CameraBroadcastClient() {
         "start_device_broadcast",
         {
           input_device_token: deviceIdentity.deviceToken,
-          input_offer_sdp: encodeSessionDescriptionForDatabase({
-            type: committedLocalDescription.type,
-            sdp: committedLocalDescription.sdp,
-          }),
+          /** DB offer_sdp 컬럼에는 v= 로 시작하는 SDP 텍스트만 저장 (JSON 객체 문자열 금지) */
+          input_offer_sdp: encodePlainSdpForDatabaseColumn(
+            committedLocalDescription.sdp,
+          ),
         },
       );
 
@@ -292,7 +292,7 @@ export function CameraBroadcastClient() {
           const answerSdpRaw = signalingPayload.answer_sdp as string | null | undefined;
           if (answerSdpRaw && currentPc.remoteDescription === null) {
             try {
-              const answerInit = decodeSessionDescriptionPayload(answerSdpRaw);
+              const answerInit = decodeSdpFromDatabaseColumn(answerSdpRaw, "answer");
               await currentPc.setRemoteDescription(new RTCSessionDescription(answerInit));
               setBroadcastPhase("live");
             } catch (answerErr) {

@@ -1,15 +1,13 @@
 /**
- * WebRTC SessionDescription 을 DB(TEXT)에 넣을 때 줄바꿈·이스케이프 깨짐을 막기 위한 유틸.
+ * camera_sessions.offer_sdp / answer_sdp 컬럼용 SDP 직렬화.
  *
- * - **rawv1 (권장)**: JSON 을 쓰지 않고 SDP 원문만 UTF-8 Base64 로 저장 → 이스케이프/따옴표로 인한 파손 방지
- * - **sdpv2**: 구버전 — Base64(JSON) 저장
- * - **레거시**: 순수 JSON 문자열
+ * **저장(신규)**: `v=0` 으로 시작하는 SDP 본문만 TEXT 로 넣습니다 (JSON 객체 전체 문자열 금지).
+ * **읽기**: 순수 SDP, `{"type","sdp"}`, `rawv1:`, `sdpv2:` 등 레거시 모두 지원.
  */
 
 const SDP_V2_PREFIX = "sdpv2:" as const;
 const RAW_V1_PREFIX = "rawv1:" as const;
 
-/** DB/네트워크에서 잘못 들어온 리터럴 "\\r\\n" 등을 실제 줄바꿈으로 복구합니다. */
 function repairLiteralEscapesInSdpText(sdpText: string): string {
   return sdpText
     .replace(/\\r\\n/g, "\r\n")
@@ -18,7 +16,7 @@ function repairLiteralEscapesInSdpText(sdpText: string): string {
 }
 
 /**
- * v= 줄부터 잡고, 빈 줄을 제거한 뒤 CRLF 로 맞춥니다 (구버전 sdpv2/JSON 경로용).
+ * v= 줄부터 잡고, 빈 줄을 제거한 뒤 CRLF 로 맞춥니다.
  */
 export function sanitizeSdpForWebRtc(sdpText: string): string {
   let repaired = repairLiteralEscapesInSdpText(sdpText.trim());
@@ -74,10 +72,6 @@ function base64ToUtf8String(base64: string): string {
   return new TextDecoder("utf-8", { fatal: false }).decode(bytes);
 }
 
-/**
- * 브라우저가 준 SDP 원문을 WebRTC 가 읽기 좋게 CRLF 만 정리합니다 (줄 내용은 건드리지 않음).
- * rawv1 디코드 시 사용합니다.
- */
 function normalizeSdpLineEndingsOnly(sdpRaw: string): string {
   let s = sdpRaw;
   if (s.charCodeAt(0) === 0xfeff) {
@@ -102,34 +96,33 @@ function normalizeSdpLineEndingsOnly(sdpRaw: string): string {
 }
 
 /**
- * RTCSessionDescriptionInit 을 DB 컬럼(offer_sdp / answer_sdp)에 저장할 문자열로 직렬화합니다.
- * JSON 을 끼우지 않고 SDP 원문만 Base64 하여 파싱 깨짐을 방지합니다.
+ * DB 에 넣을 값: 브라우저가 준 SDP 문자열만 정규화 (반드시 v= 로 시작하는 한 덩어리 텍스트).
  */
-export function encodeSessionDescriptionForDatabase(
-  description: RTCSessionDescriptionInit,
-): string {
-  const sdp = description.sdp;
-  if (sdp == null || !sdp.trim()) {
-    throw new Error("SDP가 비어 있습니다.");
-  }
-  const t = description.type;
-  if (t !== "offer" && t !== "answer" && t !== "pranswer") {
-    throw new Error(`지원하지 않는 SDP 타입: ${String(t)}`);
-  }
-  return `${RAW_V1_PREFIX}${t}:${utf8StringToBase64(sdp)}`;
+export function encodePlainSdpForDatabaseColumn(sdp: string): string {
+  return sanitizeSdpForWebRtc(sdp);
 }
 
 /**
- * DB에서 읽은 문자열을 RTCSessionDescriptionInit 으로 복원합니다.
+ * DB 에서 읽은 문자열 → RTCSessionDescriptionInit.
+ * @param fallbackType 컬럼에 type 이 없을 때 (순수 SDP) 사용
  */
-export function decodeSessionDescriptionPayload(
+export function decodeSdpFromDatabaseColumn(
   stored: string | null | undefined,
+  fallbackType: RTCSessionDescriptionInit["type"],
 ): RTCSessionDescriptionInit {
   if (stored == null || !String(stored).trim()) {
-    throw new Error("SessionDescription payload is empty.");
+    throw new Error("SDP column is empty.");
   }
 
   const trimmed = stored.trim();
+
+  if (trimmed.startsWith("{")) {
+    const parsed = JSON.parse(trimmed) as RTCSessionDescriptionInit;
+    return {
+      type: parsed.type ?? fallbackType,
+      sdp: sanitizeSdpForWebRtc(parsed.sdp ?? ""),
+    };
+  }
 
   if (trimmed.startsWith(RAW_V1_PREFIX)) {
     const rest = trimmed.slice(RAW_V1_PREFIX.length);
@@ -156,9 +149,38 @@ export function decodeSessionDescriptionPayload(
     };
   }
 
-  const legacyParsed = JSON.parse(trimmed) as RTCSessionDescriptionInit;
-  return {
-    type: legacyParsed.type,
-    sdp: sanitizeSdpForWebRtc(legacyParsed.sdp ?? ""),
-  };
+  if (/^v=/m.test(trimmed)) {
+    return {
+      type: fallbackType,
+      sdp: sanitizeSdpForWebRtc(trimmed),
+    };
+  }
+
+  try {
+    const legacyParsed = JSON.parse(trimmed) as RTCSessionDescriptionInit;
+    if (legacyParsed && typeof legacyParsed === "object" && "sdp" in legacyParsed) {
+      return {
+        type: legacyParsed.type ?? fallbackType,
+        sdp: sanitizeSdpForWebRtc(String(legacyParsed.sdp ?? "")),
+      };
+    }
+  } catch {
+    // ignore
+  }
+
+  throw new Error("SDP 형식을 알 수 없습니다.");
+}
+
+/** @deprecated decodeSdpFromDatabaseColumn(..., 'offer') 사용 */
+export function decodeSessionDescriptionPayload(
+  stored: string | null | undefined,
+): RTCSessionDescriptionInit {
+  return decodeSdpFromDatabaseColumn(stored, "offer");
+}
+
+/** @deprecated encodePlainSdpForDatabaseColumn 사용 */
+export function encodeSessionDescriptionForDatabase(
+  description: RTCSessionDescriptionInit,
+): string {
+  return encodePlainSdpForDatabaseColumn(description.sdp ?? "");
 }
