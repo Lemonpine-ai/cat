@@ -7,7 +7,14 @@ import {
   encodePlainSdpForDatabaseColumn,
 } from "@/lib/webrtc/sessionDescriptionPayload";
 import type { RealtimeChannel } from "@supabase/supabase-js";
-import styles from "./CameraLiveViewer.module.css";
+import {
+  AlertTriangle,
+  ArrowRight,
+  Loader2,
+  Radio,
+  Smartphone,
+  Video,
+} from "lucide-react";
 
 /** STUN만 사용. 첫 URL은 Google 무료 STUN (요구사항과 동일). */
 const WEBRTC_ICE_SERVERS: RTCIceServer[] = [
@@ -298,53 +305,87 @@ export function CameraLiveViewer() {
   if (!homeId || connectionPhase === "idle") return null;
 
   return (
-    <section className={styles.section} aria-label="라이브 카메라">
-      <div className={styles.titleRow}>
-        <h2 className={styles.title}>📡 라이브 카메라</h2>
+    <section
+      className="w-full rounded-3xl border border-[#4FD1C5]/20 bg-[#F1FBF9] p-4 shadow-lg"
+      aria-label="라이브 카메라"
+    >
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <h2 className="flex items-center gap-2 text-sm font-medium text-[#1e8f83]">
+          <Video
+            className="size-5 shrink-0 text-[#4FD1C5]"
+            strokeWidth={1.75}
+            aria-hidden
+          />
+          라이브 카메라
+        </h2>
         {connectionPhase === "connected" ? (
-          <span className={styles.livePill}>● LIVE</span>
+          <span className="inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-[#4FD1C5] to-[#38BDB0] px-3 py-1 text-[0.68rem] font-bold uppercase tracking-wider text-white shadow-lg">
+            <Radio className="size-3" strokeWidth={2.5} aria-hidden />
+            LIVE
+          </span>
         ) : connectionPhase === "connecting" ? (
-          <span className={styles.connectingPill}>연결 중…</span>
+          <span className="inline-flex items-center gap-1 rounded-full bg-[#4FD1C5]/20 px-3 py-1 text-[0.7rem] font-semibold text-[#1e8f83]">
+            <Loader2 className="size-3.5 animate-spin" aria-hidden />
+            연결 중…
+          </span>
         ) : (
-          <span className={styles.offlinePill}>대기 중</span>
+          <span className="rounded-full bg-slate-200/80 px-3 py-1 text-[0.7rem] font-medium text-slate-500">
+            대기 중
+          </span>
         )}
       </div>
 
-      <div className={styles.videoContainer}>
+      <div className="relative aspect-video w-full overflow-hidden rounded-3xl bg-[#0d1a18] shadow-lg">
         <video
           ref={remoteVideoRef}
-          className={styles.remoteVideo}
+          className="size-full object-cover"
           autoPlay
           playsInline
           muted
           aria-label="라이브 카메라 화면"
         />
         {connectionPhase !== "connected" ? (
-          <div className={styles.videoOverlay} aria-hidden>
+          <div
+            className="absolute inset-0 flex flex-col items-center justify-center gap-3 rounded-3xl bg-[#0d1a18]/88 p-6 text-center backdrop-blur-[2px]"
+            aria-hidden
+          >
             {connectionPhase === "watching_for_broadcast" ? (
               <>
-                <span className={styles.overlayIcon}>📱</span>
-                <span className={styles.overlayText}>
+                <Smartphone
+                  className="size-10 text-[#4FD1C5]"
+                  strokeWidth={1.5}
+                  aria-hidden
+                />
+                <span className="max-w-[22ch] text-sm leading-relaxed text-slate-300">
                   남는 폰에서 방송을 시작하면 자동으로 연결돼요
                 </span>
                 <a
                   href="/camera/broadcast"
-                  className={styles.broadcastLink}
+                  className="inline-flex items-center gap-2 rounded-full border-2 border-[#4FD1C5]/50 bg-gradient-to-r from-[#4FD1C5] to-[#38BDB0] px-5 py-2.5 text-sm font-semibold text-white shadow-lg transition hover:brightness-105"
                   target="_blank"
                   rel="noreferrer"
                 >
-                  방송 시작하러 가기 →
+                  방송 시작하러 가기
+                  <ArrowRight className="size-4" strokeWidth={2} aria-hidden />
                 </a>
               </>
             ) : connectionPhase === "connecting" ? (
               <>
-                <span className={styles.overlayIcon}>⏳</span>
-                <span className={styles.overlayText}>연결 중…</span>
+                <Loader2
+                  className="size-10 animate-spin text-[#4FD1C5]"
+                  strokeWidth={1.75}
+                  aria-hidden
+                />
+                <span className="text-sm text-slate-300">연결 중…</span>
               </>
             ) : connectionPhase === "error" ? (
               <>
-                <span className={styles.overlayIcon}>⚠️</span>
-                <span className={styles.overlayText}>
+                <AlertTriangle
+                  className="size-10 text-[#FFAB91]"
+                  strokeWidth={1.75}
+                  aria-hidden
+                />
+                <span className="max-w-[22ch] text-sm text-slate-300">
                   {errorMessage ?? "연결에 실패했어요."}
                 </span>
               </>
