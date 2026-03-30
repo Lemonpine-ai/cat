@@ -124,6 +124,8 @@ export function CameraBroadcastClient() {
   const [lastWaterChangeAt, setLastWaterChangeAt] = useState<string | null>(null);
   const [lastLitterCleanAt, setLastLitterCleanAt] = useState<string | null>(null);
   const [elapsedTick, setElapsedTick] = useState(0);
+  // 홈 화면 Broadcast 채널 연동에 필요한 home_id (RPC 응답에서 추출)
+  const broadcastHomeIdRef = useRef<string | null>(null);
 
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
@@ -212,6 +214,18 @@ export function CameraBroadcastClient() {
         if (careKind === "water_change") setLastWaterChangeAt(nowIso);
         if (careKind === "litter_clean") setLastLitterCleanAt(nowIso);
 
+        // 홈 화면 실시간 업데이트: Broadcast 채널로 케어 이벤트 전파
+        const homeIdForBroadcast = broadcastHomeIdRef.current;
+        if (homeIdForBroadcast && (careKind === "water_change" || careKind === "litter_clean")) {
+          void supabase
+            .channel(`env_care_broadcast_${homeIdForBroadcast}`)
+            .send({
+              type: "broadcast",
+              event: "env_care_updated",
+              payload: { care_kind: careKind, recorded_at: nowIso },
+            });
+        }
+
         const labelByKind: Record<typeof careKind, string> = {
           meal: "맘마 먹기",
           water_change: "식수 교체",
@@ -233,7 +247,7 @@ export function CameraBroadcastClient() {
     return () => clearInterval(id);
   }, []);
 
-  // 기기 identity 확보 후: 홈의 최신 식수교체/화장실청소 타임스탬프 초기 조회
+  // 기기 identity 확보 후: 홈의 최신 식수교체/화장실청소 타임스탬프 + home_id 초기 조회
   useEffect(() => {
     if (!deviceIdentity) return;
     async function fetchInitialEnvTimestamps() {
@@ -241,11 +255,13 @@ export function CameraBroadcastClient() {
         p_device_token: deviceIdentity!.deviceToken,
       });
       const payload = data as {
+        home_id?: string | null;
         last_water_change_at?: string | null;
         last_litter_clean_at?: string | null;
         error?: string;
       } | null;
       if (!payload || payload.error) return;
+      if (payload.home_id) broadcastHomeIdRef.current = payload.home_id;
       if (payload.last_water_change_at) setLastWaterChangeAt(payload.last_water_change_at);
       if (payload.last_litter_clean_at) setLastLitterCleanAt(payload.last_litter_clean_at);
     }

@@ -151,7 +151,7 @@ export function CatvisorHomeDashboard({
     return () => clearInterval(intervalId);
   }, []);
 
-  // 환경 관리 Realtime 구독 (water_change, litter_clean)
+  // 환경 관리 Realtime 구독 (water_change, litter_clean) — 홈 화면 직접 클릭 시 사용
   useEffect(() => {
     if (!homeId) return;
     const supabase = createSupabaseBrowserClient();
@@ -177,6 +177,30 @@ export function CatvisorHomeDashboard({
       .subscribe();
     return () => {
       void supabase.removeChannel(channel);
+    };
+  }, [homeId]);
+
+  // 방송 기기 Broadcast 구독 — SECURITY DEFINER RPC 삽입 시 postgres_changes 미도달 문제 보완
+  useEffect(() => {
+    if (!homeId) return;
+    const supabase = createSupabaseBrowserClient();
+    const broadcastChannel = supabase
+      .channel(`env_care_broadcast_${homeId}`)
+      .on(
+        "broadcast",
+        { event: "env_care_updated" },
+        (event) => {
+          const payload = event.payload as { care_kind: string; recorded_at: string };
+          if (payload.care_kind === "water_change") {
+            setLastWaterChangeAt(payload.recorded_at);
+          } else if (payload.care_kind === "litter_clean") {
+            setLastLitterCleanAt(payload.recorded_at);
+          }
+        },
+      )
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(broadcastChannel);
     };
   }, [homeId]);
 

@@ -1,0 +1,2 @@
+[  226322ms] [ERROR] Failed to load resource: the server responded with a status of 404 () @ https://cat-lac-eight.vercel.app/api/auth/session:0
+[  331432ms] [ERROR] Failed to load resource: the server responded with a status of 401 () @ https://euggidgywqqavycfrynq.supabase.co/auth/v1/user:0
