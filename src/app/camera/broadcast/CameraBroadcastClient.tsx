@@ -125,7 +125,9 @@ export function CameraBroadcastClient() {
   const [lastLitterCleanAt, setLastLitterCleanAt] = useState<string | null>(null);
   const [elapsedTick, setElapsedTick] = useState(0);
   // 홈 화면 Broadcast 채널 연동에 필요한 home_id (RPC 응답에서 추출)
-  const broadcastHomeIdRef = useRef<string | null>(null);
+  const [broadcastHomeId, setBroadcastHomeId] = useState<string | null>(null);
+  // 구독 완료된 Broadcast 채널 ref — send() 호출 시 재사용
+  const envBroadcastChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
@@ -214,16 +216,16 @@ export function CameraBroadcastClient() {
         if (careKind === "water_change") setLastWaterChangeAt(nowIso);
         if (careKind === "litter_clean") setLastLitterCleanAt(nowIso);
 
-        // 홈 화면 실시간 업데이트: Broadcast 채널로 케어 이벤트 전파
-        const homeIdForBroadcast = broadcastHomeIdRef.current;
-        if (homeIdForBroadcast && (careKind === "water_change" || careKind === "litter_clean")) {
-          void supabase
-            .channel(`env_care_broadcast_${homeIdForBroadcast}`)
-            .send({
-              type: "broadcast",
-              event: "env_care_updated",
-              payload: { care_kind: careKind, recorded_at: nowIso },
-            });
+        // 홈 화면 실시간 업데이트: 미리 구독된 Broadcast 채널로 케어 이벤트 전파
+        if (
+          envBroadcastChannelRef.current &&
+          (careKind === "water_change" || careKind === "litter_clean")
+        ) {
+          void envBroadcastChannelRef.current.send({
+            type: "broadcast",
+            event: "env_care_updated",
+            payload: { care_kind: careKind, recorded_at: nowIso },
+          });
         }
 
         const labelByKind: Record<typeof careKind, string> = {
@@ -261,12 +263,24 @@ export function CameraBroadcastClient() {
         error?: string;
       } | null;
       if (!payload || payload.error) return;
-      if (payload.home_id) broadcastHomeIdRef.current = payload.home_id;
+      if (payload.home_id) setBroadcastHomeId(payload.home_id);
       if (payload.last_water_change_at) setLastWaterChangeAt(payload.last_water_change_at);
       if (payload.last_litter_clean_at) setLastLitterCleanAt(payload.last_litter_clean_at);
     }
     void fetchInitialEnvTimestamps();
   }, [deviceIdentity, supabase]);
+
+  // broadcastHomeId 확보 후 Broadcast 채널 구독 — send() 전 반드시 SUBSCRIBED 상태여야 함
+  useEffect(() => {
+    if (!broadcastHomeId) return;
+    const channel = supabase.channel(`env_care_broadcast_${broadcastHomeId}`);
+    envBroadcastChannelRef.current = channel;
+    channel.subscribe();
+    return () => {
+      envBroadcastChannelRef.current = null;
+      void supabase.removeChannel(channel);
+    };
+  }, [broadcastHomeId, supabase]);
 
   /**
    * 페어링 직후 `?autostart=1` 로 들어온 경우: 카메라 권한 → offer 생성 → `start_device_broadcast` 까지 한 번에 이어 줍니다.
