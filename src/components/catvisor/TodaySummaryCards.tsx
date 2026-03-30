@@ -54,7 +54,7 @@ function addAiVisionLogToSummary(
  */
 export function TodaySummaryCards({
   initialSummary,
-  homeId,
+  homeId: homeIdProp,
   initialTodayMedicineCount,
   initialTodayMealCount,
 }: TodaySummaryCardsProps) {
@@ -64,6 +64,8 @@ export function TodaySummaryCards({
   const [todayMedicineCount, setTodayMedicineCount] = useState(
     initialTodayMedicineCount,
   );
+  // SSR homeId 가 빈 문자열인 경우(세션 만료 등) 클라이언트에서 직접 조회해 Realtime 구독에 사용
+  const [homeId, setHomeId] = useState(homeIdProp);
 
   useEffect(() => {
     setAiVisionSummary(initialSummary);
@@ -76,6 +78,30 @@ export function TodaySummaryCards({
   useEffect(() => {
     setTodayMedicineCount(initialTodayMedicineCount);
   }, [initialTodayMedicineCount]);
+
+  // homeId 가 비어 있으면 클라이언트 auth 로 직접 조회 (middleware 없는 환경 fallback)
+  useEffect(() => {
+    if (homeIdProp) {
+      setHomeId(homeIdProp);
+      return;
+    }
+    const supabase = createSupabaseBrowserClient();
+    async function fetchFallbackHomeId() {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("home_id")
+        .eq("id", user.id)
+        .single();
+      if (profile?.home_id) {
+        setHomeId(profile.home_id);
+      }
+    }
+    void fetchFallbackHomeId();
+  }, [homeIdProp]);
 
   // cat_name 캐시 (AI 비전 카드 실시간 업데이트용)
   const catNameMapRef = useRef<Map<string, string>>(new Map());

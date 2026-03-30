@@ -219,6 +219,11 @@
   border: 1px solid rgba(255, 171, 145, 0.45);
 }
 
+.broadcastCareBtnPurple {
+  background: linear-gradient(135deg, #a78bfa 0%, #7c3aed 100%);
+  border: 1px solid rgba(167, 139, 250, 0.45);
+}
+
 .broadcastCareFeedback {
   margin: 0;
   font-size: 0.72rem;

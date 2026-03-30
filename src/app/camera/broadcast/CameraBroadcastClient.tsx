@@ -7,6 +7,7 @@ import {
   Droplets,
   Eye,
   Link2,
+  Pill,
   Radio,
   Sparkles,
   Square,
@@ -152,7 +153,11 @@ export function CameraBroadcastClient() {
   }, []);
 
   const recordCareLogFromBroadcastDevice = useCallback(
-    async ({ careKind }: { careKind: "meal" | "water" | "toilet" }) => {
+    async ({
+      careKind,
+    }: {
+      careKind: "meal" | "water" | "toilet" | "medicine";
+    }) => {
       if (!deviceIdentity) return;
       if (isSoundEnabled) playPopSound();
       setCareLogMessage(null);
@@ -183,6 +188,7 @@ export function CameraBroadcastClient() {
           meal: "맘마 먹기",
           water: "물 마시기",
           toilet: "감자 캐기",
+          medicine: "약 먹기",
         };
         setCareLogMessage(`「${labelByKind[careKind]}」 기록했어요!`);
         window.setTimeout(() => setCareLogMessage(null), 2200);
@@ -641,6 +647,19 @@ export function CameraBroadcastClient() {
                 >
                   <Sparkles size={14} strokeWidth={2} aria-hidden />
                   감자 💩
+                </button>
+                <button
+                  type="button"
+                  disabled={careLogPending}
+                  className={`${styles.broadcastCareBtn} ${styles.broadcastCareBtnPurple}`}
+                  onClick={() =>
+                    void recordCareLogFromBroadcastDevice({
+                      careKind: "medicine",
+                    })
+                  }
+                >
+                  <Pill size={14} strokeWidth={2} aria-hidden />
+                  약 💊
                 </button>
               </div>
               {careLogMessage ? (
