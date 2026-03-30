@@ -104,6 +104,17 @@ export function CameraPairClient() {
 
     persistPairedDeviceCredentials(data);
 
+    const { error: ensureSessionError } = await supabase.rpc(
+      "ensure_camera_session_after_pairing",
+      { p_device_token: String(data.device_token) },
+    );
+    if (ensureSessionError) {
+      console.warn(
+        "[pair] ensure_camera_session_after_pairing 실패 (방송 페이지에서 재시도 가능)",
+        ensureSessionError,
+      );
+    }
+
     const tokenReadable =
       typeof window !== "undefined" &&
       (window.localStorage.getItem(DEVICE_TOKEN_STORAGE_KEY) ??
@@ -120,7 +131,7 @@ export function CameraPairClient() {
     setPairedDeviceName(String(data.device_name ?? "카메라"));
     setPairingPhase("success");
 
-    const broadcastPath = `${window.location.origin}/camera/broadcast`;
+    const broadcastPath = `${window.location.origin}/camera/broadcast?autostart=1`;
     window.setTimeout(() => {
       window.location.assign(broadcastPath);
     }, 900);

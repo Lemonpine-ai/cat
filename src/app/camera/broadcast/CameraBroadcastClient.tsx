@@ -71,8 +71,8 @@ type DeviceIdentity = {
 
 /**
  * 남는 폰에서 실행하는 WebRTC 방송 클라이언트.
- * localStorage의 device_token으로 인증 → SECURITY DEFINER 로 세션 생성 →
- * (anon 은 RLS 로 DB 행을 볼 수 없으므로) get_broadcaster_signaling_state 폴링으로 answer/ICE 수신.
+ * localStorage의 device_token으로 인증 → SECURITY DEFINER RPC 로 세션 생성 →
+ * anon 은 SELECT RLS 로 행을 직접 읽지 못하므로 get_broadcaster_signaling_state 폴링으로 answer/ICE 수신.
  */
 export function CameraBroadcastClient() {
   const supabase = createSupabaseBrowserClient();
@@ -91,6 +91,7 @@ export function CameraBroadcastClient() {
   const isCleaningUpRef = useRef(false);
   const signalingPollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const appliedViewerIceKeysRef = useRef<Set<string>>(new Set());
+  const autostartBroadcastSequenceStartedRef = useRef(false);
 
   useEffect(() => {
     const { token: storedToken, name: storedName } =
@@ -106,6 +107,38 @@ export function CameraBroadcastClient() {
       setBroadcastPhase("unpaired");
     }
   }, []);
+
+  /**
+   * 페어링 직후 `?autostart=1` 로 들어온 경우: 카메라 권한 → offer 생성 → `start_device_broadcast` 까지 한 번에 이어 줍니다.
+   * (Strict Mode 등에서 중복 실행을 막기 위해 ref 로 1회만 시도)
+   */
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!deviceIdentity || broadcastPhase !== "idle") return;
+
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("autostart") !== "1") return;
+    if (autostartBroadcastSequenceStartedRef.current) return;
+    autostartBroadcastSequenceStartedRef.current = true;
+
+    void (async () => {
+      try {
+        await acquireCamera();
+        if (!localStreamRef.current) {
+          autostartBroadcastSequenceStartedRef.current = false;
+          return;
+        }
+        await startBroadcast();
+      } catch (autostartErr) {
+        console.error("[broadcast] autostart 시퀀스 오류", autostartErr);
+        autostartBroadcastSequenceStartedRef.current = false;
+      } finally {
+        window.history.replaceState({}, "", "/camera/broadcast");
+      }
+    })();
+    // acquireCamera / startBroadcast 는 동일 컴포넌트 내 선언이며, 의도적으로 초기 idle 진입 시점에만 실행합니다.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- autostart 는 deviceIdentity + idle 진입 1회만
+  }, [deviceIdentity, broadcastPhase]);
 
   /**
    * WebRTC·폴링만 정리합니다. DB 의 camera_sessions 는 건드리지 않습니다.
