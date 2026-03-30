@@ -279,8 +279,12 @@ export function CatvisorHomeDashboard({
           {/* 등록된 카메라 기기 목록 및 페어링 코드 발급 */}
           {homeId ? <CameraDeviceManager homeId={homeId} /> : null}
 
-          {/* 라이브 방송이 있으면 자동 연결해서 영상을 보여줌 */}
-          <CameraLiveViewer />
+          {/* 라이브 방송이 있으면 자동 연결해서 영상을 보여줌
+              onWaterChangeRecorded/onLitterCleanRecorded: 카메라 뷰어 버튼 클릭 시 홈 화면도 즉시 동기화 */}
+          <CameraLiveViewer
+            onWaterChangeRecorded={setLastWaterChangeAt}
+            onLitterCleanRecorded={setLastLitterCleanAt}
+          />
 
           <div className={styles.cameraGrid}>
             {CAMERA_TILES.map((tile) => (

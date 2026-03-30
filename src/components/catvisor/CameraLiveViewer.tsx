@@ -65,7 +65,17 @@ function formatEnvElapsed(isoTimestamp: string | null): string {
   return `${Math.floor(diffHours / 24)}일 전`;
 }
 
-export function CameraLiveViewer() {
+type CameraLiveViewerProps = {
+  /** 식수 교체 기록 시 홈 화면 상태를 즉시 동기화하는 콜백 */
+  onWaterChangeRecorded?: (isoTimestamp: string) => void;
+  /** 화장실 청소 기록 시 홈 화면 상태를 즉시 동기화하는 콜백 */
+  onLitterCleanRecorded?: (isoTimestamp: string) => void;
+};
+
+export function CameraLiveViewer({
+  onWaterChangeRecorded,
+  onLitterCleanRecorded,
+}: CameraLiveViewerProps = {}) {
   const [connectionPhase, setConnectionPhase] =
     useState<ViewerConnectionPhase>("idle");
   const [homeId, setHomeId] = useState<string | null>(null);
@@ -285,9 +295,15 @@ export function CameraLiveViewer() {
           setCareLogMessage(error.message);
           return;
         }
-        // 환경 관리 항목은 경과 시간 즉시 반영
-        if (careKind === "water_change") setLastWaterChangeAt(nowIso);
-        if (careKind === "litter_clean") setLastLitterCleanAt(nowIso);
+        // 환경 관리 항목은 경과 시간 즉시 반영 + 홈 화면 콜백 호출
+        if (careKind === "water_change") {
+          setLastWaterChangeAt(nowIso);
+          onWaterChangeRecorded?.(nowIso);
+        }
+        if (careKind === "litter_clean") {
+          setLastLitterCleanAt(nowIso);
+          onLitterCleanRecorded?.(nowIso);
+        }
 
         const labelByKind: Record<typeof careKind, string> = {
           meal: "맘마 먹기",
