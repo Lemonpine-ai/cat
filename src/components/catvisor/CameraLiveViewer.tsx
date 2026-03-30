@@ -49,6 +49,22 @@ type LiveSession = {
  * Supabase Realtime 을 통해 live 세션을 자동 감지하고 WebRTC 연결을 맺습니다.
  * homeId 가 없으면 아무것도 렌더링하지 않습니다.
  */
+/**
+ * 마지막 관리 타임스탬프 → '0분 전' / 'n분 전' / 'n시간 전' / 'n일 전' 변환.
+ * CatvisorHomeDashboard의 동일 함수와 동일 규칙을 적용합니다.
+ */
+function formatEnvElapsed(isoTimestamp: string | null): string {
+  if (!isoTimestamp) return "기록 없음";
+  const diffMs = Date.now() - new Date(isoTimestamp).getTime();
+  if (diffMs < 0) return "0분 전";
+  const diffMinutes = Math.floor(diffMs / 60_000);
+  if (diffMinutes < 1) return "0분 전";
+  if (diffMinutes < 60) return `${diffMinutes}분 전`;
+  const diffHours = Math.floor(diffMinutes / 60);
+  if (diffHours < 24) return `${diffHours}시간 전`;
+  return `${Math.floor(diffHours / 24)}일 전`;
+}
+
 export function CameraLiveViewer() {
   const [connectionPhase, setConnectionPhase] =
     useState<ViewerConnectionPhase>("idle");
@@ -58,6 +74,11 @@ export function CameraLiveViewer() {
   const [isSoundEnabled, setIsSoundEnabled] = useState(true);
   const [careLogPending, setCareLogPending] = useState(false);
   const [careLogMessage, setCareLogMessage] = useState<string | null>(null);
+
+  // 환경 관리 경과 시간 추적
+  const [lastWaterChangeAt, setLastWaterChangeAt] = useState<string | null>(null);
+  const [lastLitterCleanAt, setLastLitterCleanAt] = useState<string | null>(null);
+  const [elapsedTick, setElapsedTick] = useState(0);
 
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
@@ -238,7 +259,7 @@ export function CameraLiveViewer() {
   }, []);
 
   const recordCareLog = useCallback(
-    async (careKind: "meal" | "water" | "toilet" | "medicine") => {
+    async (careKind: "meal" | "water_change" | "litter_clean" | "medicine") => {
       if (!homeId) return;
       if (isSoundEnabled) playPopSound();
       setCareLogMessage(null);
@@ -251,6 +272,7 @@ export function CameraLiveViewer() {
           setCareLogMessage("로그인이 필요해요.");
           return;
         }
+        const nowIso = new Date().toISOString();
         const { error } = await supabase.from("cat_care_logs").insert({
           home_id: homeId,
           recorded_by: user.id,
@@ -263,13 +285,17 @@ export function CameraLiveViewer() {
           setCareLogMessage(error.message);
           return;
         }
+        // 환경 관리 항목은 경과 시간 즉시 반영
+        if (careKind === "water_change") setLastWaterChangeAt(nowIso);
+        if (careKind === "litter_clean") setLastLitterCleanAt(nowIso);
+
         const labelByKind: Record<typeof careKind, string> = {
           meal: "맘마 먹기",
-          water: "물 마시기",
-          toilet: "감자 캐기",
+          water_change: "식수 교체",
+          litter_clean: "화장실 청소",
           medicine: "약 먹기",
         };
-        setCareLogMessage(`「${labelByKind[careKind]}」 기록했어요!`);
+        setCareLogMessage(`「${labelByKind[careKind]}」 기록했어요! (0분 전)`);
         window.setTimeout(() => setCareLogMessage(null), 2200);
       } finally {
         setCareLogPending(false);
@@ -303,6 +329,57 @@ export function CameraLiveViewer() {
     }
     void fetchHomeId();
   }, [supabase]);
+
+  // 1분 주기로 경과 시간 레이블 강제 갱신
+  useEffect(() => {
+    const id = setInterval(() => setElapsedTick((n) => n + 1), 60_000);
+    return () => clearInterval(id);
+  }, []);
+
+  // homeId 확보 후: 최신 water_change / litter_clean 타임스탬프 초기 조회
+  useEffect(() => {
+    if (!homeId) return;
+    async function fetchInitialEnvTimestamps() {
+      const { data: waterRow } = await supabase
+        .from("cat_care_logs")
+        .select("created_at")
+        .eq("home_id", homeId!)
+        .eq("care_kind", "water_change")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (waterRow?.created_at) setLastWaterChangeAt(waterRow.created_at);
+
+      const { data: litterRow } = await supabase
+        .from("cat_care_logs")
+        .select("created_at")
+        .eq("home_id", homeId!)
+        .eq("care_kind", "litter_clean")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (litterRow?.created_at) setLastLitterCleanAt(litterRow.created_at);
+    }
+    void fetchInitialEnvTimestamps();
+  }, [homeId, supabase]);
+
+  // Realtime: 다른 기기에서 water_change / litter_clean 저장 시 즉시 반영
+  useEffect(() => {
+    if (!homeId) return;
+    const channel = supabase
+      .channel(`viewer_env_care_${homeId}`)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "cat_care_logs", filter: `home_id=eq.${homeId}` },
+        (payload) => {
+          const row = payload.new as { care_kind: string; created_at: string };
+          if (row.care_kind === "water_change") setLastWaterChangeAt(row.created_at);
+          if (row.care_kind === "litter_clean") setLastLitterCleanAt(row.created_at);
+        },
+      )
+      .subscribe();
+    return () => { void supabase.removeChannel(channel); };
+  }, [homeId, supabase]);
 
   // 2단계: home_id 확보 후 live 세션 감시 시작
   useEffect(() => {
@@ -509,20 +586,30 @@ export function CameraLiveViewer() {
           <button
             type="button"
             disabled={careLogPending}
-            onClick={() => void recordCareLog("water")}
-            className="inline-flex min-w-[5.5rem] flex-1 items-center justify-center gap-2 rounded-3xl border border-sky-200/80 bg-gradient-to-r from-sky-400 to-sky-500 px-2 py-3 text-xs font-bold text-white shadow-md transition hover:brightness-105 disabled:opacity-50 sm:text-sm"
+            onClick={() => void recordCareLog("water_change")}
+            className="inline-flex min-w-[5.5rem] flex-1 flex-col items-center justify-center gap-0.5 rounded-3xl border border-sky-200/80 bg-gradient-to-r from-sky-400 to-sky-500 px-2 py-2 text-xs font-bold text-white shadow-md transition hover:brightness-105 disabled:opacity-50 sm:text-sm"
           >
-            <Droplets className="size-4 shrink-0" strokeWidth={2} aria-hidden />
-            물 마시기 💧
+            <span className="flex items-center gap-1">
+              <Droplets className="size-4 shrink-0" strokeWidth={2} aria-hidden />
+              식수 교체 💧
+            </span>
+            <span className="text-[0.6rem] font-semibold opacity-90">
+              {formatEnvElapsed(lastWaterChangeAt)}
+            </span>
           </button>
           <button
             type="button"
             disabled={careLogPending}
-            onClick={() => void recordCareLog("toilet")}
-            className="inline-flex min-w-[5.5rem] flex-1 items-center justify-center gap-2 rounded-3xl border border-[#FFAB91]/50 bg-gradient-to-r from-[#FFAB91] to-[#FF8A65] px-2 py-3 text-xs font-bold text-white shadow-md transition hover:brightness-105 disabled:opacity-50 sm:text-sm"
+            onClick={() => void recordCareLog("litter_clean")}
+            className="inline-flex min-w-[5.5rem] flex-1 flex-col items-center justify-center gap-0.5 rounded-3xl border border-[#FFAB91]/50 bg-gradient-to-r from-[#FFAB91] to-[#FF8A65] px-2 py-2 text-xs font-bold text-white shadow-md transition hover:brightness-105 disabled:opacity-50 sm:text-sm"
           >
-            <Sparkles className="size-4 shrink-0" strokeWidth={2} aria-hidden />
-            감자 캐기 💩
+            <span className="flex items-center gap-1">
+              <Sparkles className="size-4 shrink-0" strokeWidth={2} aria-hidden />
+              화장실 청소 🚽
+            </span>
+            <span className="text-[0.6rem] font-semibold opacity-90">
+              {formatEnvElapsed(lastLitterCleanAt)}
+            </span>
           </button>
           <button
             type="button"
