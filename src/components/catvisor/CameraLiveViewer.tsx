@@ -376,8 +376,8 @@ export function CameraLiveViewer() {
     void connectToLiveSession(liveSession);
   }, [liveSession, connectionPhase, connectToLiveSession]);
 
-  // home_id 없거나 아직 감시 전이면 렌더링 안함
-  if (!homeId || connectionPhase === "idle") return null;
+  // home_id 없으면 렌더링 안 함 (connectionPhase 는 homeId 확보 직후 useEffect 에서 곧바로 watching_for_broadcast 로 바뀜)
+  if (!homeId) return null;
 
   return (
     <section
@@ -469,7 +469,7 @@ export function CameraLiveViewer() {
         ) : null}
       </div>
 
-      <div className="mt-4 flex flex-col gap-3">
+      <div className="relative z-50 mt-4 flex flex-col gap-3 rounded-2xl border border-[#4FD1C5]/35 bg-white p-3 shadow-lg">
         <div className="flex items-center justify-between gap-2">
           <span className="text-xs font-semibold text-[#1e8f83]">
             빠른 케어 기록
@@ -489,12 +489,12 @@ export function CameraLiveViewer() {
           </button>
         </div>
 
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+        <div className="flex flex-row flex-wrap gap-2">
           <button
             type="button"
             disabled={careLogPending}
             onClick={() => void recordCareLog("meal")}
-            className="inline-flex items-center justify-center gap-2 rounded-3xl border border-[#4FD1C5]/30 bg-gradient-to-r from-[#4FD1C5] to-[#38BDB0] px-3 py-3 text-sm font-bold text-white shadow-lg transition hover:brightness-105 disabled:opacity-50"
+            className="inline-flex min-w-[5.5rem] flex-1 items-center justify-center gap-2 rounded-3xl border border-[#4FD1C5]/30 bg-gradient-to-r from-[#4FD1C5] to-[#38BDB0] px-2 py-3 text-xs font-bold text-white shadow-md transition hover:brightness-105 disabled:opacity-50 sm:text-sm"
           >
             <Baby className="size-4 shrink-0" strokeWidth={2} aria-hidden />
             맘마 먹기 🍼
@@ -503,7 +503,7 @@ export function CameraLiveViewer() {
             type="button"
             disabled={careLogPending}
             onClick={() => void recordCareLog("water")}
-            className="inline-flex items-center justify-center gap-2 rounded-3xl border border-sky-200/80 bg-gradient-to-r from-sky-400 to-sky-500 px-3 py-3 text-sm font-bold text-white shadow-lg transition hover:brightness-105 disabled:opacity-50"
+            className="inline-flex min-w-[5.5rem] flex-1 items-center justify-center gap-2 rounded-3xl border border-sky-200/80 bg-gradient-to-r from-sky-400 to-sky-500 px-2 py-3 text-xs font-bold text-white shadow-md transition hover:brightness-105 disabled:opacity-50 sm:text-sm"
           >
             <Droplets className="size-4 shrink-0" strokeWidth={2} aria-hidden />
             물 마시기 💧
@@ -512,7 +512,7 @@ export function CameraLiveViewer() {
             type="button"
             disabled={careLogPending}
             onClick={() => void recordCareLog("toilet")}
-            className="inline-flex items-center justify-center gap-2 rounded-3xl border border-[#FFAB91]/50 bg-gradient-to-r from-[#FFAB91] to-[#FF8A65] px-3 py-3 text-sm font-bold text-white shadow-lg transition hover:brightness-105 disabled:opacity-50"
+            className="inline-flex min-w-[5.5rem] flex-1 items-center justify-center gap-2 rounded-3xl border border-[#FFAB91]/50 bg-gradient-to-r from-[#FFAB91] to-[#FF8A65] px-2 py-3 text-xs font-bold text-white shadow-md transition hover:brightness-105 disabled:opacity-50 sm:text-sm"
           >
             <Sparkles className="size-4 shrink-0" strokeWidth={2} aria-hidden />
             감자 캐기 💩

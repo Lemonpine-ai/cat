@@ -1,7 +1,20 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Camera, Radio, Square, Eye, Link2 } from "lucide-react";
+import {
+  Baby,
+  Camera,
+  Droplets,
+  Eye,
+  Link2,
+  Radio,
+  Sparkles,
+  Square,
+  Volume2,
+  VolumeX,
+} from "lucide-react";
+import { playPopSound } from "@/lib/sound/playPopSound";
+import { CATVISOR_SOUND_ENABLED_STORAGE_KEY } from "@/lib/sound/soundPreferenceStorageKey";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   decodeSdpFromDatabaseColumn,
@@ -85,6 +98,9 @@ export function CameraBroadcastClient() {
   const [peerConnectionState, setPeerConnectionState] =
     useState<RTCPeerConnectionState>("new");
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [isSoundEnabled, setIsSoundEnabled] = useState(true);
+  const [careLogPending, setCareLogPending] = useState(false);
+  const [careLogMessage, setCareLogMessage] = useState<string | null>(null);
 
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
@@ -109,6 +125,73 @@ export function CameraBroadcastClient() {
       setBroadcastPhase("unpaired");
     }
   }, []);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(CATVISOR_SOUND_ENABLED_STORAGE_KEY);
+      if (raw === "0") setIsSoundEnabled(false);
+      if (raw === "1") setIsSoundEnabled(true);
+    } catch {
+      // storage 사용 불가
+    }
+  }, []);
+
+  const toggleSoundEnabled = useCallback(() => {
+    setIsSoundEnabled((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem(
+          CATVISOR_SOUND_ENABLED_STORAGE_KEY,
+          next ? "1" : "0",
+        );
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+  }, []);
+
+  const recordCareLogFromBroadcastDevice = useCallback(
+    async ({ careKind }: { careKind: "meal" | "water" | "toilet" }) => {
+      if (!deviceIdentity) return;
+      if (isSoundEnabled) playPopSound();
+      setCareLogMessage(null);
+      setCareLogPending(true);
+      try {
+        const { data, error } = await supabase.rpc(
+          "record_device_cat_care_log",
+          {
+            p_device_token: deviceIdentity.deviceToken,
+            p_care_kind: careKind,
+            p_camera_session_id: activeSessionId,
+          },
+        );
+        if (error) {
+          setCareLogMessage(error.message);
+          return;
+        }
+        const payload = data as { success?: boolean; error?: string } | null;
+        if (payload?.error === "invalid_device") {
+          setCareLogMessage("기기를 다시 연결해 주세요.");
+          return;
+        }
+        if (payload?.error) {
+          setCareLogMessage("기록을 저장하지 못했어요.");
+          return;
+        }
+        const labelByKind: Record<typeof careKind, string> = {
+          meal: "맘마 먹기",
+          water: "물 마시기",
+          toilet: "감자 캐기",
+        };
+        setCareLogMessage(`「${labelByKind[careKind]}」 기록했어요!`);
+        window.setTimeout(() => setCareLogMessage(null), 2200);
+      } finally {
+        setCareLogPending(false);
+      }
+    },
+    [activeSessionId, deviceIdentity, isSoundEnabled, supabase],
+  );
 
   /**
    * 페어링 직후 `?autostart=1` 로 들어온 경우: 카메라 권한 → offer 생성 → `start_device_broadcast` 까지 한 번에 이어 줍니다.
@@ -506,6 +589,70 @@ export function CameraBroadcastClient() {
                 ? `● ${deviceIdentity?.deviceName ?? "카메라"} 방송 중`
                 : `○ 시청자 기다리는 중… (${peerStatusLabel[peerConnectionState]})`}
             </p>
+            <div className={styles.broadcastCareBar}>
+              <div className={styles.broadcastCareHeader}>
+                <span className={styles.broadcastCareTitle}>빠른 케어 기록</span>
+                <button
+                  type="button"
+                  onClick={toggleSoundEnabled}
+                  className={styles.broadcastSoundBtn}
+                  aria-pressed={isSoundEnabled}
+                  aria-label={isSoundEnabled ? "효과음 끄기" : "효과음 켜기"}
+                >
+                  {isSoundEnabled ? (
+                    <Volume2 size={16} strokeWidth={2} aria-hidden />
+                  ) : (
+                    <VolumeX size={16} strokeWidth={2} aria-hidden />
+                  )}
+                </button>
+              </div>
+              <div className={styles.broadcastCareRow}>
+                <button
+                  type="button"
+                  disabled={careLogPending}
+                  className={`${styles.broadcastCareBtn} ${styles.broadcastCareBtnMint}`}
+                  onClick={() =>
+                    void recordCareLogFromBroadcastDevice({ careKind: "meal" })
+                  }
+                >
+                  <Baby size={14} strokeWidth={2} aria-hidden />
+                  맘마 🍼
+                </button>
+                <button
+                  type="button"
+                  disabled={careLogPending}
+                  className={`${styles.broadcastCareBtn} ${styles.broadcastCareBtnSky}`}
+                  onClick={() =>
+                    void recordCareLogFromBroadcastDevice({ careKind: "water" })
+                  }
+                >
+                  <Droplets size={14} strokeWidth={2} aria-hidden />
+                  물 💧
+                </button>
+                <button
+                  type="button"
+                  disabled={careLogPending}
+                  className={`${styles.broadcastCareBtn} ${styles.broadcastCareBtnPeach}`}
+                  onClick={() =>
+                    void recordCareLogFromBroadcastDevice({
+                      careKind: "toilet",
+                    })
+                  }
+                >
+                  <Sparkles size={14} strokeWidth={2} aria-hidden />
+                  감자 💩
+                </button>
+              </div>
+              {careLogMessage ? (
+                <p
+                  className={styles.broadcastCareFeedback}
+                  role="status"
+                  aria-live="polite"
+                >
+                  {careLogMessage}
+                </p>
+              ) : null}
+            </div>
             <button
               type="button"
               className={styles.btnStop}

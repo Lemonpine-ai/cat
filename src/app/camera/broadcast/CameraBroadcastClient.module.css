@@ -125,6 +125,109 @@
   gap: 0.65rem;
 }
 
+/* 방송 중 케어 버튼 — 민트 테마 가로 행, 방송 종료 바로 위 */
+.broadcastCareBar {
+  position: relative;
+  z-index: 50;
+  background: #fff;
+  border-radius: 1rem;
+  border: 1.5px solid rgba(79, 209, 197, 0.35);
+  box-shadow: 0 4px 16px rgba(79, 209, 197, 0.12);
+  padding: 0.65rem 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.broadcastCareHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.broadcastCareTitle {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #1e8f83;
+}
+
+.broadcastSoundBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 999px;
+  border: 1.5px solid rgba(79, 209, 197, 0.35);
+  background: #fff;
+  color: #1e8f83;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(79, 209, 197, 0.12);
+  transition: background 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.broadcastSoundBtn:active {
+  background: rgba(79, 209, 197, 0.1);
+}
+
+.broadcastCareRow {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: stretch;
+}
+
+.broadcastCareBtn {
+  flex: 1;
+  min-width: 5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  padding: 0.65rem 0.5rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #fff;
+  border: none;
+  border-radius: 1rem;
+  cursor: pointer;
+  transition: filter 0.15s, opacity 0.15s;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.broadcastCareBtn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.broadcastCareBtnMint {
+  background: linear-gradient(135deg, #4fd1c5 0%, #38bdb0 100%);
+  border: 1px solid rgba(79, 209, 197, 0.35);
+}
+
+.broadcastCareBtnSky {
+  background: linear-gradient(135deg, #38bdf8 0%, #0ea5e9 100%);
+  border: 1px solid rgba(14, 165, 233, 0.35);
+}
+
+.broadcastCareBtnPeach {
+  background: linear-gradient(135deg, #ffab91 0%, #ff8a65 100%);
+  border: 1px solid rgba(255, 171, 145, 0.45);
+}
+
+.broadcastCareFeedback {
+  margin: 0;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #1e8f83;
+  text-align: center;
+  line-height: 1.4;
+}
+
 .btnPrimary {
   width: 100%;
   padding: 0.95rem 1.5rem;
