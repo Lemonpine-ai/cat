@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Camera, Radio, Square, Eye, Link2 } from "lucide-react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   decodeSdpFromDatabaseColumn,
@@ -409,14 +410,17 @@ export function CameraBroadcastClient() {
     return (
       <div className={styles.page}>
         <div className={styles.unpairedCard}>
-          <span className={styles.unpairedIcon} aria-hidden>🔗</span>
+          <div className={styles.unpairedIcon} aria-hidden>
+            <Link2 size={28} color="#1e8f83" strokeWidth={1.75} />
+          </div>
           <h2 className={styles.unpairedTitle}>먼저 페어링이 필요해요</h2>
           <p className={styles.unpairedDesc}>
             대시보드에서 <strong>카메라 추가</strong>를 눌러<br />
             4자리 코드를 받은 뒤 연결해 주세요.
           </p>
           <a href="/camera/pair" className={styles.btnPairLink}>
-            📷 4자리 코드 입력하러 가기
+            <Camera size={18} strokeWidth={2} aria-hidden />
+            4자리 코드 입력하러 가기
           </a>
         </div>
       </div>
@@ -452,12 +456,14 @@ export function CameraBroadcastClient() {
         />
         {broadcastPhase === "idle" || broadcastPhase === "acquiring" ? (
           <div className={styles.videoPlaceholder} aria-hidden>
-            <span className={styles.placeholderIcon}>📷</span>
+            <span className={styles.placeholderIcon}>
+              <Camera size={64} color="rgba(79,209,197,0.35)" strokeWidth={1.25} />
+            </span>
           </div>
         ) : null}
         {peerConnectionState === "connected" && (
           <div className={styles.viewerBadge} aria-live="polite">
-            👀 시청 중
+            <Eye size={14} strokeWidth={2} aria-hidden /> 시청 중
           </div>
         )}
       </div>
@@ -473,7 +479,8 @@ export function CameraBroadcastClient() {
             className={styles.btnPrimary}
             onClick={() => void acquireCamera()}
           >
-            📷 카메라 켜기
+            <Camera size={18} strokeWidth={2} aria-hidden />
+            카메라 켜기
           </button>
         ) : null}
 
@@ -487,7 +494,8 @@ export function CameraBroadcastClient() {
             className={styles.btnPrimary}
             onClick={() => void startBroadcast()}
           >
-            🔴 방송 시작
+            <Radio size={18} strokeWidth={2} aria-hidden />
+            방송 시작
           </button>
         ) : null}
 
@@ -495,15 +503,16 @@ export function CameraBroadcastClient() {
           <div className={styles.liveControls}>
             <p className={styles.statusText}>
               {peerConnectionState === "connected"
-                ? `🟢 ${deviceIdentity?.deviceName ?? "카메라"} 방송 중`
-                : `📡 시청자 기다리는 중… (${peerStatusLabel[peerConnectionState]})`}
+                ? `● ${deviceIdentity?.deviceName ?? "카메라"} 방송 중`
+                : `○ 시청자 기다리는 중… (${peerStatusLabel[peerConnectionState]})`}
             </p>
             <button
               type="button"
               className={styles.btnStop}
               onClick={() => void stopBroadcast()}
             >
-              ⏹ 방송 종료
+              <Square size={16} strokeWidth={2} aria-hidden />
+              방송 종료
             </button>
           </div>
         ) : null}

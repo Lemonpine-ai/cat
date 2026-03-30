@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState, useCallback } from "react";
+import { Camera, Link2 } from "lucide-react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import styles from "./CameraPairClient.module.css";
 
@@ -147,7 +148,9 @@ export function CameraPairClient() {
   return (
     <div className={styles.page}>
       <div className={styles.card}>
-        <div className={styles.iconWrap} aria-hidden>📷</div>
+        <div className={styles.iconWrap} aria-hidden>
+          <Camera size={36} color="#1e8f83" strokeWidth={1.5} />
+        </div>
         <h1 className={styles.title}>카메라 연결</h1>
         <p className={styles.desc}>
           대시보드의 <strong>카메라 추가</strong> 버튼을 눌러<br />
@@ -158,7 +161,7 @@ export function CameraPairClient() {
           <div className={styles.successBox}>
             <span className={styles.successIcon}>✅</span>
             <p className={styles.successText}>
-              <strong>{pairedDeviceName}</strong> 연결 완료!<br />
+              <strong>{pairedDeviceName}</strong> 연결 완료!&nbsp;<Link2 size={14} strokeWidth={2} aria-hidden /><br />
               방송 화면으로 이동 중…
             </p>
           </div>

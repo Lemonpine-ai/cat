@@ -1,43 +1,50 @@
+/* 페어링 페이지 — Reflectly Soft UI × Mint */
 .page {
   min-height: 100dvh;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #0a0a0a;
+  background: #f1fbf9;
   padding: 1.5rem;
 }
 
 .card {
   width: 100%;
   max-width: 340px;
-  background: #1a1a1a;
-  border: 1px solid #2a2a2a;
-  border-radius: 24px;
+  background: #ffffff;
+  border: 1.5px solid rgba(79, 209, 197, 0.22);
+  border-radius: 2rem;
   padding: 2.5rem 2rem;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 1.1rem;
-  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.6);
+  box-shadow: 0 8px 40px rgba(79, 209, 197, 0.18), 0 2px 8px rgba(0,0,0,0.04);
 }
 
 .iconWrap {
-  font-size: 3.5rem;
-  line-height: 1;
+  width: 4.5rem;
+  height: 4.5rem;
+  border-radius: 1.5rem;
+  background: linear-gradient(135deg, #d6f5f1 0%, #a8ece6 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 16px rgba(79,209,197,0.2);
 }
 
 .title {
   margin: 0;
   font-size: 1.4rem;
   font-weight: 700;
-  color: #f1f5f9;
+  color: #0d2b28;
   text-align: center;
 }
 
 .desc {
   margin: 0;
   font-size: 0.85rem;
-  color: #94a3b8;
+  color: #3d6b65;
   text-align: center;
   line-height: 1.6;
 }
@@ -51,20 +58,21 @@
 .digitInput {
   width: 58px;
   height: 68px;
-  border: 2px solid #334155;
-  border-radius: 14px;
-  background: #0f172a;
-  color: #f8fafc;
+  border: 2.5px solid rgba(79, 209, 197, 0.3);
+  border-radius: 1.25rem;
+  background: #f1fbf9;
+  color: #0d2b28;
   font-size: 2rem;
   font-weight: 700;
   text-align: center;
-  transition: border-color 0.15s;
+  transition: border-color 0.15s, box-shadow 0.15s;
   caret-color: transparent;
 }
 
 .digitInput:focus {
   outline: none;
-  border-color: #22d3ee;
+  border-color: #4fd1c5;
+  box-shadow: 0 0 0 3px rgba(79,209,197,0.18);
 }
 
 .digitInput:disabled {
@@ -72,7 +80,7 @@
 }
 
 .digitInputError {
-  border-color: #ef4444 !important;
+  border-color: #ffab91 !important;
   animation: shake 0.35s ease;
 }
 
@@ -85,25 +93,26 @@
 .errorText {
   margin: 0;
   font-size: 0.82rem;
-  color: #f87171;
+  color: #d97e6a;
   text-align: center;
 }
 
 .btnConnect {
   width: 100%;
-  padding: 0.9rem;
-  background: #22d3ee;
-  color: #0a0a0a;
+  padding: 0.95rem;
+  background: linear-gradient(135deg, #4fd1c5 0%, #38bdb0 100%);
+  color: #fff;
   font-size: 1rem;
   font-weight: 700;
   border: none;
-  border-radius: 14px;
+  border-radius: 1.5rem;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  transition: background 0.15s, transform 0.1s;
+  transition: filter 0.15s, transform 0.1s;
+  box-shadow: 0 6px 20px rgba(79,209,197,0.35);
 }
 
 .btnConnect:disabled {
@@ -112,7 +121,7 @@
 }
 
 .btnConnect:not(:disabled):active {
-  background: #06b6d4;
+  filter: brightness(0.95);
   transform: scale(0.97);
 }
 
@@ -120,19 +129,24 @@
   width: 100%;
   padding: 0.9rem;
   background: transparent;
-  color: #94a3b8;
+  color: #3d6b65;
   font-size: 0.95rem;
-  border: 1.5px solid #334155;
-  border-radius: 14px;
+  border: 1.5px solid rgba(79, 209, 197, 0.3);
+  border-radius: 1.5rem;
   cursor: pointer;
+  transition: background 0.15s;
+}
+
+.btnRetry:hover {
+  background: rgba(79,209,197,0.08);
 }
 
 .spinner {
   display: inline-block;
   width: 16px;
   height: 16px;
-  border: 2px solid #0a0a0a;
-  border-top-color: transparent;
+  border: 2.5px solid rgba(255,255,255,0.4);
+  border-top-color: #fff;
   border-radius: 50%;
   animation: spin 0.7s linear infinite;
 }
@@ -146,10 +160,10 @@
   flex-direction: column;
   align-items: center;
   gap: 0.75rem;
-  padding: 1rem;
-  background: #052e16;
-  border: 1px solid #166534;
-  border-radius: 14px;
+  padding: 1.25rem;
+  background: linear-gradient(135deg, #d6f5f1 0%, #a8ece6 100%);
+  border: 1.5px solid rgba(79,209,197,0.3);
+  border-radius: 1.5rem;
   width: 100%;
 }
 
@@ -160,7 +174,7 @@
 .successText {
   margin: 0;
   font-size: 0.9rem;
-  color: #86efac;
+  color: #1e8f83;
   text-align: center;
   line-height: 1.6;
 }

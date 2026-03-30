@@ -1,4 +1,4 @@
-/* ─── 라이브 카메라 뷰어 섹션 ─── */
+/* ─── 라이브 카메라 뷰어 — Reflectly Soft UI ─── */
 .section {
   width: 100%;
 }
@@ -15,7 +15,7 @@
   font-family: var(--font-display, sans-serif);
   font-size: 0.88rem;
   font-weight: 500;
-  color: var(--color-primary-dark, #0f766e);
+  color: var(--color-primary-dark, #1e8f83);
   letter-spacing: 0.01em;
 }
 
@@ -23,24 +23,25 @@
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
-  background: #ef4444;
+  background: linear-gradient(135deg, #ffab91 0%, #ff8a65 100%);
   color: #fff;
   font-size: 0.68rem;
   font-weight: 700;
   letter-spacing: 0.08em;
-  padding: 0.2rem 0.5rem;
+  padding: 0.2rem 0.55rem;
   border-radius: 999px;
+  box-shadow: 0 3px 10px rgba(255,171,145,0.4);
   animation: pulseLive 1.5s ease-in-out infinite;
 }
 
 @keyframes pulseLive {
   0%, 100% { opacity: 1; }
-  50% { opacity: 0.6; }
+  50% { opacity: 0.75; }
 }
 
 .connectingPill {
-  background: rgba(251, 191, 36, 0.15);
-  color: #b45309;
+  background: rgba(255, 171, 145, 0.15);
+  color: #d97e6a;
   font-size: 0.7rem;
   font-weight: 600;
   padding: 0.2rem 0.55rem;
@@ -48,8 +49,8 @@
 }
 
 .offlinePill {
-  background: rgba(148, 163, 184, 0.12);
-  color: #94a3b8;
+  background: rgba(148, 184, 179, 0.15);
+  color: #94b8b3;
   font-size: 0.7rem;
   font-weight: 500;
   padding: 0.2rem 0.55rem;
@@ -61,10 +62,10 @@
   position: relative;
   width: 100%;
   aspect-ratio: 16 / 9;
-  background: #0f172a;
-  border-radius: 14px;
+  background: #0d1a18;
+  border-radius: 2rem;
   overflow: hidden;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.18);
+  box-shadow: 0 4px 24px rgba(79,209,197,0.15), 0 2px 8px rgba(0,0,0,0.12);
 }
 
 .remoteVideo {
@@ -72,10 +73,10 @@
   height: 100%;
   object-fit: cover;
   display: block;
-  border-radius: 14px;
+  border-radius: 2rem;
 }
 
-/* ── 오버레이 (대기·연결중·오류 상태) ── */
+/* ── 오버레이 ── */
 .videoOverlay {
   position: absolute;
   inset: 0;
@@ -84,36 +85,38 @@
   align-items: center;
   justify-content: center;
   gap: 0.6rem;
-  background: rgba(15, 23, 42, 0.88);
+  background: rgba(13, 26, 24, 0.82);
   padding: 1.5rem;
   text-align: center;
+  border-radius: 2rem;
 }
 
 .overlayIcon {
-  font-size: 2.2rem;
   line-height: 1;
 }
 
 .overlayText {
   font-size: 0.82rem;
-  color: #94a3b8;
+  color: #94b8b3;
   line-height: 1.55;
   max-width: 22ch;
 }
 
 .broadcastLink {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
   margin-top: 0.25rem;
   font-size: 0.8rem;
   font-weight: 600;
-  color: #34d399;
+  color: #4fd1c5;
   text-decoration: none;
-  padding: 0.4rem 0.9rem;
-  border: 1.5px solid rgba(52, 211, 153, 0.4);
-  border-radius: 8px;
+  padding: 0.45rem 1rem;
+  border: 1.5px solid rgba(79, 209, 197, 0.4);
+  border-radius: 999px;
   transition: background 0.15s;
 }
 
 .broadcastLink:hover {
-  background: rgba(52, 211, 153, 0.1);
+  background: rgba(79, 209, 197, 0.12);
 }

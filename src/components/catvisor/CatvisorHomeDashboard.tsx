@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { type ReactNode, useEffect, useId, useRef, useState } from "react";
+import { Droplets, Trash2, MessageCircle, X } from "lucide-react";
 import { CameraDeviceManager } from "@/components/catvisor/CameraDeviceManager";
 import { CameraLiveViewer } from "@/components/catvisor/CameraLiveViewer";
 import { RecentCatActivityLog } from "@/components/catvisor/RecentCatActivityLog";
@@ -210,7 +211,7 @@ export function CatvisorHomeDashboard({
             className={styles.envChip}
             onClick={() => openEnvModal("water_change")}
           >
-            <span className={styles.envChipIcon} aria-hidden>💧</span>
+            <Droplets size={20} color="#4fd1c5" strokeWidth={1.75} aria-hidden />
             <span className={styles.envChipText}>
               <span className={styles.envChipLabel}>식수</span>
               <span className={styles.envChipEta}>{waterEtaLabel}</span>
@@ -221,7 +222,7 @@ export function CatvisorHomeDashboard({
             className={`${styles.envChip} ${styles.envChipLitter}`}
             onClick={() => openEnvModal("litter_clean")}
           >
-            <span className={styles.envChipIcon} aria-hidden>🧹</span>
+            <Trash2 size={20} color="#ffab91" strokeWidth={1.75} aria-hidden />
             <span className={styles.envChipText}>
               <span className={styles.envChipLabel}>화장실</span>
               <span className={styles.envChipEta}>{litterEtaLabel}</span>
@@ -379,13 +380,15 @@ export function CatvisorHomeDashboard({
                   setSelectedCamera(null);
                 }}
               >
-                💬 소통하기 (음성 송출)
+                <MessageCircle size={18} strokeWidth={2} aria-hidden />
+                소통하기 (음성 송출)
               </button>
               <button
                 type="button"
                 className={styles.btnCloseFull}
                 onClick={() => setSelectedCamera(null)}
               >
+                <X size={16} strokeWidth={2} aria-hidden />
                 닫기
               </button>
             </div>

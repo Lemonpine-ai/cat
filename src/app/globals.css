@@ -1,48 +1,50 @@
 /* ================================================================
-   CATvisor Design System
-   Cozy Modern × Mint Green
+   CATvisor Design System — Reflectly Soft UI × Mint
+   메인: #4FD1C5 / 배경: #F1FBF9 / 포인트: #FFAB91
    폰트: Jua (디스플레이) + Noto Sans KR (본문)
 ================================================================ */
 
 /* ─── CSS 커스텀 프로퍼티 ─── */
 :root {
-  /* 색상 팔레트 */
-  --mint-50:  #f0fdf9;
-  --mint-100: #ccfbef;
-  --mint-200: #99f6e0;
-  --mint-400: #34d399;
-  --mint-500: #10b981;
-  --mint-600: #059669;
-  --mint-700: #047857;
-  --mint-900: #064e3b;
+  /* Reflectly 팔레트 */
+  --mint-50:  #f1fbf9;
+  --mint-100: #d6f5f1;
+  --mint-200: #a8ece6;
+  --mint-400: #4fd1c5;
+  --mint-500: #38bdb0;
+  --mint-600: #2aa89b;
+  --mint-700: #1e8f83;
+  --mint-900: #0e5551;
+  --coral:    #ffab91;
+  --coral-light: #fff0ea;
 
   /* 의미 색상 */
-  --color-bg:        #f5fcf9;
-  --color-surface:   rgba(255, 255, 255, 0.82);
+  --color-bg:        #f1fbf9;
+  --color-surface:   rgba(255, 255, 255, 0.88);
   --color-surface-solid: #ffffff;
-  --color-border:    rgba(16, 185, 129, 0.18);
-  --color-border-hover: rgba(16, 185, 129, 0.38);
-  --color-shadow:    rgba(16, 185, 129, 0.14);
-  --color-primary:   #10b981;
-  --color-primary-dark: #047857;
-  --color-text:      #0f2d27;
-  --color-text-sub:  #4b6a62;
-  --color-text-muted: #9eb8b0;
+  --color-border:    rgba(79, 209, 197, 0.22);
+  --color-border-hover: rgba(79, 209, 197, 0.45);
+  --color-shadow:    rgba(79, 209, 197, 0.18);
+  --color-primary:   #4fd1c5;
+  --color-primary-dark: #1e8f83;
+  --color-text:      #0d2b28;
+  --color-text-sub:  #3d6b65;
+  --color-text-muted: #94b8b3;
 
   /* 폰트 */
   --font-display: var(--font-jua), "Jua", system-ui, sans-serif;
   --font-body:    var(--font-noto), "Noto Sans KR", system-ui, sans-serif;
 
-  /* 레이아웃 */
-  --radius-sm:  0.65rem;
-  --radius-md:  1.1rem;
-  --radius-lg:  1.5rem;
-  --radius-xl:  2rem;
+  /* 레이아웃 — Reflectly 32px(2rem) 중심 */
+  --radius-sm:  1rem;
+  --radius-md:  1.4rem;
+  --radius-lg:  2rem;
+  --radius-xl:  2.25rem;
 
-  /* 그림자 */
-  --shadow-card: 0 4px 24px var(--color-shadow), 0 1px 4px rgba(0,0,0,0.04);
-  --shadow-card-hover: 0 8px 32px rgba(16,185,129,0.2), 0 2px 8px rgba(0,0,0,0.06);
-  --shadow-header: 0 8px 32px rgba(16,185,129,0.1);
+  /* 그림자 — Soft UI, 부드러운 깊이감 */
+  --shadow-card: 0 4px 28px var(--color-shadow), 0 1px 4px rgba(0,0,0,0.03);
+  --shadow-card-hover: 0 10px 36px rgba(79,209,197,0.22), 0 2px 8px rgba(0,0,0,0.05);
+  --shadow-header: 0 8px 32px rgba(79,209,197,0.12);
 }
 
 /* ─── 애니메이션 키프레임 ─── */
@@ -93,16 +95,16 @@ body {
 
 button { font: inherit; }
 
-/* ─── 상단 헤더 (높이 약 1/2 — 스크롤 여유 확보) ─── */
+/* ─── 상단 헤더 (Reflectly Soft UI) ─── */
 .app-header {
   position: sticky;
   top: 0;
   z-index: 50;
-  background: rgba(240, 253, 250, 0.85);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border-bottom: 1px solid rgba(16, 185, 129, 0.12);
-  box-shadow: 0 4px 16px rgba(16, 185, 129, 0.06);
+  background: rgba(241, 251, 249, 0.92);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border-bottom: 1px solid rgba(79, 209, 197, 0.14);
+  box-shadow: 0 4px 20px rgba(79, 209, 197, 0.08);
 }
 
 .app-header-inner {
@@ -134,11 +136,12 @@ button { font: inherit; }
 .app-header-sub {
   font-size: 0.65rem;
   font-weight: 700;
-  color: var(--mint-500);
+  color: var(--color-primary-dark);
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  background: var(--mint-100);
-  padding: 0.1rem 0.38rem;
+  background: linear-gradient(135deg, var(--mint-400) 0%, var(--mint-600) 100%);
+  color: #fff;
+  padding: 0.1rem 0.42rem;
   border-radius: 999px;
   opacity: 0.95;
   line-height: 1.2;
@@ -162,7 +165,7 @@ button { font: inherit; }
   padding-bottom: calc(4.75rem + env(safe-area-inset-bottom, 0px));
 }
 
-/* ─── 고정 하단 탭 바 ─── */
+/* ─── 고정 하단 탭 바 (Reflectly Soft UI) ─── */
 .bottom-tab-bar {
   position: fixed;
   bottom: 0;
@@ -174,12 +177,13 @@ button { font: inherit; }
   justify-content: space-around;
   max-width: 56rem;
   margin: 0 auto;
-  padding: 0.45rem 0.5rem calc(0.45rem + env(safe-area-inset-bottom, 0px));
-  background: rgba(255, 255, 255, 0.92);
+  padding: 0.55rem 0.75rem calc(0.55rem + env(safe-area-inset-bottom, 0px));
+  background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  border-top: 1px solid rgba(16, 185, 129, 0.12);
-  box-shadow: 0 -8px 32px rgba(16, 185, 129, 0.1);
+  border-top: 1px solid rgba(79, 209, 197, 0.14);
+  box-shadow: 0 -8px 32px rgba(79, 209, 197, 0.12);
+  border-radius: 2rem 2rem 0 0;
 }
 
 .bottom-tab-bar__link {
@@ -188,7 +192,7 @@ button { font: inherit; }
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 3px;
+  gap: 4px;
   min-width: 0;
   padding: 0.35rem 0.25rem;
   text-decoration: none;
@@ -197,13 +201,13 @@ button { font: inherit; }
   font-size: 0.66rem;
   font-weight: 700;
   letter-spacing: 0.05em;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   transition: color 0.18s ease, background 0.18s ease, transform 0.14s ease;
 }
 
 .bottom-tab-bar__link:hover {
   color: var(--color-primary);
-  background: rgba(16, 185, 129, 0.1);
+  background: rgba(79, 209, 197, 0.1);
 }
 
 .bottom-tab-bar__link:active {
@@ -212,7 +216,7 @@ button { font: inherit; }
 
 .bottom-tab-bar__link.is-active {
   color: var(--color-primary-dark);
-  background: rgba(16, 185, 129, 0.12);
+  background: rgba(79, 209, 197, 0.14);
 }
 
 .bottom-tab-bar__label { line-height: 1.1; text-align: center; }
