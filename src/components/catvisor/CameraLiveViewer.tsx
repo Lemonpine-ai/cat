@@ -9,6 +9,7 @@ import {
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import styles from "./CameraLiveViewer.module.css";
 
+/** STUN만 사용. 첫 URL은 Google 무료 STUN (요구사항과 동일). */
 const WEBRTC_ICE_SERVERS: RTCIceServer[] = [
   { urls: "stun:stun.l.google.com:19302" },
   { urls: "stun:stun1.l.google.com:19302" },
@@ -75,6 +76,22 @@ export function CameraLiveViewer() {
         const pc = new RTCPeerConnection({ iceServers: WEBRTC_ICE_SERVERS });
         peerConnectionRef.current = pc;
 
+        const appliedBroadcasterIceKeys = new Set<string>();
+
+        async function applyBroadcasterIceCandidate(
+          rawCandidate: RTCIceCandidateInit,
+        ) {
+          const dedupeKey = JSON.stringify(rawCandidate);
+          if (appliedBroadcasterIceKeys.has(dedupeKey)) return;
+          appliedBroadcasterIceKeys.add(dedupeKey);
+          if (!pc.remoteDescription) return;
+          try {
+            await pc.addIceCandidate(new RTCIceCandidate(rawCandidate));
+          } catch {
+            // 중복·순서 문제 등은 무시
+          }
+        }
+
         pc.ontrack = ({ streams }) => {
           if (remoteVideoRef.current && streams[0]) {
             remoteVideoRef.current.srcObject = streams[0];
@@ -96,62 +113,60 @@ export function CameraLiveViewer() {
           }
         };
 
-        const channel = supabase.channel(`viewer-${session.id}`);
-        channel
-          .on(
-            "postgres_changes",
-            {
-              event: "INSERT",
-              schema: "public",
-              table: "ice_candidates",
-              filter: `session_id=eq.${session.id}`,
-            },
-            async (payload) => {
-              const row = payload.new as {
-                sender: string;
-                candidate: RTCIceCandidateInit;
-              };
-              if (row.sender === "broadcaster" && pc.remoteDescription) {
-                try {
-                  await pc.addIceCandidate(new RTCIceCandidate(row.candidate));
-                } catch {
-                  // 무시
-                }
-              }
-            },
-          )
-          .subscribe();
-
-        signalingChannelRef.current = channel;
-
-        pc.onicecandidate = async ({ candidate }) => {
-          if (candidate) {
-            await supabase.from("ice_candidates").insert({
-              session_id: session.id,
-              sender: "viewer",
-              candidate: candidate.toJSON(),
-            });
-          }
-        };
-
         const offerInit = decodeSdpFromDatabaseColumn(session.offer_sdp, "offer");
         await pc.setRemoteDescription(new RTCSessionDescription(offerInit));
 
-        const { data: existingCandidates } = await supabase
+        const channel = supabase.channel(`viewer-ice-${session.id}`);
+        channel.on(
+          "postgres_changes",
+          {
+            event: "INSERT",
+            schema: "public",
+            table: "ice_candidates",
+            filter: `session_id=eq.${session.id}`,
+          },
+          (payload) => {
+            const row = payload.new as {
+              sender: string;
+              candidate: RTCIceCandidateInit;
+            };
+            if (row.sender !== "broadcaster") return;
+            void applyBroadcasterIceCandidate(row.candidate);
+          },
+        );
+
+        await new Promise<void>((resolve, reject) => {
+          channel.subscribe((status) => {
+            if (status === "SUBSCRIBED") resolve();
+            if (status === "CHANNEL_ERROR") {
+              reject(new Error("ICE 실시간 채널을 열 수 없어요."));
+            }
+          });
+        });
+
+        signalingChannelRef.current = channel;
+
+        const { data: existingBroadcasterIceRows } = await supabase
           .from("ice_candidates")
           .select("candidate")
           .eq("session_id", session.id)
-          .eq("sender", "broadcaster");
+          .eq("sender", "broadcaster")
+          .order("created_at", { ascending: true });
 
-        for (const row of existingCandidates ?? []) {
-          try {
-            await pc.addIceCandidate(
-              new RTCIceCandidate(row.candidate as RTCIceCandidateInit),
-            );
-          } catch {
-            // 무시
-          }
+        for (const row of existingBroadcasterIceRows ?? []) {
+          await applyBroadcasterIceCandidate(
+            row.candidate as RTCIceCandidateInit,
+          );
         }
+
+        pc.onicecandidate = ({ candidate }) => {
+          if (!candidate) return;
+          void supabase.from("ice_candidates").insert({
+            session_id: session.id,
+            sender: "viewer",
+            candidate: candidate.toJSON(),
+          });
+        };
 
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);

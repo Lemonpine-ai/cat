@@ -8,6 +8,7 @@ import {
 } from "@/lib/webrtc/sessionDescriptionPayload";
 import styles from "./CameraBroadcastClient.module.css";
 
+/** STUN만 사용 (무료 공개 서버). 첫 항목은 Google 기본 STUN. */
 const WEBRTC_ICE_SERVERS: RTCIceServer[] = [
   { urls: "stun:stun.l.google.com:19302" },
   { urls: "stun:stun1.l.google.com:19302" },
@@ -246,6 +247,8 @@ export function CameraBroadcastClient() {
     setErrorMessage(null);
 
     try {
+      sessionIdRef.current = null;
+
       const pc = new RTCPeerConnection({ iceServers: WEBRTC_ICE_SERVERS });
       peerConnectionRef.current = pc;
 
@@ -263,6 +266,23 @@ export function CameraBroadcastClient() {
       localStreamRef.current.getTracks().forEach((track) => {
         pc.addTrack(track, localStreamRef.current!);
       });
+
+      /** setLocalDescription 직후 ICE가 뜨는데 session_id 는 RPC 이후에만 생기므로, 그 전 후보는 메모리에 쌓았다가 일괄 전송합니다. */
+      const iceCandidatesWaitingForSessionId: RTCIceCandidateInit[] = [];
+
+      pc.onicecandidate = ({ candidate }) => {
+        if (!candidate) return;
+        const candidatePayload = candidate.toJSON();
+        if (!sessionIdRef.current) {
+          iceCandidatesWaitingForSessionId.push(candidatePayload);
+          return;
+        }
+        void supabase.rpc("add_device_ice_candidate", {
+          input_device_token: deviceIdentity.deviceToken,
+          input_session_id: sessionIdRef.current,
+          input_candidate: candidatePayload,
+        });
+      };
 
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
@@ -293,15 +313,14 @@ export function CameraBroadcastClient() {
       sessionIdRef.current = sessionId;
       setActiveSessionId(sessionId);
 
-      pc.onicecandidate = async ({ candidate }) => {
-        if (candidate && sessionIdRef.current) {
-          await supabase.rpc("add_device_ice_candidate", {
-            input_device_token: deviceIdentity.deviceToken,
-            input_session_id: sessionIdRef.current,
-            input_candidate: candidate.toJSON(),
-          });
-        }
-      };
+      for (const queuedCandidate of iceCandidatesWaitingForSessionId) {
+        await supabase.rpc("add_device_ice_candidate", {
+          input_device_token: deviceIdentity.deviceToken,
+          input_session_id: sessionId,
+          input_candidate: queuedCandidate,
+        });
+      }
+      iceCandidatesWaitingForSessionId.length = 0;
 
       const pollIntervalMs = 400;
       signalingPollIntervalRef.current = setInterval(() => {
