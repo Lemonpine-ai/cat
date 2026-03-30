@@ -65,6 +65,7 @@ type CatvisorHomeDashboardProps = {
   activityLogsFetchError: string | null;
   catsLookupForActivity: CatLookupForActivity[];
   initialDailySummary: CatDailySummaryItem[];
+  initialTodayMedicineCount: number;
 };
 
 /**
@@ -77,6 +78,7 @@ export function CatvisorHomeDashboard({
   activityLogsFetchError,
   catsLookupForActivity,
   initialDailySummary,
+  initialTodayMedicineCount,
 }: CatvisorHomeDashboardProps) {
   const [waterEtaLabel, setWaterEtaLabel] = useState("기록 없음");
   const [litterEtaLabel, setLitterEtaLabel] = useState("기록 없음");
@@ -202,7 +204,11 @@ export function CatvisorHomeDashboard({
         {children}
 
         {/* 오늘의 활동 요약 */}
-        <TodaySummaryCards initialSummary={initialDailySummary} />
+        <TodaySummaryCards
+          initialSummary={initialDailySummary}
+          homeId={homeId}
+          initialTodayMedicineCount={initialTodayMedicineCount}
+        />
 
         {/* ① 환경 칩 */}
         <div className={styles.envRow} role="group" aria-label="환경 관리 기록">

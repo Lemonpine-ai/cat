@@ -4,4 +4,5 @@ export type CatDailySummaryItem = {
   catName: string;
   mealCount: number;
   toiletCount: number;
+  medicineCount: number;
 };

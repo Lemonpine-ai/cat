@@ -7,6 +7,8 @@ import styles from "./CatvisorHomeDashboard.module.css";
 
 type TodaySummaryCardsProps = {
   initialSummary: CatDailySummaryItem[];
+  homeId: string;
+  initialTodayMedicineCount: number;
 };
 
 function addToSummary(
@@ -34,19 +36,34 @@ function addToSummary(
   }
   return [
     ...previous,
-    { catId, catName, mealCount: isMeal ? 1 : 0, toiletCount: isToilet ? 1 : 0 },
+    {
+      catId,
+      catName,
+      mealCount: isMeal ? 1 : 0,
+      toiletCount: isToilet ? 1 : 0,
+      medicineCount: 0,
+    },
   ];
 }
 
 /**
- * 오늘 얼마나 행복했을까? — Realtime cat_logs 구독으로 즉시 갱신됩니다.
+ * 오늘 얼마나 행복했을까? — Realtime cat_logs + cat_care_logs 구독으로 즉시 갱신됩니다.
  */
-export function TodaySummaryCards({ initialSummary }: TodaySummaryCardsProps) {
+export function TodaySummaryCards({
+  initialSummary,
+  homeId,
+  initialTodayMedicineCount,
+}: TodaySummaryCardsProps) {
   const [summary, setSummary] = useState<CatDailySummaryItem[]>(initialSummary);
+  const [todayMedicineCount, setTodayMedicineCount] = useState(initialTodayMedicineCount);
 
   useEffect(() => {
     setSummary(initialSummary);
   }, [initialSummary]);
+
+  useEffect(() => {
+    setTodayMedicineCount(initialTodayMedicineCount);
+  }, [initialTodayMedicineCount]);
 
   const catNameMapRef = useRef<Map<string, string>>(new Map());
   useEffect(() => {
@@ -55,6 +72,7 @@ export function TodaySummaryCards({ initialSummary }: TodaySummaryCardsProps) {
     });
   }, [initialSummary]);
 
+  // cat_logs(AI 비전) 실시간 구독
   useEffect(() => {
     const supabase = createSupabaseBrowserClient();
 
@@ -84,7 +102,44 @@ export function TodaySummaryCards({ initialSummary }: TodaySummaryCardsProps) {
     };
   }, []);
 
-  if (summary.length === 0) {
+  // cat_care_logs(수동 케어) 실시간 구독 — medicine 카운트 갱신
+  useEffect(() => {
+    if (!homeId) return;
+    const supabase = createSupabaseBrowserClient();
+
+    const channel = supabase
+      .channel(`care_logs_medicine_${homeId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "cat_care_logs",
+          filter: `home_id=eq.${homeId}`,
+        },
+        (payload) => {
+          const row = payload.new as {
+            care_kind: string;
+            created_at: string;
+          };
+          if (row.care_kind !== "medicine") return;
+          const insertedDate = row.created_at.slice(0, 10);
+          const todayDate = new Date().toISOString().slice(0, 10);
+          if (insertedDate !== todayDate) return;
+          setTodayMedicineCount((prev) => prev + 1);
+        },
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [homeId]);
+
+  const hasCatActivity = summary.length > 0;
+  const hasMedicine = todayMedicineCount > 0;
+
+  if (!hasCatActivity && !hasMedicine) {
     return (
       <section className={styles.summarySection} aria-label="오늘의 활동 요약">
         <h2 className={styles.summarySectionTitle}>오늘 얼마나 행복했을까? ✨</h2>
@@ -104,6 +159,7 @@ export function TodaySummaryCards({ initialSummary }: TodaySummaryCardsProps) {
         {summary.map((item) => (
           <SummaryCatCard key={item.catId} item={item} />
         ))}
+        <TodayMedicineCard count={todayMedicineCount} />
       </div>
     </section>
   );
@@ -171,4 +227,52 @@ function buildSummaryComment(item: CatDailySummaryItem): string {
     return "오늘은 아직 기록이 없어요.";
   }
   return parts.join(" / ");
+}
+
+/**
+ * 오늘 집 전체 약 먹기 횟수를 보라색 카드로 보여줍니다.
+ */
+function TodayMedicineCard({ count }: { count: number }) {
+  return (
+    <div className={styles.summaryCard} style={{ borderColor: "rgba(167,139,250,0.35)" }}>
+      <div className={styles.summaryCardHeader}>
+        <span className={styles.summaryCatPaw} aria-hidden>💊</span>
+        <span className={styles.summaryCatName}>오늘 약 기록</span>
+      </div>
+      <div className={styles.summaryStatRow}>
+        <span className={styles.summaryStat} data-kind="medicine">
+          <span className={styles.summaryStatIcon} aria-hidden>💜</span>
+          <span className={styles.summaryStatLabel}>약 먹기</span>
+          <MedicineCountDisplay value={count} />
+        </span>
+      </div>
+      <p className={styles.summaryCardComment}>
+        {count > 0
+          ? `오늘 약을 ${count}번 챙겨 먹었어요! 💊`
+          : "오늘 약 기록이 없어요."}
+      </p>
+    </div>
+  );
+}
+
+function MedicineCountDisplay({ value }: { value: number }) {
+  const [animKey, setAnimKey] = useState(0);
+  const prevValueRef = useRef(value);
+
+  useEffect(() => {
+    if (value !== prevValueRef.current) {
+      setAnimKey((k) => k + 1);
+      prevValueRef.current = value;
+    }
+  }, [value]);
+
+  return (
+    <span
+      key={animKey}
+      className={`${styles.summaryStatCount} ${animKey > 0 ? styles.summaryStatCountBump : ""}`}
+      style={{ color: "#a78bfa" }}
+    >
+      {value}번
+    </span>
+  );
 }

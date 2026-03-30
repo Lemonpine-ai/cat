@@ -13,6 +13,7 @@ import {
   Baby,
   Droplets,
   Loader2,
+  Pill,
   Radio,
   Smartphone,
   Sparkles,
@@ -237,7 +238,7 @@ export function CameraLiveViewer() {
   }, []);
 
   const recordCareLog = useCallback(
-    async (careKind: "meal" | "water" | "toilet") => {
+    async (careKind: "meal" | "water" | "toilet" | "medicine") => {
       if (!homeId) return;
       if (isSoundEnabled) playPopSound();
       setCareLogMessage(null);
@@ -266,6 +267,7 @@ export function CameraLiveViewer() {
           meal: "맘마 먹기",
           water: "물 마시기",
           toilet: "감자 캐기",
+          medicine: "약 먹기",
         };
         setCareLogMessage(`「${labelByKind[careKind]}」 기록했어요!`);
         window.setTimeout(() => setCareLogMessage(null), 2200);
@@ -274,6 +276,11 @@ export function CameraLiveViewer() {
       }
     },
     [homeId, isSoundEnabled, liveSession, supabase],
+  );
+
+  const recordCareLogForMedicine = useCallback(
+    () => void recordCareLog("medicine"),
+    [recordCareLog],
   );
 
   // 1단계: 내 home_id 가져오기
@@ -516,6 +523,15 @@ export function CameraLiveViewer() {
           >
             <Sparkles className="size-4 shrink-0" strokeWidth={2} aria-hidden />
             감자 캐기 💩
+          </button>
+          <button
+            type="button"
+            disabled={careLogPending}
+            onClick={recordCareLogForMedicine}
+            className="inline-flex min-w-[5.5rem] flex-1 items-center justify-center gap-2 rounded-3xl border border-purple-300/50 bg-gradient-to-r from-purple-400 to-violet-500 px-2 py-3 text-xs font-bold text-white shadow-md transition hover:brightness-105 disabled:opacity-50 sm:text-sm"
+          >
+            <Pill className="size-4 shrink-0" strokeWidth={2} aria-hidden />
+            약 먹기 💊
           </button>
         </div>
 
