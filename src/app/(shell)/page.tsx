@@ -64,6 +64,7 @@ export default async function HomePage() {
   let dailySummary: CatDailySummaryItem[] = [];
   let homeId: string | null = null;
   let todayMedicineCount = 0;
+  let todayMealCount = 0;
 
   try {
     const supabase = await createSupabaseServerClient();
@@ -121,16 +122,27 @@ export default async function HomePage() {
       dailySummary = aggregateDailySummary(summaryRows as DailySummaryRow[]);
     }
 
-    // 오늘 홈 전체 약 먹기 횟수
+    // 오늘 홈 전체 수동 케어 카운트 (meal + medicine)
     if (homeId) {
+      const todayStart = buildTodayStartUtcIso();
+
       const { count: medicineRows } = await supabase
         .from("cat_care_logs")
         .select("id", { count: "exact", head: true })
         .eq("home_id", homeId)
         .eq("care_kind", "medicine")
-        .gte("created_at", buildTodayStartUtcIso());
+        .gte("created_at", todayStart);
 
       todayMedicineCount = medicineRows ?? 0;
+
+      const { count: mealRows } = await supabase
+        .from("cat_care_logs")
+        .select("id", { count: "exact", head: true })
+        .eq("home_id", homeId)
+        .eq("care_kind", "meal")
+        .gte("created_at", todayStart);
+
+      todayMealCount = mealRows ?? 0;
     }
   } catch (unknownError) {
     const message =
@@ -157,6 +169,7 @@ export default async function HomePage() {
       catsLookupForActivity={catsLookupForActivity}
       initialDailySummary={dailySummary}
       initialTodayMedicineCount={todayMedicineCount}
+      initialTodayMealCount={todayMealCount}
     >
       <HomeCatCards cats={cats} fetchErrorMessage={catsFetchError} />
     </CatvisorHomeDashboard>

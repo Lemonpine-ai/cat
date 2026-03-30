@@ -66,6 +66,7 @@ type CatvisorHomeDashboardProps = {
   catsLookupForActivity: CatLookupForActivity[];
   initialDailySummary: CatDailySummaryItem[];
   initialTodayMedicineCount: number;
+  initialTodayMealCount: number;
 };
 
 /**
@@ -79,6 +80,7 @@ export function CatvisorHomeDashboard({
   catsLookupForActivity,
   initialDailySummary,
   initialTodayMedicineCount,
+  initialTodayMealCount,
 }: CatvisorHomeDashboardProps) {
   const [waterEtaLabel, setWaterEtaLabel] = useState("기록 없음");
   const [litterEtaLabel, setLitterEtaLabel] = useState("기록 없음");
@@ -208,6 +210,7 @@ export function CatvisorHomeDashboard({
           initialSummary={initialDailySummary}
           homeId={homeId}
           initialTodayMedicineCount={initialTodayMedicineCount}
+          initialTodayMealCount={initialTodayMealCount}
         />
 
         {/* ① 환경 칩 */}

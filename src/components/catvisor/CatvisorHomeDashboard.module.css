@@ -460,6 +460,69 @@
   line-height: 1.6;
 }
 
+/* ─── 오늘 케어 2카드 행 (맘마 + 약, 항상 최상단 고정) ─── */
+.todayCareCardRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.55rem;
+  margin-bottom: 0.55rem;
+}
+
+.todayCareCard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.2rem;
+  padding: 0.85rem 0.75rem 0.8rem;
+  border-radius: 1.25rem;
+  border-width: 1.5px;
+  border-style: solid;
+  box-shadow: 0 4px 18px rgba(0,0,0,0.07);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  text-align: center;
+  animation: fadeInUp 0.35s ease both;
+}
+
+.todayCareCard:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.11);
+}
+
+.todayCareEmoji {
+  font-size: 1.85rem;
+  line-height: 1;
+  margin-bottom: 0.05rem;
+}
+
+.todayCareLabel {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--color-text-sub);
+  letter-spacing: 0.01em;
+}
+
+.todayCareCount {
+  font-size: 2.25rem;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: -0.04em;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.12rem;
+}
+
+.todayCareCountUnit {
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.todayCareUnit {
+  font-size: 0.7rem;
+  font-weight: 600;
+  opacity: 0.8;
+}
+
 /* ─── 환경 칩 (식수·화장실) ─── */
 .envRow {
   display: flex;
