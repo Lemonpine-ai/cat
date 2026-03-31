@@ -27,10 +27,25 @@
    - `git push origin master` 명령어로 원격 저장소에 반영한다.
 
 3. **Vercel 운영 서버 배포**:
-   - 푸시가 완료되면 `npx vercel --prod` 명령어를 실행하여 실제 서비스에 배포한다.
+   - GitHub와 Vercel이 연결되어 있으면 **`git push`만으로 프로덕션 배포가 돌아가는 경우가 많다.** 그때는 대시보드 또는 `npx vercel ls cat`으로 최신 배포 URL을 확인해 보고한다.
+   - 자동 배포가 없거나 CLI로 명시 배포가 필요하면 저장소 **루트**에서 `npx vercel --prod`를 실행한다. (워크스페이스 폴더 이름에 공백·대문자가 있으면 Vercel이 프로젝트 이름을 잘못 추론할 수 있으므로, 문제 시 `npx vercel link`로 아래 프로젝트를 다시 연결한다.)
    - 배포 결과(URL)를 사용자에게 보고한다.
 
 4. **최종 보고**:
    - 모든 과정이 끝나면 [변경 내용 / 푸시 여부 / 배포 결과]를 요약하여 사용자에게 알린다.
 
-다른 컴퓨터에서는 이 저장소를 클론하면 `AI_rules.md`가 함께 따라오므로 동일한 에이전트 규칙을 쓸 수 있다. Git 원격·Vercel CLI 인증(`npx vercel login` 등)은 PC마다 한 번씩만 설정하면 된다.
+## Vercel·GitHub 연동 정보 (이 저장소 기준)
+
+에이전트와 다른 PC에서 동일하게 맞추기 위한 고정 값이다.
+
+- **GitHub 저장소**: `https://github.com/Lemonpine-ai/cat`
+- **배포 브랜치**: `master` (`git push origin master`)
+- **Vercel 팀(스코프)**: `lemonpine-ais-projects`
+- **Vercel 프로젝트 이름**: `cat`
+- **Vercel 프로젝트 ID** (`vercel link`·API 참고용): `prj_Bnnc4kDkWB8tn6Ovvr8SmNWgPH2P`
+- **Vercel 팀(조직) ID** (`vercel link` 참고용): `team_dobkbAGfwH68vFAtg8GFKQxn`
+- **프로덕션 URL**: 배포마다 고유 URL이 생기며, Vercel 대시보드의 해당 프로젝트 **Domains**에 연결된 대표 도메인(예: `*.vercel.app`)을 기준으로 안내한다. 최신 한 건은 `npx vercel ls cat` 출력에서 확인할 수 있다.
+
+**로컬 CLI 연결**: `.vercel/` 디렉터리는 `.gitignore`에 포함되어 저장소에 올라가지 않는다. 새 PC에서는 저장소 루트에서 `npx vercel login` 후 `npx vercel link`로 위 프로젝트 `cat`을 선택하면 된다.
+
+다른 컴퓨터에서는 이 저장소를 클론하면 `AI_rules.md`가 함께 따라오므로 동일한 에이전트 규칙과 위 배포 설정을 쓸 수 있다.
