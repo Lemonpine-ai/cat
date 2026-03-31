@@ -1,3 +1,7 @@
+이 규칙은 프로젝트의 일관성을 유지하고, 새로운 환경에서도 즉시 개발 및 배포가 가능하도록 에이전트(Cursor)가 반드시 준수해야 할 지침이다.
+
+## 일반 코딩 원칙
+
 기존 기능과 데이터 구조는 유지해.
 
 디자인과 레이아웃은 변경 가능해.
@@ -14,25 +18,43 @@
 
 수정 후 무엇이 바뀌었는지 요약해.
 
-## 🚀 작업 마무리 및 배포 자동화 규칙 (Workflow)
+## 1. 환경 및 도구 설정 (Environment Setup)
 
-모든 기능 구현이나 버그 수정이 완료되면, 에이전트는 별도의 요청이 없어도 아래 단계를 순서대로 수행하여 작업을 마무리한다.
+에이전트는 새로운 환경에서 프로젝트가 실행될 때 다음 도구들이 설치 및 설정되어 있는지 확인하고, 미설치 시 사용자에게 설치를 제안하거나 직접 실행한다.
 
-1. **의존성 체크 및 설치**:
-   - `package.json`에 변화가 생겼거나 새로운 라이브러리가 필요하다면 **`bun install` 또는 `npm install` 중 해당 PC에 설치된 도구로** 환경을 동기화한다. (둘 다 허용. 저장소에 `package-lock.json`이 있으므로 `npm install`로 맞추거나, Bun 환경에서는 `bun install`을 써도 된다.)
+- **Runtime**: Bun을 기본 패키지 매니저로 사용한다. (`bun install` 우선순위) Bun이 없는 환경에서는 `npm install`로 동기화해도 된다. 저장소에 `package-lock.json`이 있으므로 팀과 맞출 때는 npm도 허용된다.
+- **Vercel**: Vercel CLI와 Vercel Cursor Plugin이 활성화되어 있어야 한다.
+- **환경 변수**: 동기화가 필요할 경우 `npx vercel env pull .env.local`을 실행한다.
+- **Figma MCP**: 디자인 데이터 접근을 위해 아래 커맨드를 활용한다.
 
-2. **Git 커밋 및 푸시**:
-   - 변경 사항을 스테이징(`git add .`)한다.
-   - 커밋 메시지는 작업 내용을 요약하여 한국어로 명확하게 작성한다. (예: "feat: 고양이 급식 알림 UI 추가")
-   - `git push origin master` 명령어로 원격 저장소에 반영한다.
+```bash
+bunx cursor-talk-to-figma-socket
+```
 
-3. **Vercel 운영 서버 배포**:
-   - GitHub와 Vercel이 연결되어 있으면 **`git push`만으로 프로덕션 배포가 돌아가는 경우가 많다.** 그때는 대시보드 또는 `npx vercel ls cat`으로 최신 배포 URL을 확인해 보고한다.
-   - 자동 배포가 없거나 CLI로 명시 배포가 필요하면 저장소 **루트**에서 `npx vercel --prod`를 실행한다. (워크스페이스 폴더 이름에 공백·대문자가 있으면 Vercel이 프로젝트 이름을 잘못 추론할 수 있으므로, 문제 시 `npx vercel link`로 아래 프로젝트를 다시 연결한다.)
-   - 배포 결과(URL)를 사용자에게 보고한다.
+## 2. 프로젝트 구조 가이드 (Directory Structure)
 
-4. **최종 보고**:
-   - 모든 과정이 끝나면 [변경 내용 / 푸시 여부 / 배포 결과]를 요약하여 사용자에게 알린다.
+- **Root 중심 개발**: 모든 프론트엔드(Next.js) 코드는 프로젝트 루트(`/`)에 위치한다.
+- **Legacy 정리**: `frontend/` 폴더는 더 이상 사용하지 않으며, 모든 작업은 루트의 `src/` 및 관련 설정 파일에서 진행한다.
+
+## 3. 작업 마무리 및 자동 배포 (Deployment Workflow)
+
+모든 코드 수정 후, 에이전트는 사용자의 추가 지시가 없어도 다음 단계를 원클릭으로 수행하는 것을 목표로 한다.
+
+- **Dependency**: 패키지 변경 시 **`bun install` 우선** (Bun 미설치 시 `npm install`).
+- **Git**:
+  - `git add .` 수행.
+  - 커밋 메시지는 한국어로 명확히 작성 (예: "feat: 고양이 활동량 분석 차트 추가").
+  - `git push origin master` 실행.
+- **Vercel Build**:
+  - GitHub와 Vercel이 연결되어 있으면 `git push`만으로 프로덕션 빌드가 돌아가는 경우가 많다. 그때는 `npx vercel ls cat` 또는 대시보드로 최신 배포 URL을 확인해 보고한다.
+  - 필요 시 저장소 **루트**에서 `npx vercel --prod`를 실행하여 실운영에 배포한다. (폴더 이름 이슈 시 `npx vercel link`로 아래 프로젝트 `cat`을 다시 연결.)
+  - 배포 완료 후 생성·확인된 URL을 사용자에게 보고한다.
+- **최종 보고**: 변경 내용 / 푸시 여부 / 배포 결과를 요약해 알린다.
+
+## 4. 고양이 앱 특화 규칙 (Project Specific)
+
+- **On-Device AI**: AI 모델 관련 작업 시 로컬 자원(GPU: RTX 3060 Ti) 활용 가능성을 고려한다.
+- **UI/UX**: Figma MCP를 통해 가져온 디자인 시스템을 엄격히 준수하여 Tailwind CSS로 구현한다.
 
 ## Vercel·GitHub 연동 정보 (이 저장소 기준)
 
@@ -44,7 +66,7 @@
 - **Vercel 프로젝트 이름**: `cat`
 - **Vercel 프로젝트 ID** (`vercel link`·API 참고용): `prj_Bnnc4kDkWB8tn6Ovvr8SmNWgPH2P`
 - **Vercel 팀(조직) ID** (`vercel link` 참고용): `team_dobkbAGfwH68vFAtg8GFKQxn`
-- **프로덕션 URL**: 배포마다 고유 URL이 생기며, Vercel 대시보드의 해당 프로젝트 **Domains**에 연결된 대표 도메인(예: `*.vercel.app`)을 기준으로 안내한다. 최신 한 건은 `npx vercel ls cat` 출력에서 확인할 수 있다.
+- **프로덕션 URL**: 배포마다 고유 URL이 생기며, Vercel 대시보드의 해당 프로젝트 **Domains**에 연결된 대표 도메인을 기준으로 안내한다. 최신 한 건은 `npx vercel ls cat` 출력에서 확인할 수 있다.
 
 **로컬 CLI 연결**: `.vercel/` 디렉터리는 `.gitignore`에 포함되어 저장소에 올라가지 않는다. 새 PC에서는 저장소 루트에서 `npx vercel login` 후 `npx vercel link`로 위 프로젝트 `cat`을 선택하면 된다.
 
