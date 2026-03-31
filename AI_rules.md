@@ -53,7 +53,7 @@ bunx cursor-talk-to-figma-socket
 
 ## 4. 고양이 앱 특화 규칙 (Project Specific)
 
-- **On-Device AI**: AI 모델 관련 작업 시 로컬 자원(GPU: RTX 3060 Ti) 활용 가능성을 고려한다.
+- **On-Device AI**: AI 모델 관련 작업 시 로컬 자원(GPU: RTX 5060 Ti 16GB) 활용 가능성을 고려한다.
 - **UI/UX**: Figma MCP를 통해 가져온 디자인 시스템을 엄격히 준수하여 Tailwind CSS로 구현한다.
 
 ## Vercel·GitHub 연동 정보 (이 저장소 기준)
