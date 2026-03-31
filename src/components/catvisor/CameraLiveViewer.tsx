@@ -6,6 +6,7 @@ import {
   decodeSdpFromDatabaseColumn,
   encodePlainSdpForDatabaseColumn,
 } from "@/lib/webrtc/sessionDescriptionPayload";
+import { buildWebRtcIceServers } from "@/lib/webrtc/buildWebRtcIceServers";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import {
   AlertTriangle,
@@ -24,12 +25,8 @@ import {
 import { playPopSound } from "@/lib/sound/playPopSound";
 import { CATVISOR_SOUND_ENABLED_STORAGE_KEY } from "@/lib/sound/soundPreferenceStorageKey";
 
-/** STUN만 사용. 첫 URL은 Google 무료 STUN (요구사항과 동일). */
-const WEBRTC_ICE_SERVERS: RTCIceServer[] = [
-  { urls: "stun:stun.l.google.com:19302" },
-  { urls: "stun:stun1.l.google.com:19302" },
-  { urls: "stun:stun.cloudflare.com:3478" },
-];
+/** STUN + (선택) TURN — `buildWebRtcIceServers` 참고 */
+const WEBRTC_ICE_SERVERS: RTCIceServer[] = buildWebRtcIceServers();
 
 type ViewerConnectionPhase =
   | "idle"

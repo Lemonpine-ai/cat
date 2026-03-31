@@ -22,14 +22,11 @@ import {
   decodeSdpFromDatabaseColumn,
   encodePlainSdpForDatabaseColumn,
 } from "@/lib/webrtc/sessionDescriptionPayload";
+import { buildWebRtcIceServers } from "@/lib/webrtc/buildWebRtcIceServers";
 import styles from "./CameraBroadcastClient.module.css";
 
-/** STUN만 사용 (무료 공개 서버). 첫 항목은 Google 기본 STUN. */
-const WEBRTC_ICE_SERVERS: RTCIceServer[] = [
-  { urls: "stun:stun.l.google.com:19302" },
-  { urls: "stun:stun1.l.google.com:19302" },
-  { urls: "stun:stun.cloudflare.com:3478" },
-];
+/** STUN + (선택) TURN — `buildWebRtcIceServers` 참고 */
+const WEBRTC_ICE_SERVERS: RTCIceServer[] = buildWebRtcIceServers();
 
 /**
  * 마지막 관리 타임스탬프 → '0분 전' / 'n분 전' / 'n시간 전' / 'n일 전' 변환.
