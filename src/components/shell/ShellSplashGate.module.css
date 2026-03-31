@@ -1,0 +1,71 @@
+/* 앱 셸 진입 시 2초 스플래시 — 로고 페이드 인/아웃 */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(
+    165deg,
+    var(--mint-50, #f0fdf9) 0%,
+    var(--color-bg, #f5fcf9) 45%,
+    #ecfdf5 100%
+  );
+  animation: splashBackdropFade 2s ease-in-out forwards;
+  pointer-events: none;
+}
+
+.logoWrap {
+  position: relative;
+  width: min(13.75rem, 58vw);
+  aspect-ratio: 1;
+  animation: splashLogoFade 2s ease-in-out forwards;
+}
+
+.logoImage {
+  object-fit: contain;
+}
+
+@keyframes splashBackdropFade {
+  0% {
+    opacity: 0;
+  }
+  18% {
+    opacity: 1;
+  }
+  72% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes splashLogoFade {
+  0% {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  22% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  70% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .overlay,
+  .logoWrap {
+    animation-duration: 0.001ms;
+    animation-iteration-count: 1;
+  }
+}

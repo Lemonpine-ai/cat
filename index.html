@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="ko" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#ffffff" id="metaThemeColor" />
+    <title>다보냥 — 고양이 모니터링</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=Noto+Sans+KR:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css"
+      crossorigin="anonymous"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+    <!-- 테마 깜빡임(FOUC) 방지: CSS 로드 전에 테마 미리 적용 -->
+    <script>
+      (function applyStoredThemeBeforeRender() {
+        try {
+          var savedTheme = localStorage.getItem('dabonyang_theme') || 'light';
+          document.documentElement.setAttribute('data-theme', savedTheme);
+          document.getElementById('metaThemeColor').content =
+            savedTheme === 'dark' ? '#0a0a0f' : '#ffffff';
+        } catch (e) {}
+      })();
+    </script>
+  </head>
+  <body>
+
+    <!-- 스플래시 (Figma 01) -->
+    <div id="splashScreen" class="splash-screen" role="dialog" aria-modal="true" aria-labelledby="splashTitle">
+      <div class="splash-bg-decor" aria-hidden="true">
+        <span class="splash-paw splash-paw--1">🐾</span>
+        <span class="splash-paw splash-paw--2">🐾</span>
+        <span class="splash-paw splash-paw--3">🐾</span>
+      </div>
+      <div class="splash-inner">
+        <div class="splash-logo-wrap">
+          <img
+            src="./wangnyang-logo.png"
+            alt="왔냥 로고"
+            class="splash-logo-img"
+            draggable="false"
+          />
+        </div>
+        <h1 id="splashTitle" class="splash-title">다보냥</h1>
+        <p class="splash-subtitle">C · A · T · V</p>
+        <p class="splash-lead">
+          사생활 걱정 없는 똑똑한 고양이 비서.<br />
+          클라우드 전송 없이, 기기 내에서만 안전하게 분석합니다.
+        </p>
+        <button type="button" class="btn btn-primary splash-cta" id="splashStartButton">
+          시작하기
+        </button>
+        <button type="button" class="splash-skip" id="splashSkipButton">건너뛰기</button>
+        <div class="splash-trust-row">
+          <span class="splash-trust-badge">🔒 클라우드 전송 없음</span>
+          <span class="splash-trust-badge">🛡 기기 내 분석</span>
+          <span class="splash-trust-badge">🐾 AI 건강관리</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 로그인 (시작하기 → 표시, 성공 시 홈 CAT-visor 02) -->
+    <div
+      id="loginScreen"
+      class="login-screen hidden"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="loginScreenTitle"
+    >
+      <div class="login-bg-decor" aria-hidden="true">
+        <span class="login-paw login-paw--1">🐾</span>
+        <span class="login-paw login-paw--2">🐾</span>
+      </div>
+      <div class="login-screen-inner">
+        <article class="login-card">
+          <div class="login-brand">
+            <img src="./wangnyang-logo.png" alt="" class="login-brand-logo" width="56" height="56" draggable="false" />
+            <div>
+              <p class="login-brand-kicker">다보냥</p>
+              <p class="login-brand-sub">C · A · T · V</p>
+            </div>
+          </div>
+          <h2 id="loginScreenTitle" class="login-title">로그인</h2>
+          <p class="login-lead">계정으로 로그인하고 고양이 AI 대시보드를 이용해 보세요.</p>
+
+          <form id="loginPasswordForm" class="login-form" novalidate>
+            <label class="field login-field">
+              <span class="field-label">아이디 (이메일)</span>
+              <input
+                id="loginEmailInput"
+                name="email"
+                type="email"
+                autocomplete="username"
+                required
+                placeholder="name@example.com"
+              />
+            </label>
+            <label class="field login-field">
+              <span class="field-label">비밀번호</span>
+              <input
+                id="loginPasswordInput"
+                name="password"
+                type="password"
+                autocomplete="current-password"
+                required
+                placeholder="비밀번호를 입력하세요"
+              />
+            </label>
+            <button type="submit" class="btn btn-primary login-submit" id="loginSubmitButton">로그인</button>
+          </form>
+
+          <div class="login-divider" aria-hidden="true">
+            <span class="login-divider-line"></span>
+            <span class="login-divider-text">또는</span>
+            <span class="login-divider-line"></span>
+          </div>
+
+          <div class="login-social-stack">
+            <button type="button" class="btn-login-social btn-login-google" id="loginGoogleButton">
+              <svg class="btn-login-google-icon" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+              </svg>
+              <span>Google로 시작하기</span>
+            </button>
+            <button type="button" class="btn-login-social btn-login-kakao" id="loginKakaoButton">
+              <svg class="btn-login-kakao-icon" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
+                <path
+                  fill="currentColor"
+                  d="M12 4c-4.97 0-9 3.09-9 6.9 0 2.37 1.27 4.47 3.2 5.73L5 20l4.08-2.45c1.19.33 2.45.5 3.77.5 4.97 0 9-3.09 9-6.9S16.97 4 12 4z"
+                />
+              </svg>
+              <span>카카오톡으로 시작하기</span>
+            </button>
+          </div>
+
+          <p id="loginFormMessage" class="login-form-message" role="status" aria-live="polite"></p>
+
+          <button type="button" class="login-back-link" id="loginBackButton">← 처음 화면으로</button>
+        </article>
+      </div>
+    </div>
+
+    <div id="appShell" class="app-shell hidden">
+
+      <header class="app-header">
+        <div class="app-header-inner">
+          <div class="brand-block">
+            <div class="brand-logo-wrap">
+              <img
+                src="./wangnyang-logo.png"
+                alt="왔냥"
+                class="brand-logo-img"
+                draggable="false"
+              />
+            </div>
+            <div class="brand-text">
+              <h1 class="brand-title">다보냥</h1>
+              <p class="brand-sub">고양이 AI 모니터링</p>
+            </div>
+          </div>
+          <div class="auth-actions">
+            <button
+              id="themeToggleButton"
+              type="button"
+              class="btn-icon theme-toggle"
+              aria-label="테마 전환"
+              title="라이트 / 다크 모드 전환"
+            >
+              <span class="theme-toggle-icon theme-toggle-icon--light" aria-hidden="true">
+                <!-- 달 아이콘 (다크모드로 전환) -->
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 12.79A9 9 0 1111.21 3a7 7 0 009.79 9.79z"/>
+                </svg>
+              </span>
+              <span class="theme-toggle-icon theme-toggle-icon--dark" aria-hidden="true">
+                <!-- 태양 아이콘 (라이트모드로 전환) -->
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="5"/>
+                  <line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>
+                  <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+                  <line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/>
+                  <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+                </svg>
+              </span>
+            </button>
+            <span id="sessionSummary" class="session-chip" aria-live="polite"></span>
+            <button id="githubLoginButton" type="button" class="btn btn-primary">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style="margin-right:6px;vertical-align:-1px"><path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/></svg>
+              로그인
+            </button>
+            <button id="logoutButton" type="button" class="btn btn-outline hidden">로그아웃</button>
+          </div>
+        </div>
+        <div class="app-header-stripe" aria-hidden="true"></div>
+      </header>
+
+      <nav class="tab-nav" role="tablist" aria-label="주요 화면">
+        <button type="button" class="tab-nav-item is-active" id="tabHome" data-tab-target="home" role="tab" aria-selected="true" aria-controls="panelHome">
+          <span class="tab-nav-icon" aria-hidden="true">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 10.5L12 3l9 7.5V20a1 1 0 01-1 1h-5v-6H9v6H4a1 1 0 01-1-1v-9.5z"/>
+            </svg>
+          </span>
+          <span>홈</span>
+        </button>
+        <button type="button" class="tab-nav-item" id="tabCommunity" data-tab-target="community" role="tab" aria-selected="false" aria-controls="panelCommunity">
+          <span class="tab-nav-icon" aria-hidden="true">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
+            </svg>
+          </span>
+          <span>소통</span>
+        </button>
+        <button type="button" class="tab-nav-item" id="tabHealth" data-tab-target="health" role="tab" aria-selected="false" aria-controls="panelHealth">
+          <span class="tab-nav-icon" aria-hidden="true">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/>
+            </svg>
+          </span>
+          <span>리포트</span>
+        </button>
+        <button type="button" class="tab-nav-item" id="tabAccount" data-tab-target="account" role="tab" aria-selected="false" aria-controls="panelAccount">
+          <span class="tab-nav-icon" aria-hidden="true">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/>
+            </svg>
+          </span>
+          <span>마이페이지</span>
+        </button>
+      </nav>
+
+      <section class="notice" id="authNotice" hidden>
+        <span class="notice-icon">ℹ️</span>
+        <p>
+          <strong>데이터가 비어 있나요?</strong>
+          <code>profiles</code>에 <code>home_id</code>가 연결되고, 리포트 뷰·테이블 권한이 맞을 때 요약이 표시됩니다.
+        </p>
+      </section>
+
+      <div class="main-stack">
+
+        <!-- 홈: MAIN 참고 시안 스타일 (Figma Body) -->
+        <section
+          class="panel panel-home panel-home--figma-main"
+          id="panelHome"
+          data-panel="home"
+          role="tabpanel"
+          aria-labelledby="tabHome"
+        >
+          <div class="home-figma-block home-cat-strip" aria-labelledby="homeCatStripHeading">
+            <div class="home-cat-strip-head">
+              <h2 class="home-figma-h2" id="homeCatStripHeading">관리 중인 고양이</h2>
+              <p class="home-cat-strip-count" id="homeManagedCatsCount">불러오는 중…</p>
+            </div>
+            <p class="home-cat-focus-line muted" id="homeScreenTitleText">CAT-visor 홈</p>
+            <div class="home-cat-avatar-row" id="homeCatAvatarRow" role="list" aria-label="연결된 고양이"></div>
+          </div>
+
+          <div class="home-figma-block home-care-bento" id="homeCareSection" aria-labelledby="homeCareHeading">
+            <h2 class="home-figma-h2" id="homeCareHeading">케어 현황</h2>
+            <div class="home-bento-stack">
+              <button
+                type="button"
+                class="home-bento-card home-bento-card--litter"
+                id="envLitterCard"
+                data-env-kind="litter_clean"
+              >
+                <div class="home-bento-card-top">
+                  <span class="home-bento-icon-pill home-bento-icon-pill--litter" aria-hidden="true">🧹</span>
+                  <span class="home-bento-kicker">화장실</span>
+                </div>
+                <p class="home-bento-value" id="envLitterLastRelative">기록 없음</p>
+                <p class="home-bento-caption">마지막 청소 이후</p>
+                <span class="home-bento-tap-hint">탭하여 기록</span>
+              </button>
+              <button
+                type="button"
+                class="home-bento-card home-bento-card--water"
+                id="envWaterCard"
+                data-env-kind="water_change"
+              >
+                <div class="home-bento-card-top">
+                  <span class="home-bento-icon-pill home-bento-icon-pill--water" aria-hidden="true">💧</span>
+                  <span class="home-bento-kicker">음수량</span>
+                </div>
+                <p class="home-bento-value" id="envWaterLastRelative">기록 없음</p>
+                <p class="home-bento-caption">물 교체 이후</p>
+                <span class="home-bento-tap-hint">탭하여 기록</span>
+              </button>
+              <div class="home-bento-card home-bento-card--medication" aria-label="약 복용 안내">
+                <div class="home-bento-med-head">
+                  <span class="home-bento-med-icon" aria-hidden="true">💊</span>
+                  <span class="home-bento-med-title">약 복용</span>
+                </div>
+                <div class="home-bento-med-rows" id="homeMedicationPlaceholderRows">
+                  <div class="home-bento-med-row muted">
+                    <span>리포트 연동 후 표시됩니다</span>
+                  </div>
+                </div>
+              </div>
+              <div class="home-bento-card home-bento-card--stats">
+                <p class="home-bento-stats-label">식사 횟수 <span class="home-bento-stats-sublabel">(7일)</span></p>
+                <div class="home-bento-stats-cols" id="homeFeedingStatsCols"></div>
+              </div>
+              <div class="home-bento-card home-bento-card--stats home-bento-card--stats-alt">
+                <p class="home-bento-stats-label">배변 횟수 <span class="home-bento-stats-sublabel">(7일)</span></p>
+                <div class="home-bento-stats-cols" id="homeToiletStatsCols"></div>
+              </div>
+            </div>
+          </div>
+
+          <p id="homeDashboardStatus" class="status-message home-dash-status" role="status"></p>
+
+          <div class="home-figma-block home-live-block">
+            <div class="home-live-head">
+              <h2 class="home-figma-h2">라이브 캠</h2>
+              <span class="home-live-pill" id="homeLiveChannelCount">—</span>
+            </div>
+            <div class="home-camera-grid home-camera-grid--figma" id="homeCameraGrid" aria-live="polite"></div>
+          </div>
+
+          <button
+            type="button"
+            class="home-care-fab"
+            id="homeCareFabButton"
+            aria-label="식수 교체 기록하기"
+            title="식수 교체 기록"
+          >
+            <span class="home-care-fab-icon" aria-hidden="true">+</span>
+          </button>
+
+          <div class="home-timeline card-surface home-timeline--mint">
+            <p class="card-section-title">최근 활동</p>
+            <ul class="timeline-list" id="homeTimelineList">
+              <li class="timeline-empty">로그인 후 고양이가 연결되면 여기에 이벤트가 표시됩니다.</li>
+            </ul>
+          </div>
+
+          <dialog id="environmentUpdateModal" class="app-dialog" aria-labelledby="environmentModalTitle">
+            <form id="environmentLogForm" class="app-dialog-body">
+              <h3 id="environmentModalTitle" class="app-dialog-title">환경 기록</h3>
+              <p id="environmentModalDescription" class="muted app-dialog-desc">지금 시점을 기준으로 완료했습니다.</p>
+              <input type="hidden" id="environmentModalKindInput" name="kind" value="" />
+              <label class="field">
+                <span class="field-label">메모 (선택)</span>
+                <textarea id="environmentModalNoteInput" name="note" rows="2" maxlength="500" placeholder="예: 새 그릇으로 교체함"></textarea>
+              </label>
+              <div class="app-dialog-actions">
+                <button type="button" class="btn btn-outline" id="environmentModalCancelButton">취소</button>
+                <button type="submit" class="btn btn-primary" id="environmentModalSubmitButton">저장</button>
+              </div>
+            </form>
+          </dialog>
+
+          <dialog id="cameraDetailModal" class="app-dialog app-dialog--wide" aria-labelledby="cameraDetailTitle">
+            <div class="app-dialog-body">
+              <h3 id="cameraDetailTitle" class="app-dialog-title">카메라</h3>
+              <div id="cameraDetailStreamPlaceholder" class="camera-detail-stream" role="img" aria-label="라이브 영상 영역">
+                <span class="camera-detail-stream-label">스트림 연동 예정</span>
+              </div>
+              <p id="cameraDetailStatusLine" class="camera-detail-meta muted"></p>
+              <button type="button" class="btn btn-primary btn-voice-broadcast" id="cameraVoiceBroadcastButton">
+                소통하기 (음성 송출)
+              </button>
+              <button type="button" class="btn btn-outline app-dialog-close" id="cameraDetailCloseButton">닫기</button>
+            </div>
+          </dialog>
+        </section>
+
+        <!-- 커뮤니티 -->
+        <section class="panel panel-community hidden" id="panelCommunity" data-panel="community" role="tabpanel" aria-labelledby="tabCommunity">
+          <div class="panel-hero">
+            <p class="section-kicker">집사들의 공간</p>
+            <h2 class="section-title">커뮤니티</h2>
+            <p class="section-desc">주제는 Supabase <code>community_topics</code> 테이블에서 관리됩니다.</p>
+          </div>
+
+          <div id="communityTopicFilters" class="topic-filters" role="tablist" aria-label="글 주제 필터"></div>
+
+          <div class="toolbar">
+            <p id="communityStatusMessage" class="status-message" role="status"></p>
+            <button id="refreshCommunityButton" type="button" class="btn btn-outline btn-sm" disabled>새로고침</button>
+          </div>
+
+          <div class="community-composer card-surface" id="communityComposer" hidden>
+            <h2 class="card-section-title">새 글 작성</h2>
+            <form id="communityPostForm" class="community-form">
+              <label class="field">
+                <span class="field-label">제목</span>
+                <input id="communityPostTitle" name="title" type="text" required maxlength="200" autocomplete="off" placeholder="예: 새벽에 우다다가 잦아졌어요" />
+              </label>
+              <label class="field">
+                <span class="field-label">주제</span>
+                <select id="communityPostTopic" name="topic_id">
+                  <option value="">불러오는 중…</option>
+                </select>
+              </label>
+              <label class="field">
+                <span class="field-label">내용</span>
+                <textarea id="communityPostBody" name="body" required rows="4" maxlength="8000" placeholder="고양이 이야기를 나눠 보세요."></textarea>
+              </label>
+              <button type="submit" class="btn btn-primary" id="communityPostSubmitButton">게시하기</button>
+            </form>
+          </div>
+
+          <main class="panel-main">
+            <div id="communityPostList" class="community-list" aria-live="polite"></div>
+            <div id="communityEmptyState" class="empty-state hidden">
+              <div class="empty-emoji">💬</div>
+              <h3>아직 글이 없습니다</h3>
+              <p>첫 글을 작성해 보시거나, 로그인 후 새로고침 해 주세요.</p>
+            </div>
+          </main>
+        </section>
+
+        <!-- 건강 (Figma 03) -->
+        <section class="panel panel-health hidden" id="panelHealth" data-panel="health" role="tabpanel" aria-labelledby="tabHealth">
+          <div class="panel-hero">
+            <p class="section-kicker">건강 리포트</p>
+            <h2 class="section-title" id="healthReportRangeTitle">주간 AI 건강 리포트</h2>
+            <p class="section-desc" id="healthReportRangeSub">Supabase <code>my_cat_health_weekly</code> · 로그인 후 표시</p>
+          </div>
+
+          <div class="health-stat-row">
+            <div class="health-stat-card">
+              <p class="health-stat-label">7일 행동 이벤트</p>
+              <p class="health-stat-value" id="healthActivitySummary">—</p>
+            </div>
+            <div class="health-stat-card health-stat-card--alt">
+              <p class="health-stat-label">통증 분석</p>
+              <p class="health-stat-value" id="healthPainSummary">—</p>
+            </div>
+          </div>
+
+          <div class="health-ai-card card-surface">
+            <div class="health-ai-card-header">
+              <span class="health-ai-icon">AI</span>
+              <p class="card-section-title">건강 요약 &amp; AI 예측</p>
+            </div>
+            <div id="healthAiSummaryText" class="health-ai-body muted">
+              로그인 후 고양이가 연결되면 Supabase 집계 데이터가 표시됩니다.
+            </div>
+          </div>
+
+          <div class="health-chart-placeholder card-surface">
+            <p class="health-chart-ph-label">활동 수준 차트 (기기 연동 예정)</p>
+            <div class="health-chart-ph-bars" aria-hidden="true">
+              <span style="height:40%"></span><span style="height:65%"></span><span style="height:55%"></span>
+              <span style="height:80%"></span><span style="height:70%"></span><span style="height:50%"></span>
+              <span style="height:75%"></span>
+            </div>
+            <div class="health-chart-ph-days" aria-hidden="true">
+              <span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span><span>일</span>
+            </div>
+          </div>
+
+          <div class="section-divider">
+            <span>7일 행동 요약 · Supabase</span>
+          </div>
+
+          <div class="toolbar">
+            <p id="statusMessage" class="status-message" role="status"></p>
+            <button id="refreshReportsButton" type="button" class="btn btn-outline btn-sm" disabled>새로고침</button>
+          </div>
+
+          <main class="panel-main">
+            <div id="catReportGrid" class="cat-grid" aria-live="polite"></div>
+            <div id="emptyState" class="empty-state hidden">
+              <img src="./wangnyang-logo.png" alt="" class="empty-logo" aria-hidden="true" />
+              <h3>아직 표시할 고양이가 없습니다</h3>
+              <p>로그인 후에도 카드가 없으면 Supabase에서 사용자 연결을 확인해 주세요.</p>
+            </div>
+          </main>
+        </section>
+
+        <!-- 계정 (Figma 04) -->
+        <section class="panel panel-account hidden" id="panelAccount" data-panel="account" role="tabpanel" aria-labelledby="tabAccount">
+          <div class="panel-hero">
+            <p class="section-kicker">계정 · 설정</p>
+            <h2 class="section-title">내 계정</h2>
+          </div>
+
+          <div class="account-profile-card card-surface">
+            <div class="account-avatar" aria-hidden="true">
+              <img src="./wangnyang-logo.png" alt="" class="account-avatar-img" />
+            </div>
+            <div class="account-info">
+              <p class="account-name" id="accountProfileName">프로필 로딩 중…</p>
+              <p class="account-sub muted" id="accountProfileSub">로그인 후 프로필을 불러옵니다.</p>
+            </div>
+          </div>
+
+          <ul class="account-menu card-surface">
+            <li>
+              <button type="button" class="account-menu-item" disabled>
+                <span class="account-menu-icon">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+                </span>
+                <span>기기 설정</span>
+                <span class="account-menu-badge">준비 중</span>
+              </button>
+            </li>
+            <li>
+              <button type="button" class="account-menu-item" disabled>
+                <span class="account-menu-icon">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+                </span>
+                <span>알림 설정</span>
+                <span class="account-menu-badge">준비 중</span>
+              </button>
+            </li>
+            <li>
+              <button type="button" class="account-menu-item theme-menu-item" id="themeMenuToggle">
+                <span class="account-menu-icon">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+                </span>
+                <span id="themeMenuLabel">라이트 모드</span>
+                <span class="account-menu-arrow">→</span>
+              </button>
+            </li>
+          </ul>
+
+          <div class="subscribe-card">
+            <div class="subscribe-card-header">
+              <span class="subscribe-icon">★</span>
+              <div>
+                <h2 class="subscribe-title">AI 리포트 무제한 구독</h2>
+                <p class="subscribe-desc muted">월 9,900원 · 고급 행동 분석 · 기기 내 암호화 우선</p>
+              </div>
+            </div>
+            <button type="button" class="btn btn-primary subscribe-cta" disabled>구독하기</button>
+          </div>
+
+          <div class="card-surface session-card">
+            <p class="card-section-title">세션 정보</p>
+            <p id="accountSessionDetail" class="session-detail muted"></p>
+          </div>
+        </section>
+
+      </div>
+
+      <footer class="app-footer">
+        <img src="./wangnyang-logo.png" alt="왔냥" class="footer-logo" />
+        <div class="footer-center">
+          <p class="footer-realtime">실시간: <span id="realtimeStatus">연결 대기</span></p>
+          <button type="button" class="footer-link" id="showSplashAgainButton">소개 화면</button>
+        </div>
+        <p class="footer-copy">© 2026 다보냥</p>
+      </footer>
+
+    </div>
+
+    <script>
+      (function syncSplashShellForReturningVisitors() {
+        try {
+          var done = localStorage.getItem('dabonyang_onboarding_complete');
+          var forceSplash = window.location.hash === '#splash';
+          var showLogin = sessionStorage.getItem('dabonyang_show_login_screen') === '1';
+          var splash = document.getElementById('splashScreen');
+          var app = document.getElementById('appShell');
+          var login = document.getElementById('loginScreen');
+          if (done && !forceSplash) {
+            splash.classList.add('hidden');
+            login.classList.add('hidden');
+            app.classList.remove('hidden');
+          } else if (showLogin && !forceSplash) {
+            splash.classList.add('hidden');
+            login.classList.remove('hidden');
+            app.classList.add('hidden');
+          } else {
+            splash.classList.remove('hidden');
+            login.classList.add('hidden');
+            app.classList.add('hidden');
+          }
+        } catch (e) {}
+      })();
+    </script>
+    <script type="module" src="./dashboard.js"></script>
+  </body>
+</html>
