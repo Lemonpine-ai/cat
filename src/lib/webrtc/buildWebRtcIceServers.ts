@@ -13,19 +13,34 @@ const DEFAULT_STUN_SERVERS: RTCIceServer[] = [
   { urls: "stun:stun.cloudflare.com:3478" },
 ];
 
-function readOptionalTrimmedEnv(name: string): string | undefined {
-  const value = process.env[name];
+function readOptionalTrimmedEnv(
+  env: NodeJS.ProcessEnv,
+  name: string,
+): string | undefined {
+  const value = env[name];
   if (value === undefined || value === "") return undefined;
   const trimmed = value.trim();
   return trimmed === "" ? undefined : trimmed;
 }
 
-export function buildWebRtcIceServers(): RTCIceServer[] {
+/**
+ * @param env 기본값 `process.env`. 테스트에서만 다른 객체를 넘겨 TURN 조합을 검증할 수 있다.
+ */
+export function buildWebRtcIceServers(
+  env: NodeJS.ProcessEnv = process.env,
+): RTCIceServer[] {
   const servers: RTCIceServer[] = [...DEFAULT_STUN_SERVERS];
 
-  const turnUrlsRaw = readOptionalTrimmedEnv("NEXT_PUBLIC_WEBRTC_TURN_URLS");
-  const turnUsername = readOptionalTrimmedEnv("NEXT_PUBLIC_WEBRTC_TURN_USERNAME");
+  const turnUrlsRaw = readOptionalTrimmedEnv(
+    env,
+    "NEXT_PUBLIC_WEBRTC_TURN_URLS",
+  );
+  const turnUsername = readOptionalTrimmedEnv(
+    env,
+    "NEXT_PUBLIC_WEBRTC_TURN_USERNAME",
+  );
   const turnCredential = readOptionalTrimmedEnv(
+    env,
     "NEXT_PUBLIC_WEBRTC_TURN_CREDENTIAL",
   );
 
