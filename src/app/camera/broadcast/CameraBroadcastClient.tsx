@@ -374,6 +374,51 @@ export function CameraBroadcastClient() {
     };
   }, [cleanupPeerResourcesOnly]);
 
+  /**
+   * 이전에 연 미리보기/방송 트랙을 모두 stop — 같은 탭에서 두 번째 getUserMedia 가
+   * NotReadableError(다른 앱이 사용 중처럼 보임) 나는 경우를 줄입니다.
+   */
+  function stopLocalPreviewTracksAndClearVideo() {
+    if (localStreamRef.current) {
+      localStreamRef.current.getTracks().forEach((track) => {
+        track.stop();
+      });
+      localStreamRef.current = null;
+    }
+    if (localVideoRef.current) {
+      localVideoRef.current.srcObject = null;
+    }
+  }
+
+  function delayMs(ms: number) {
+    return new Promise<void>((resolve) => {
+      window.setTimeout(resolve, ms);
+    });
+  }
+
+  function mapGetUserMediaErrorToUserMessage(err: unknown): string {
+    const name = err instanceof DOMException ? err.name : (err as Error)?.name;
+    if (name === "NotAllowedError") {
+      return "카메라 권한이 거부됐어요. 브라우저 주소창 옆 자물쇠 아이콘을 눌러 허용해 주세요.";
+    }
+    if (name === "NotFoundError") {
+      return "카메라 장치를 찾을 수 없어요.";
+    }
+    if (name === "NotReadableError" || name === "TrackStartError") {
+      return (
+        "카메라가 다른 앱·브라우저 탭에서 사용 중이에요. " +
+        "다른 탭의 다보냥/카메라를 닫거나, 인스타·줌 등 카메라를 끈 뒤 잠시 후 다시 눌러 주세요."
+      );
+    }
+    if (name === "OverconstrainedError") {
+      return "요청한 카메라 설정을 만족할 수 없어요. 잠시 후 다시 시도해 주세요.";
+    }
+    if (err instanceof Error && err.message) {
+      return err.message;
+    }
+    return "카메라를 시작할 수 없어요.";
+  }
+
   async function acquireCamera() {
     setBroadcastPhase("acquiring");
     setErrorMessage(null);
@@ -384,15 +429,45 @@ export function CameraBroadcastClient() {
       return;
     }
 
+    stopLocalPreviewTracksAndClearVideo();
+    await delayMs(120);
+
+    const preferredConstraints: MediaStreamConstraints = {
+      video: {
+        facingMode: { ideal: "environment" },
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+      },
+      audio: false,
+    };
+
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: { ideal: "environment" },
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-        },
-        audio: false,
-      });
+      let stream: MediaStream | null = null;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia(preferredConstraints);
+      } catch (firstErr) {
+        const firstName =
+          firstErr instanceof DOMException
+            ? firstErr.name
+            : (firstErr as Error)?.name;
+        if (
+          firstName === "NotReadableError" ||
+          firstName === "TrackStartError"
+        ) {
+          stopLocalPreviewTracksAndClearVideo();
+          await delayMs(200);
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: true,
+            audio: false,
+          });
+        } else {
+          throw firstErr;
+        }
+      }
+
+      if (!stream) {
+        throw new Error("카메라 스트림을 받지 못했어요.");
+      }
 
       localStreamRef.current = stream;
       if (localVideoRef.current) {
@@ -400,16 +475,8 @@ export function CameraBroadcastClient() {
       }
       setBroadcastPhase("ready");
     } catch (err) {
-      const cameraError =
-        err instanceof Error
-          ? err.name === "NotAllowedError"
-            ? "카메라 권한이 거부됐어요. 브라우저 주소창 옆 자물쇠 아이콘을 눌러 허용해 주세요."
-            : err.name === "NotFoundError"
-              ? "카메라 장치를 찾을 수 없어요."
-              : err.message
-          : "카메라를 시작할 수 없어요.";
-
-      setErrorMessage(cameraError);
+      stopLocalPreviewTracksAndClearVideo();
+      setErrorMessage(mapGetUserMediaErrorToUserMessage(err));
       setBroadcastPhase("error");
     }
   }
@@ -778,7 +845,9 @@ export function CameraBroadcastClient() {
             className={styles.btnPrimary}
             onClick={() => {
               setErrorMessage(null);
-              setBroadcastPhase(localStreamRef.current ? "ready" : "idle");
+              void cleanupPeerResourcesOnly(true).then(() => {
+                setBroadcastPhase(localStreamRef.current ? "ready" : "idle");
+              });
             }}
           >
             🔄 다시 시작
