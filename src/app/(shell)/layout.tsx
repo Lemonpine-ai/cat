@@ -52,11 +52,13 @@ export default async function MainShellLayout({
     <ShellSplashGate>
       <header className="app-header">
         <div className="app-header-inner">
-          <div className="app-header-titles">
-            <span className="app-header-brand">다보냥</span>
-            <span className="app-header-sub">CATvisor</span>
+          <div className="app-header-profile">
+            <span className="app-header-avatar" aria-hidden />
+            <span className="app-header-name">다보냥</span>
           </div>
-          <span className="app-header-badge">집사 대시보드 🐾</span>
+          <button type="button" className="app-header-notify" aria-label="알림">
+            🔔
+          </button>
         </div>
       </header>
       <div className="app-main">{children}</div>

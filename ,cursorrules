@@ -55,6 +55,7 @@ bunx cursor-talk-to-figma-socket
 
 - **On-Device AI**: AI 모델 관련 작업 시 로컬 자원(GPU: RTX 5060 Ti 16GB) 활용 가능성을 고려한다.
 - **UI/UX**: Figma MCP를 통해 가져온 디자인 시스템을 엄격히 준수하여 Tailwind CSS로 구현한다.
+- **Data Persistence**: 고양이 활동 기록 및 로그 데이터는 Supabase MCP를 활용하여 데이터베이스와 실시간으로 동기화한다
 
 ## Vercel·GitHub 연동 정보 (이 저장소 기준)
 

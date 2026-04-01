@@ -1,58 +1,15 @@
 "use client";
 
-import Image from "next/image";
-import { type ReactNode, useCallback, useEffect, useId, useRef, useState } from "react";
-import { Droplets, MessageCircle, Trash2, X } from "lucide-react";
+import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { CameraDeviceManager } from "@/components/catvisor/CameraDeviceManager";
 import { CameraLiveViewer } from "@/components/catvisor/CameraLiveViewer";
 import { RecentCatActivityLog } from "@/components/catvisor/RecentCatActivityLog";
-import { TodaySummaryCards } from "@/components/catvisor/TodaySummaryCards";
+import { CareStatusGrid } from "@/components/home/CareStatusGrid";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
-import type { CatDailySummaryItem } from "@/types/catDailySummary";
 import type { ActivityLogListItem } from "@/types/catLog";
 import styles from "./CatvisorHomeDashboard.module.css";
 
 type EnvironmentKind = "water_change" | "litter_clean";
-
-
-type CameraTileData = {
-  id: string;
-  placeLabel: string;
-  catLabel: string | null;
-  isOnline: boolean;
-  imageUrl: string;
-};
-
-const CAMERA_TILES: CameraTileData[] = [
-  {
-    id: "cam-1",
-    placeLabel: "거실",
-    catLabel: null,
-    isOnline: true,
-    imageUrl: "https://picsum.photos/seed/cam1/480/360",
-  },
-  {
-    id: "cam-2",
-    placeLabel: "캣타워",
-    catLabel: null,
-    isOnline: false,
-    imageUrl: "https://picsum.photos/seed/cam2/480/360",
-  },
-  {
-    id: "cam-3",
-    placeLabel: "화장실",
-    catLabel: null,
-    isOnline: false,
-    imageUrl: "https://picsum.photos/seed/cam3/480/360",
-  },
-  {
-    id: "cam-4",
-    placeLabel: "냠냠 구역",
-    catLabel: null,
-    isOnline: false,
-    imageUrl: "https://picsum.photos/seed/cam4/480/360",
-  },
-];
 
 type CatLookupForActivity = {
   id: string;
@@ -66,7 +23,6 @@ type CatvisorHomeDashboardProps = {
   initialActivityLogs: ActivityLogListItem[];
   activityLogsFetchError: string | null;
   catsLookupForActivity: CatLookupForActivity[];
-  initialDailySummary: CatDailySummaryItem[];
   initialTodayMedicineCount: number;
   initialTodayMealCount: number;
   /** 가장 최근 식수 교체 ISO 타임스탬프 (없으면 null) */
@@ -74,22 +30,6 @@ type CatvisorHomeDashboardProps = {
   /** 가장 최근 화장실 청소 ISO 타임스탬프 (없으면 null) */
   initialLastLitterCleanAt: string | null;
 };
-
-/**
- * 마지막 관리 타임스탬프를 받아 '0분 전', 'n분 전', 'n시간 전', 'n일 전'으로 변환합니다.
- */
-export function formatElapsedTimeLabel(isoTimestamp: string | null): string {
-  if (!isoTimestamp) return "기록 없음";
-  const diffMs = Date.now() - new Date(isoTimestamp).getTime();
-  if (diffMs < 0) return "0분 전";
-  const diffMinutes = Math.floor(diffMs / 60_000);
-  if (diffMinutes < 1) return "0분 전";
-  if (diffMinutes < 60) return `${diffMinutes}분 전`;
-  const diffHours = Math.floor(diffMinutes / 60);
-  if (diffHours < 24) return `${diffHours}시간 전`;
-  const diffDays = Math.floor(diffHours / 24);
-  return `${diffDays}일 전`;
-}
 
 /**
  * 카메라 중심 홈 — 흐름: 고양이 카드 → 오늘 요약 → 환경 → 카메라 기기 관리 → 활동.
@@ -100,7 +40,6 @@ export function CatvisorHomeDashboard({
   initialActivityLogs,
   activityLogsFetchError,
   catsLookupForActivity,
-  initialDailySummary,
   initialTodayMedicineCount,
   initialTodayMealCount,
   initialLastWaterChangeAt,
@@ -113,16 +52,9 @@ export function CatvisorHomeDashboard({
   const [elapsedTick, setElapsedTick] = useState(0);
   const [envSaving, setEnvSaving] = useState<EnvironmentKind | null>(null);
 
-  const waterEtaLabel = formatElapsedTimeLabel(lastWaterChangeAt);
-  const litterEtaLabel = formatElapsedTimeLabel(lastLitterCleanAt);
-
   /** 하단 토스트 메시지. 빈 문자열이면 숨김. */
   const [toastMessage, setToastMessage] = useState("");
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const [selectedCamera, setSelectedCamera] = useState<CameraTileData | null>(null);
-
-  const cameraTitleId = useId();
 
   /** 토스트를 3초 표시 후 자동 제거 */
   function showToast(message: string) {
@@ -204,18 +136,6 @@ export function CatvisorHomeDashboard({
     };
   }, [homeId]);
 
-  /** Esc 키로 카메라 모달 닫기 */
-  useEffect(() => {
-    if (!selectedCamera) return;
-    function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") {
-        setSelectedCamera(null);
-      }
-    }
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [selectedCamera]);
-
   /** 클릭 즉시 DB에 환경 관리 기록 저장 — 모달 없이 바로 처리 */
   const handleClickEnvCare = useCallback(
     async (careKind: EnvironmentKind) => {
@@ -253,98 +173,37 @@ export function CatvisorHomeDashboard({
     [homeId, envSaving],
   );
 
-  function handleVoiceBroadcast(tile: CameraTileData) {
-    showToast(`「${tile.placeLabel}」 음성 송출은 스트림 연동 후 사용할 수 있어요.`);
-  }
-
   return (
     <div className={styles.page}>
-      <div className={styles.inner}>
+      <div className={`${styles.inner} flex flex-col gap-5`}>
         {children}
 
-        {/* 오늘의 활동 요약 */}
-        <TodaySummaryCards
-          initialSummary={initialDailySummary}
-          homeId={homeId}
-          initialTodayMedicineCount={initialTodayMedicineCount}
-          initialTodayMealCount={initialTodayMealCount}
-        />
+        {homeId ? (
+          <CareStatusGrid
+            revalidateTick={elapsedTick}
+            homeId={homeId}
+            lastWaterChangeAt={lastWaterChangeAt}
+            lastLitterCleanAt={lastLitterCleanAt}
+            initialTodayMealCount={initialTodayMealCount}
+            initialTodayMedicineCount={initialTodayMedicineCount}
+            onRequestWaterChange={() => void handleClickEnvCare("water_change")}
+            onRequestLitterClean={() => void handleClickEnvCare("litter_clean")}
+            envSavingWater={envSaving === "water_change"}
+            envSavingLitter={envSaving === "litter_clean"}
+          />
+        ) : null}
 
-        {/* ① 환경 칩 — 클릭 즉시 저장, 경과 시간 실시간 표시 */}
-        <div className={styles.envRow} role="group" aria-label="환경 관리 기록">
-          <button
-            type="button"
-            className={styles.envChip}
-            disabled={envSaving === "water_change"}
-            onClick={() => void handleClickEnvCare("water_change")}
-          >
-            <Droplets size={20} color="#4fd1c5" strokeWidth={1.75} aria-hidden />
-            <span className={styles.envChipText}>
-              <span className={styles.envChipLabel}>식수 교체</span>
-              <span className={styles.envChipEta}>{waterEtaLabel}</span>
-            </span>
-          </button>
-          <button
-            type="button"
-            className={`${styles.envChip} ${styles.envChipLitter}`}
-            disabled={envSaving === "litter_clean"}
-            onClick={() => void handleClickEnvCare("litter_clean")}
-          >
-            <Trash2 size={20} color="#ffab91" strokeWidth={1.75} aria-hidden />
-            <span className={styles.envChipText}>
-              <span className={styles.envChipLabel}>화장실 청소</span>
-              <span className={styles.envChipEta}>{litterEtaLabel}</span>
-            </span>
-          </button>
-        </div>
-
-        {/* ② 카메라 — 기기 관리 + 라이브 뷰어 + 2×2 타일 */}
         <section className={styles.cameraSection} aria-label="카메라 뷰">
-          {/* 등록된 카메라 기기 목록 및 페어링 코드 발급 */}
           {homeId ? <CameraDeviceManager homeId={homeId} /> : null}
 
-          {/* 라이브 방송이 있으면 자동 연결해서 영상을 보여줌
-              onWaterChangeRecorded/onLitterCleanRecorded: 카메라 뷰어 버튼 클릭 시 홈 화면도 즉시 동기화 */}
           <CameraLiveViewer
+            variant="figma"
+            heroPlaceLabel="거실"
             onWaterChangeRecorded={setLastWaterChangeAt}
             onLitterCleanRecorded={setLastLitterCleanAt}
           />
-
-          <div className={styles.cameraGrid}>
-            {CAMERA_TILES.map((tile) => (
-              <button
-                key={tile.id}
-                type="button"
-                className={styles.cameraTile}
-                onClick={() => setSelectedCamera(tile)}
-              >
-                <div className={styles.cameraThumb}>
-                  <Image
-                    src={tile.imageUrl}
-                    alt={`${tile.placeLabel}${tile.catLabel ? ` · ${tile.catLabel}` : ""} 카메라 미리보기`}
-                    fill
-                    sizes="(max-width: 640px) 50vw, 260px"
-                    className={styles.cameraImage}
-                    priority={tile.id === "cam-1" || tile.id === "cam-2"}
-                  />
-                  <span className={styles.badgePreview}>미리보기</span>
-                  <span
-                    className={tile.isOnline ? styles.badgeOnline : styles.badgeOffline}
-                    aria-label={tile.isOnline ? "온라인" : "오프라인"}
-                  />
-                  <div className={styles.cameraOverlay} aria-hidden>
-                    <span className={styles.cameraLabel}>{tile.placeLabel}</span>
-                    <span className={styles.cameraCatLabel}>
-                      {tile.catLabel ?? "공용"}
-                    </span>
-                  </div>
-                </div>
-              </button>
-            ))}
-          </div>
         </section>
 
-        {/* ③ 최근 활동 */}
         <RecentCatActivityLog
           initialLogs={initialActivityLogs}
           fetchErrorMessage={activityLogsFetchError}
@@ -356,64 +215,6 @@ export function CatvisorHomeDashboard({
       {toastMessage ? (
         <div className={styles.toast} role="status" aria-live="polite">
           {toastMessage}
-        </div>
-      ) : null}
-
-
-      {/* ── 카메라 모달 (div 기반) ── */}
-      {selectedCamera ? (
-        <div
-          className={styles.cameraModalOverlay}
-          role="presentation"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setSelectedCamera(null);
-          }}
-        >
-          <div
-            className={styles.cameraModalCard}
-            role="dialog"
-            aria-labelledby={cameraTitleId}
-          >
-            <div className={styles.cameraModalThumb}>
-              <Image
-                src={selectedCamera.imageUrl}
-                alt=""
-                fill
-                sizes="(max-width: 640px) 92vw, 520px"
-                className={styles.cameraModalImage}
-              />
-            </div>
-            <div className={styles.cameraModalBody}>
-              <h2 id={cameraTitleId} className={styles.cameraModalTitle}>
-                {selectedCamera.placeLabel}
-                {selectedCamera.catLabel ? ` · ${selectedCamera.catLabel}` : ""}
-              </h2>
-              <p className={styles.cameraModalMeta}>
-                {selectedCamera.isOnline
-                  ? "🟢 온라인 · 스트림 연동 후 실시간 영상이 표시돼요."
-                  : "⚪ 오프라인 · 기기 전원·네트워크를 확인해 주세요."}
-              </p>
-              <button
-                type="button"
-                className={styles.btnVoice}
-                onClick={() => {
-                  handleVoiceBroadcast(selectedCamera);
-                  setSelectedCamera(null);
-                }}
-              >
-                <MessageCircle size={18} strokeWidth={2} aria-hidden />
-                소통하기 (음성 송출)
-              </button>
-              <button
-                type="button"
-                className={styles.btnCloseFull}
-                onClick={() => setSelectedCamera(null)}
-              >
-                <X size={16} strokeWidth={2} aria-hidden />
-                닫기
-              </button>
-            </div>
-          </div>
         </div>
       ) : null}
     </div>

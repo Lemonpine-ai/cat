@@ -1,57 +1,13 @@
 import { CatvisorHomeDashboard } from "@/components/catvisor/CatvisorHomeDashboard";
 import { HomeCatCards } from "@/components/catvisor/HomeCatCards";
+import { HomeProfileRow } from "@/components/home/HomeProfileRow";
 import {
   mapActivityLogRows,
   type CatLogJoinRow,
 } from "@/lib/catLog/mapActivityLogRows";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { CatProfileRow } from "@/types/cat";
-import type { CatDailySummaryItem } from "@/types/catDailySummary";
 import type { ActivityLogListItem } from "@/types/catLog";
-
-/** 오늘 00:00:00 UTC 기준 ISO 문자열 */
-function buildTodayStartUtcIso(): string {
-  const now = new Date();
-  now.setUTCHours(0, 0, 0, 0);
-  return now.toISOString();
-}
-
-type DailySummaryRow = {
-  cat_id: string;
-  status: string | null;
-  cats: { name: string } | { name: string }[] | null;
-};
-
-function aggregateDailySummary(rows: DailySummaryRow[]): CatDailySummaryItem[] {
-  const map = new Map<string, CatDailySummaryItem>();
-
-  for (const row of rows) {
-    if (row.status !== "식사" && row.status !== "배변") {
-      continue;
-    }
-    const catName =
-      row.cats == null
-        ? row.cat_id
-        : Array.isArray(row.cats)
-          ? (row.cats[0]?.name ?? row.cat_id)
-          : row.cats.name;
-
-    const existing = map.get(row.cat_id) ?? {
-      catId: row.cat_id,
-      catName,
-      mealCount: 0,
-      toiletCount: 0,
-      medicineCount: 0,
-    };
-    map.set(row.cat_id, {
-      ...existing,
-      mealCount: row.status === "식사" ? existing.mealCount + 1 : existing.mealCount,
-      toiletCount: row.status === "배변" ? existing.toiletCount + 1 : existing.toiletCount,
-    });
-  }
-
-  return Array.from(map.values()).sort((a, b) => a.catName.localeCompare(b.catName));
-}
 
 /**
  * CATvisor 민트 홈 — Supabase cats + cat_logs + 카메라 관리.
@@ -61,7 +17,6 @@ export default async function HomePage() {
   let catsFetchError: string | null = null;
   let activityLogs: ActivityLogListItem[] = [];
   let activityLogsFetchError: string | null = null;
-  let dailySummary: CatDailySummaryItem[] = [];
   let homeId: string | null = null;
   let todayMedicineCount = 0;
   let todayMealCount = 0;
@@ -113,20 +68,13 @@ export default async function HomePage() {
       activityLogs = mapActivityLogRows(logRows as CatLogJoinRow[] | null);
     }
 
-    // 오늘의 식사·배변 집계
-    const { data: summaryRows } = await supabase
-      .from("cat_logs")
-      .select("cat_id, status, cats ( name )")
-      .gte("captured_at", buildTodayStartUtcIso())
-      .in("status", ["식사", "배변"]);
-
-    if (summaryRows) {
-      dailySummary = aggregateDailySummary(summaryRows as DailySummaryRow[]);
-    }
-
     // 오늘 홈 전체 수동 케어 카운트 (meal + medicine)
     if (homeId) {
-      const todayStart = buildTodayStartUtcIso();
+      const todayStart = (() => {
+      const now = new Date();
+      now.setUTCHours(0, 0, 0, 0);
+      return now.toISOString();
+    })();
 
       const { count: medicineRows } = await supabase
         .from("cat_care_logs")
@@ -190,13 +138,26 @@ export default async function HomePage() {
       initialActivityLogs={activityLogs}
       activityLogsFetchError={activityLogsFetchError}
       catsLookupForActivity={catsLookupForActivity}
-      initialDailySummary={dailySummary}
       initialTodayMedicineCount={todayMedicineCount}
       initialTodayMealCount={todayMealCount}
       initialLastWaterChangeAt={lastWaterChangeAt}
       initialLastLitterCleanAt={lastLitterCleanAt}
     >
-      <HomeCatCards cats={cats} fetchErrorMessage={catsFetchError} />
+      <HomeProfileRow cats={cats} fetchErrorMessage={catsFetchError} />
+      {cats.length > 0 ? (
+        <details className="group mt-1 rounded-[1.5rem] border border-dashed border-[rgba(30,143,131,0.28)] bg-white/50 px-3 py-2 text-[var(--color-text-sub)] open:bg-white/90">
+          <summary className="cursor-pointer list-none text-center text-xs font-semibold text-[var(--mint-700)] marker:content-none [&::-webkit-details-marker]:hidden">
+            고양이별 상태 기록 펼치기
+          </summary>
+          <div className="mt-3 pb-1">
+            <HomeCatCards
+              cats={cats}
+              fetchErrorMessage={null}
+              hideSectionTitle
+            />
+          </div>
+        </details>
+      ) : null}
     </CatvisorHomeDashboard>
   );
 }

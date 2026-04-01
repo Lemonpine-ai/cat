@@ -35,7 +35,7 @@ export function BottomTabBar() {
             <LucideIcon
               size={22}
               strokeWidth={isActive ? 2.2 : 1.75}
-              color={isActive ? "#1e8f83" : "#94b8b3"}
+              color={isActive ? "#ffffff" : "#94b8b3"}
               aria-hidden
               className="bottom-tab-bar__icon"
             />

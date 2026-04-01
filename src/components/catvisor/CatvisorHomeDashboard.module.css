@@ -1120,6 +1120,87 @@
   transform: scale(0.98);
 }
 
+/* ─── 피그마 최근 알림 (RECENT ALERTS) ─── */
+.activitySectionTitleFigma {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 0 0.65rem;
+  font-family: var(--font-display);
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-primary-dark);
+}
+
+.activitySectionTitleKo {
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  color: var(--color-text-muted);
+  text-transform: none;
+}
+
+.activityListFigma {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.activityRowFigma {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.85rem 1rem;
+  background: var(--color-surface-solid);
+  border-radius: 1.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.95);
+  box-shadow: var(--shadow-card);
+  animation: fadeInUp 0.35s ease both;
+}
+
+.activityIconCircle {
+  flex-shrink: 0;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(79, 209, 197, 0.18);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.activityThumbRound {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.activityEmojiFallback {
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+.activityAlertMain {
+  margin: 0;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--color-text);
+  line-height: 1.45;
+}
+
+.activityRelative {
+  margin-top: 0.2rem;
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--color-text-muted);
+}
+
 /* ─── 반응형: 모바일 (max 480px) — 카메라 높이 축소로 한 화면 밀도 ↑ ─── */
 @media (max-width: 480px) {
   .inner {

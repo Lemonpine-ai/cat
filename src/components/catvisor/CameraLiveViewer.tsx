@@ -14,6 +14,8 @@ import {
   Baby,
   Droplets,
   Loader2,
+  Maximize2,
+  Mic,
   Pill,
   Radio,
   Smartphone,
@@ -67,12 +69,19 @@ type CameraLiveViewerProps = {
   onWaterChangeRecorded?: (isoTimestamp: string) => void;
   /** 화장실 청소 기록 시 홈 화면 상태를 즉시 동기화하는 콜백 */
   onLitterCleanRecorded?: (isoTimestamp: string) => void;
+  /** 홈 피그마 스타일 라이브 카드 */
+  variant?: "default" | "figma";
+  /** variant figma 일 때 오버레이 위치 라벨 (예: 거실, 캣타워) */
+  heroPlaceLabel?: string;
 };
 
 export function CameraLiveViewer({
   onWaterChangeRecorded,
   onLitterCleanRecorded,
+  variant = "default",
+  heroPlaceLabel = "거실",
 }: CameraLiveViewerProps = {}) {
+  const isFigmaVariant = variant === "figma";
   const [connectionPhase, setConnectionPhase] =
     useState<ViewerConnectionPhase>("idle");
   const [homeId, setHomeId] = useState<string | null>(null);
@@ -476,38 +485,64 @@ export function CameraLiveViewer({
   // home_id 없으면 렌더링 안 함 (connectionPhase 는 homeId 확보 직후 useEffect 에서 곧바로 watching_for_broadcast 로 바뀜)
   if (!homeId) return null;
 
+  const liveClockLabel = new Intl.DateTimeFormat("ko-KR", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(new Date());
+
   return (
     <section
-      className="w-full rounded-3xl border border-[#4FD1C5]/20 bg-[#F1FBF9] p-4 shadow-lg"
+      className={
+        isFigmaVariant
+          ? "w-full rounded-[2rem] border border-white/95 bg-white p-3 shadow-[var(--shadow-card)]"
+          : "w-full rounded-3xl border border-[#4FD1C5]/20 bg-[#F1FBF9] p-4 shadow-lg"
+      }
       aria-label="라이브 카메라"
     >
-      <div className="mb-4 flex flex-wrap items-center gap-2">
-        <h2 className="flex items-center gap-2 text-sm font-medium text-[#1e8f83]">
-          <Video
-            className="size-5 shrink-0 text-[#4FD1C5]"
-            strokeWidth={1.75}
-            aria-hidden
-          />
-          라이브 카메라
-        </h2>
-        {connectionPhase === "connected" ? (
-          <span className="inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-[#4FD1C5] to-[#38BDB0] px-3 py-1 text-[0.68rem] font-bold uppercase tracking-wider text-white shadow-lg">
-            <Radio className="size-3" strokeWidth={2.5} aria-hidden />
+      {isFigmaVariant ? (
+        <div className="mb-3 flex items-center justify-between px-0.5">
+          <h2 className="font-[family-name:var(--font-display)] text-sm font-semibold tracking-wide text-[var(--color-primary-dark)]">
+            LIVE CAM
+          </h2>
+          <span className="inline-flex items-center gap-1 rounded-full bg-red-500/12 px-2 py-0.5 text-[0.65rem] font-bold uppercase tracking-wider text-red-600">
+            <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-red-500" />
             LIVE
           </span>
-        ) : connectionPhase === "connecting" ? (
-          <span className="inline-flex items-center gap-1 rounded-full bg-[#4FD1C5]/20 px-3 py-1 text-[0.7rem] font-semibold text-[#1e8f83]">
-            <Loader2 className="size-3.5 animate-spin" aria-hidden />
-            연결 중…
-          </span>
-        ) : (
-          <span className="rounded-full bg-slate-200/80 px-3 py-1 text-[0.7rem] font-medium text-slate-500">
-            대기 중
-          </span>
-        )}
-      </div>
+        </div>
+      ) : (
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          <h2 className="flex items-center gap-2 text-sm font-medium text-[#1e8f83]">
+            <Video
+              className="size-5 shrink-0 text-[#4FD1C5]"
+              strokeWidth={1.75}
+              aria-hidden
+            />
+            라이브 카메라
+          </h2>
+          {connectionPhase === "connected" ? (
+            <span className="inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-[#4FD1C5] to-[#38BDB0] px-3 py-1 text-[0.68rem] font-bold uppercase tracking-wider text-white shadow-lg">
+              <Radio className="size-3" strokeWidth={2.5} aria-hidden />
+              LIVE
+            </span>
+          ) : connectionPhase === "connecting" ? (
+            <span className="inline-flex items-center gap-1 rounded-full bg-[#4FD1C5]/20 px-3 py-1 text-[0.7rem] font-semibold text-[#1e8f83]">
+              <Loader2 className="size-3.5 animate-spin" aria-hidden />
+              연결 중…
+            </span>
+          ) : (
+            <span className="rounded-full bg-slate-200/80 px-3 py-1 text-[0.7rem] font-medium text-slate-500">
+              대기 중
+            </span>
+          )}
+        </div>
+      )}
 
-      <div className="relative aspect-video w-full overflow-hidden rounded-3xl bg-[#0d1a18] shadow-lg">
+      <div
+        className={`relative aspect-video w-full overflow-hidden bg-[#0d1a18] shadow-lg ${
+          isFigmaVariant ? "rounded-[1.75rem]" : "rounded-3xl"
+        }`}
+      >
         <video
           ref={remoteVideoRef}
           className="size-full object-cover"
@@ -564,9 +599,42 @@ export function CameraLiveViewer({
             ) : null}
           </div>
         ) : null}
+
+        {isFigmaVariant && connectionPhase === "connected" ? (
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[8] flex items-end justify-between bg-gradient-to-t from-black/70 via-black/25 to-transparent px-4 pb-3 pt-14">
+            <div className="pointer-events-auto min-w-0">
+              <p className="truncate font-[family-name:var(--font-display)] text-base font-bold text-white drop-shadow">
+                {heroPlaceLabel} 라이브
+              </p>
+              <p className="text-xs font-medium text-white/90">
+                {heroPlaceLabel} · {liveClockLabel}
+              </p>
+            </div>
+            <div className="pointer-events-auto flex gap-2">
+              <button
+                type="button"
+                className="flex h-10 w-10 items-center justify-center rounded-full bg-white/20 text-white backdrop-blur-sm transition hover:bg-white/30"
+                aria-label="마이크(준비 중)"
+              >
+                <Mic size={18} strokeWidth={2} />
+              </button>
+              <button
+                type="button"
+                className="flex h-10 w-10 items-center justify-center rounded-full bg-white/20 text-white backdrop-blur-sm transition hover:bg-white/30"
+                aria-label="전체 화면(준비 중)"
+              >
+                <Maximize2 size={18} strokeWidth={2} />
+              </button>
+            </div>
+          </div>
+        ) : null}
       </div>
 
-      <div className="relative z-50 mt-4 flex flex-col gap-3 rounded-2xl border border-[#4FD1C5]/35 bg-white p-3 shadow-lg">
+      <div
+        className={`relative z-50 mt-4 flex flex-col gap-3 rounded-2xl border border-[#4FD1C5]/35 bg-white p-3 shadow-lg ${
+          isFigmaVariant ? "border-[rgba(30,143,131,0.12)] bg-[rgba(255,255,255,0.92)]" : ""
+        }`}
+      >
         <div className="flex items-center justify-between gap-2">
           <span className="text-xs font-semibold text-[#1e8f83]">
             빠른 케어 기록

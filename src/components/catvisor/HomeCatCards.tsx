@@ -5,6 +5,8 @@ import styles from "./CatvisorHomeDashboard.module.css";
 type HomeCatCardsProps = {
   cats: CatProfileRow[];
   fetchErrorMessage: string | null;
+  /** 접힘 패널 안에 넣을 때 상단 제목 숨김 */
+  hideSectionTitle?: boolean;
 };
 
 /**
@@ -40,7 +42,11 @@ function CatRegistrationGuide() {
  * Supabase cats 행을 카드 그리드로 표시합니다. 각 카드는 상태 버튼으로 `cats.status` 를 갱신합니다.
  * 등록된 고양이가 없으면 `CatRegistrationGuide` 를 보여줍니다.
  */
-export function HomeCatCards({ cats, fetchErrorMessage }: HomeCatCardsProps) {
+export function HomeCatCards({
+  cats,
+  fetchErrorMessage,
+  hideSectionTitle = false,
+}: HomeCatCardsProps) {
   if (fetchErrorMessage) {
     return (
       <div className={styles.catSection}>
@@ -61,7 +67,9 @@ export function HomeCatCards({ cats, fetchErrorMessage }: HomeCatCardsProps) {
 
   return (
     <section className={styles.catSection} aria-label="우리 고양이">
-      <h2 className={styles.catSectionTitle}>우리 고양이</h2>
+      {hideSectionTitle ? null : (
+        <h2 className={styles.catSectionTitle}>우리 고양이</h2>
+      )}
       <div className={styles.catCardGrid}>
         {cats.map((cat) => (
           <CatCard key={cat.id} cat={cat} homeId={cat.home_id} />

@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { getCatMomentPublicUrl } from "@/lib/supabase/getCatMomentPublicUrl";
 import { toDisplayLabel } from "@/lib/cat/catStatusDisplayLabel";
+import { formatRelativeTimeKo } from "@/lib/time/formatRelativeTimeKo";
 import type { ActivityLogListItem } from "@/types/catLog";
 import styles from "./CatvisorHomeDashboard.module.css";
 
@@ -22,6 +23,27 @@ type RecentCatActivityLogProps = {
   catsLookup: CatLookupRow[];
   fetchErrorMessage: string | null;
 };
+
+function buildFriendlyMomentSentence(
+  catName: string,
+  rawStatus: string | null,
+  displayLabel: string | null,
+): string {
+  const raw = rawStatus ?? "";
+  if (raw === "식사") {
+    return `${catName}가 맘마를 맛있게 먹었어요`;
+  }
+  if (raw === "그루밍" || displayLabel?.includes("그루밍")) {
+    return `${catName}가 그루밍 중이에요 ✨`;
+  }
+  if (raw === "배변") {
+    return `${catName}의 화장실 기록이 있어요`;
+  }
+  if (displayLabel) {
+    return `${catName} · ${displayLabel} — 모먼트가 기록됐어요`;
+  }
+  return `${catName}의 순간이 포착됐어요`;
+}
 
 function formatActivityTimestamp(iso: string): string {
   try {
@@ -115,12 +137,16 @@ export function RecentCatActivityLog({
     logs.length - ACTIVITY_PREVIEW_ROW_COUNT,
   );
 
-  const TITLE = "냥-모먼트 일지 🐾";
+  const TITLE_EN = "RECENT ALERTS";
+  const TITLE_KO = "최근 알림";
 
   if (fetchErrorMessage) {
     return (
       <section className={styles.activitySection} aria-label="최근 활동">
-        <h2 className={styles.activitySectionTitle}>{TITLE}</h2>
+        <h2 className={styles.activitySectionTitleFigma}>
+          <span>{TITLE_EN}</span>
+          <span className={styles.activitySectionTitleKo}>{TITLE_KO}</span>
+        </h2>
         <p className={styles.activityEmpty} role="alert">
           활동 로그를 불러오지 못했어요. {fetchErrorMessage}
         </p>
@@ -131,7 +157,10 @@ export function RecentCatActivityLog({
   if (logs.length === 0) {
     return (
       <section className={styles.activitySection} aria-label="최근 활동">
-        <h2 className={styles.activitySectionTitle}>{TITLE}</h2>
+        <h2 className={styles.activitySectionTitleFigma}>
+          <span>{TITLE_EN}</span>
+          <span className={styles.activitySectionTitleKo}>{TITLE_KO}</span>
+        </h2>
         <p className={styles.activityEmptyCute}>
           아직 냥-모먼트가 없어요. 📷
           <br />
@@ -143,8 +172,11 @@ export function RecentCatActivityLog({
 
   return (
     <section className={styles.activitySection} aria-label="최근 활동">
-      <h2 className={styles.activitySectionTitle}>{TITLE}</h2>
-      <ul className={styles.activityList} id="cat-activity-log-list">
+      <h2 className={styles.activitySectionTitleFigma}>
+        <span>{TITLE_EN}</span>
+        <span className={styles.activitySectionTitleKo}>{TITLE_KO}</span>
+      </h2>
+      <ul className={styles.activityListFigma} id="cat-activity-log-list">
         {visibleActivityLogs.map((entry) => (
           <ActivityLogRow key={entry.id} entry={entry} />
         ))}
@@ -162,7 +194,7 @@ export function RecentCatActivityLog({
           >
             {isActivityListExpanded
               ? "접기 · 요약만 보기"
-              : `냥-모먼트 더 보기 (+${remainingActivityLogCount}개)`}
+              : `VIEW MORE / 더보기 (+${remainingActivityLogCount})`}
           </button>
         </div>
       ) : null}
@@ -182,40 +214,40 @@ function ActivityLogRow({ entry }: { entry: ActivityLogListItem }) {
   }, [entry.captured_at]);
 
   const displayStatus = toDisplayLabel(entry.cat_status);
-  const statusPart = displayStatus ? ` · ${displayStatus}` : "";
+  const relative = formatRelativeTimeKo(entry.captured_at);
+  const sentence = buildFriendlyMomentSentence(
+    entry.cat_name,
+    entry.cat_status,
+    displayStatus,
+  );
 
   return (
-    <li className={styles.activityRow}>
-      <div className={styles.activityThumbWrap}>
+    <li className={styles.activityRowFigma}>
+      <div className={styles.activityIconCircle} aria-hidden>
         {thumbnailUrl ? (
           <Image
             src={thumbnailUrl}
             alt=""
-            width={50}
-            height={50}
-            className={styles.activityThumb}
+            width={44}
+            height={44}
+            className={styles.activityThumbRound}
             unoptimized
           />
         ) : (
-          <div className={styles.activityThumbPlaceholder} aria-hidden>
-            🐾
-          </div>
+          <span className={styles.activityEmojiFallback}>🐾</span>
         )}
       </div>
       <div className={styles.activityBody}>
+        <p className={styles.activityAlertMain}>
+          <span className={styles.activityCatName}>{sentence}</span>
+        </p>
         <time
-          className={styles.activityTime}
+          className={styles.activityRelative}
           dateTime={entry.captured_at}
           suppressHydrationWarning
         >
-          {formattedTime}
+          {relative} · {formattedTime}
         </time>
-        <p className={styles.activityText}>
-          <span className={styles.activityCatName}>{entry.cat_name}</span>
-          {statusPart}
-          <span className={styles.activitySep}> — </span>
-          <span className={styles.activityAction}>순간 포착 ✨</span>
-        </p>
       </div>
     </li>
   );

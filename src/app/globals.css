@@ -1,9 +1,8 @@
 @import "tailwindcss";
 
 /* ================================================================
-   CATvisor Design System — Reflectly Soft UI × Mint
-   메인: #4FD1C5 / 배경: #F1FBF9 / 포인트: #FFAB91
-   폰트: Jua (디스플레이) + Noto Sans KR (본문)
+   CATvisor — 피그마 하이엔드 민트 에어 × 라운드 카드
+   배경: #E0F7FA / 폰트: Inter + Noto Sans KR
 ================================================================ */
 
 /* ─── CSS 커스텀 프로퍼티 ─── */
@@ -21,7 +20,7 @@
   --coral-light: #fff0ea;
 
   /* 의미 색상 */
-  --color-bg:        #f1fbf9;
+  --color-bg:        #e0f7fa;
   --color-surface:   rgba(255, 255, 255, 0.88);
   --color-surface-solid: #ffffff;
   --color-border:    rgba(79, 209, 197, 0.22);
@@ -33,9 +32,11 @@
   --color-text-sub:  #3d6b65;
   --color-text-muted: #94b8b3;
 
-  /* 폰트 */
-  --font-display: var(--font-jua), "Jua", system-ui, sans-serif;
-  --font-body:    var(--font-noto), "Noto Sans KR", system-ui, sans-serif;
+  /* 폰트 — Inter(라틴/UI) + Noto(한글) */
+  --font-display: var(--font-inter), var(--font-noto), "Inter", "Noto Sans KR",
+    system-ui, sans-serif;
+  --font-body: var(--font-inter), var(--font-noto), "Inter", "Noto Sans KR",
+    system-ui, sans-serif;
 
   /* 레이아웃 — Reflectly 32px(2rem) 중심 */
   --radius-sm:  1rem;
@@ -43,9 +44,9 @@
   --radius-lg:  2rem;
   --radius-xl:  2.25rem;
 
-  /* 그림자 — Soft UI, 부드러운 깊이감 */
-  --shadow-card: 0 4px 28px var(--color-shadow), 0 1px 4px rgba(0,0,0,0.03);
-  --shadow-card-hover: 0 10px 36px rgba(79,209,197,0.22), 0 2px 8px rgba(0,0,0,0.05);
+  /* 그림자 — 아주 부드럽게 */
+  --shadow-card: 0 8px 32px rgba(14, 85, 81, 0.06), 0 2px 12px rgba(0, 0, 0, 0.04);
+  --shadow-card-hover: 0 14px 40px rgba(14, 85, 81, 0.1), 0 4px 14px rgba(0, 0, 0, 0.06);
   --shadow-header: 0 8px 32px rgba(79,209,197,0.12);
 }
 
@@ -102,21 +103,71 @@ button { font: inherit; }
   position: sticky;
   top: 0;
   z-index: 50;
-  background: rgba(241, 251, 249, 0.92);
+  background: rgba(224, 247, 250, 0.94);
   backdrop-filter: blur(18px);
   -webkit-backdrop-filter: blur(18px);
-  border-bottom: 1px solid rgba(79, 209, 197, 0.14);
-  box-shadow: 0 4px 20px rgba(79, 209, 197, 0.08);
+  border-bottom: 1px solid rgba(30, 143, 131, 0.1);
+  box-shadow: 0 4px 24px rgba(14, 85, 81, 0.06);
 }
 
 .app-header-inner {
   margin: 0 auto;
   max-width: 56rem;
-  padding: 0.14rem 0.7rem 0.16rem;
+  padding: 0.45rem 0.85rem 0.5rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
   min-height: 0;
+  gap: 0.75rem;
+}
+
+.app-header-profile {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-width: 0;
+}
+
+.app-header-avatar {
+  flex-shrink: 0;
+  width: 2.35rem;
+  height: 2.35rem;
+  border-radius: 999px;
+  background: linear-gradient(160deg, #ffffff 0%, #d6f5f1 100%);
+  border: 2px solid rgba(30, 143, 131, 0.22);
+  box-shadow: var(--shadow-card);
+}
+
+.app-header-name {
+  font-family: var(--font-display);
+  font-size: 1.06rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--color-primary-dark);
+}
+
+.app-header-notify {
+  flex-shrink: 0;
+  width: 2.65rem;
+  height: 2.65rem;
+  border-radius: 0.85rem;
+  border: 2px dashed rgba(30, 143, 131, 0.38);
+  background: rgba(255, 255, 255, 0.75);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 1.15rem;
+  line-height: 1;
+  transition: background 0.18s ease, transform 0.12s ease;
+}
+
+.app-header-notify:hover {
+  background: rgba(255, 255, 255, 0.95);
+}
+
+.app-header-notify:active {
+  transform: scale(0.96);
 }
 
 .app-header-titles {
@@ -217,8 +268,13 @@ button { font: inherit; }
 }
 
 .bottom-tab-bar__link.is-active {
-  color: var(--color-primary-dark);
-  background: rgba(79, 209, 197, 0.14);
+  color: #fff;
+  background: linear-gradient(145deg, var(--mint-500) 0%, var(--mint-700) 100%);
+  box-shadow: 0 6px 20px rgba(30, 143, 131, 0.35);
+}
+
+.bottom-tab-bar__link.is-active .bottom-tab-bar__label {
+  color: #fff;
 }
 
 .bottom-tab-bar__label { line-height: 1.1; text-align: center; }
