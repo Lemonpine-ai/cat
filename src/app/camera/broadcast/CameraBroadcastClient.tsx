@@ -22,15 +22,14 @@ import {
   decodeSdpFromDatabaseColumn,
   encodePlainSdpForDatabaseColumn,
 } from "@/lib/webrtc/sessionDescriptionPayload";
-import {
-  logWebRtcDebug,
-  summarizeIceServersForLog,
-} from "@/lib/webrtc/webrtcDebugLog";
-import {
-  getWebRtcPeerConnectionConfiguration,
-} from "@/lib/webrtc/getWebRtcIceServersForPeerConnection";
-import { isWebRtcTurnEnvComplete } from "@/lib/webrtc/buildWebRtcIceServers";
 import styles from "./CameraBroadcastClient.module.css";
+
+/** STUN만 사용 (무료 공개 서버). 첫 항목은 Google 기본 STUN. */
+const WEBRTC_ICE_SERVERS: RTCIceServer[] = [
+  { urls: "stun:stun.l.google.com:19302" },
+  { urls: "stun:stun1.l.google.com:19302" },
+  { urls: "stun:stun.cloudflare.com:3478" },
+];
 
 /**
  * 마지막 관리 타임스탬프 → '0분 전' / 'n분 전' / 'n시간 전' / 'n일 전' 변환.
@@ -116,9 +115,6 @@ export function CameraBroadcastClient() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [peerConnectionState, setPeerConnectionState] =
     useState<RTCPeerConnectionState>("new");
-  /** 모바일 크롬 등에서 connectionState보다 먼저 안정되는 경우가 많아 시청 연결 판별에 함께 씀 */
-  const [iceConnectionState, setIceConnectionState] =
-    useState<RTCIceConnectionState>("new");
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [isSoundEnabled, setIsSoundEnabled] = useState(true);
   const [careLogPending, setCareLogPending] = useState(false);
@@ -141,9 +137,6 @@ export function CameraBroadcastClient() {
   const signalingPollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const appliedViewerIceKeysRef = useRef<Set<string>>(new Set());
   const autostartBroadcastSequenceStartedRef = useRef(false);
-  const localIceCandidateRpcCountRef = useRef(0);
-  const signalingPollTickRef = useRef(0);
-  const hasLoggedWaitingForAnswerRef = useRef(false);
 
   useEffect(() => {
     const { token: storedToken, name: storedName } =
@@ -428,41 +421,16 @@ export function CameraBroadcastClient() {
 
     try {
       sessionIdRef.current = null;
-      localIceCandidateRpcCountRef.current = 0;
-      signalingPollTickRef.current = 0;
-      hasLoggedWaitingForAnswerRef.current = false;
 
-      const rtcConfig = getWebRtcPeerConnectionConfiguration();
-      logWebRtcDebug("broadcaster", "signaling.start", {
-        ice: summarizeIceServersForLog(rtcConfig.iceServers ?? []),
-      });
-
-      const pc = new RTCPeerConnection(rtcConfig);
+      const pc = new RTCPeerConnection({ iceServers: WEBRTC_ICE_SERVERS });
       peerConnectionRef.current = pc;
-      setIceConnectionState("new");
-      setPeerConnectionState("new");
-
-      pc.onicegatheringstatechange = () => {
-        logWebRtcDebug("broadcaster", "ice.gathering_state", {
-          iceGatheringState: pc.iceGatheringState,
-        });
-      };
-
-      pc.oniceconnectionstatechange = () => {
-        const ice = pc.iceConnectionState;
-        setIceConnectionState(ice);
-        logWebRtcDebug("broadcaster", "ice.connection_state", {
-          iceConnectionState: ice,
-        });
-      };
 
       pc.onconnectionstatechange = () => {
-        const state = pc.connectionState;
-        setPeerConnectionState(state);
-        logWebRtcDebug("broadcaster", "peer.connection_state", {
-          connectionState: state,
-        });
-        if (state === "failed" || state === "closed") {
+        setPeerConnectionState(pc.connectionState);
+        if (
+          pc.connectionState === "failed" ||
+          pc.connectionState === "closed"
+        ) {
           setErrorMessage("연결이 끊겼어요. 방송을 다시 시작해 주세요.");
           setBroadcastPhase("error");
         }
@@ -470,29 +438,18 @@ export function CameraBroadcastClient() {
 
       localStreamRef.current.getTracks().forEach((track) => {
         pc.addTrack(track, localStreamRef.current!);
-        logWebRtcDebug("broadcaster", "media.add_track", {
-          kind: track.kind,
-          enabled: track.enabled,
-        });
       });
 
       /** setLocalDescription 직후 ICE가 뜨는데 session_id 는 RPC 이후에만 생기므로, 그 전 후보는 메모리에 쌓았다가 일괄 전송합니다. */
       const iceCandidatesWaitingForSessionId: RTCIceCandidateInit[] = [];
 
       pc.onicecandidate = ({ candidate }) => {
-        if (!candidate) {
-          logWebRtcDebug("broadcaster", "ice.local_gathering_done", {
-            candidatesSentToServer: localIceCandidateRpcCountRef.current,
-            queuedBeforeSession: iceCandidatesWaitingForSessionId.length,
-          });
-          return;
-        }
+        if (!candidate) return;
         const candidatePayload = candidate.toJSON();
         if (!sessionIdRef.current) {
           iceCandidatesWaitingForSessionId.push(candidatePayload);
           return;
         }
-        localIceCandidateRpcCountRef.current += 1;
         void supabase.rpc("add_device_ice_candidate", {
           input_device_token: deviceIdentity.deviceToken,
           input_session_id: sessionIdRef.current,
@@ -502,9 +459,6 @@ export function CameraBroadcastClient() {
 
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
-      logWebRtcDebug("broadcaster", "signaling.local_offer_set", {
-        sdpLines: (pc.localDescription?.sdp ?? "").split("\n").length,
-      });
 
       const committedLocalDescription = pc.localDescription;
       if (!committedLocalDescription?.sdp) {
@@ -523,9 +477,6 @@ export function CameraBroadcastClient() {
       );
 
       if (broadcastError || !broadcastResult || broadcastResult.error) {
-        logWebRtcDebug("broadcaster", "signaling.start_device_broadcast_failed", {
-          error: broadcastResult?.error ?? broadcastError?.message,
-        });
         throw new Error(
           broadcastResult?.error ?? broadcastError?.message ?? "방송 세션 생성 실패",
         );
@@ -534,10 +485,8 @@ export function CameraBroadcastClient() {
       const sessionId = broadcastResult.session_id as string;
       sessionIdRef.current = sessionId;
       setActiveSessionId(sessionId);
-      logWebRtcDebug("broadcaster", "signaling.session_created", { sessionId });
 
       for (const queuedCandidate of iceCandidatesWaitingForSessionId) {
-        localIceCandidateRpcCountRef.current += 1;
         await supabase.rpc("add_device_ice_candidate", {
           input_device_token: deviceIdentity.deviceToken,
           input_session_id: sessionId,
@@ -553,9 +502,6 @@ export function CameraBroadcastClient() {
           const currentSessionId = sessionIdRef.current;
           if (!currentPc || !currentSessionId) return;
 
-          signalingPollTickRef.current += 1;
-          const tick = signalingPollTickRef.current;
-
           const { data: signalingPayload, error: signalingError } = await supabase.rpc(
             "get_broadcaster_signaling_state",
             {
@@ -564,52 +510,18 @@ export function CameraBroadcastClient() {
             },
           );
 
-          if (signalingError) {
-            logWebRtcDebug("broadcaster", "signaling.poll.rpc_error", {
-              message: signalingError.message,
-              tick,
-            });
-            return;
-          }
-          if (!signalingPayload || signalingPayload.error) {
-            logWebRtcDebug("broadcaster", "signaling.poll.invalid_payload", {
-              tick,
-              payloadError: signalingPayload?.error,
-            });
+          if (signalingError || !signalingPayload || signalingPayload.error) {
             return;
           }
 
           const answerSdpRaw = signalingPayload.answer_sdp as string | null | undefined;
-          if (!answerSdpRaw && !hasLoggedWaitingForAnswerRef.current) {
-            hasLoggedWaitingForAnswerRef.current = true;
-            logWebRtcDebug("broadcaster", "signaling.waiting_for_viewer_answer", {
-              hint: "홈 대시보드에서 라이브 카메라가 붙어 answer_sdp 가 올 때까지 대기",
-            });
-          }
-          if (!answerSdpRaw && tick % 38 === 1) {
-            logWebRtcDebug("broadcaster", "signaling.still_no_answer", {
-              polls: tick,
-              connectionState: currentPc.connectionState,
-              iceConnectionState: currentPc.iceConnectionState,
-            });
-          }
-
           if (answerSdpRaw && currentPc.remoteDescription === null) {
             try {
               const answerInit = decodeSdpFromDatabaseColumn(answerSdpRaw, "answer");
               await currentPc.setRemoteDescription(new RTCSessionDescription(answerInit));
               setBroadcastPhase("live");
-              setPeerConnectionState(currentPc.connectionState);
-              setIceConnectionState(currentPc.iceConnectionState);
-              logWebRtcDebug("broadcaster", "signaling.remote_answer_applied", {
-                connectionState: currentPc.connectionState,
-                iceConnectionState: currentPc.iceConnectionState,
-              });
             } catch (answerErr) {
               console.error("[broadcaster] setRemoteDescription 오류", answerErr);
-              logWebRtcDebug("broadcaster", "signaling.set_remote_answer_failed", {
-                message: answerErr instanceof Error ? answerErr.message : String(answerErr),
-              });
             }
           }
 
@@ -626,12 +538,6 @@ export function CameraBroadcastClient() {
             if (!currentPc.remoteDescription) continue;
             try {
               await currentPc.addIceCandidate(new RTCIceCandidate(rawCandidate));
-              const n = appliedViewerIceKeysRef.current.size;
-              if (n <= 3 || n % 10 === 0) {
-                logWebRtcDebug("broadcaster", "ice.viewer_candidate_applied", {
-                  totalApplied: n,
-                });
-              }
             } catch {
               // 중복 후보 등은 무시
             }
@@ -643,9 +549,6 @@ export function CameraBroadcastClient() {
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "방송 시작에 실패했어요.";
-      logWebRtcDebug("broadcaster", "startBroadcast.exception", {
-        message,
-      });
       setErrorMessage(message);
       setBroadcastPhase("error");
       await cleanupSessionAndStopOnServer(true);
@@ -656,13 +559,16 @@ export function CameraBroadcastClient() {
     await cleanupSessionAndStopOnServer(true);
     setBroadcastPhase("ready");
     setPeerConnectionState("new");
-    setIceConnectionState("new");
   }
 
-  const isViewerMediaConnected =
-    peerConnectionState === "connected" ||
-    iceConnectionState === "connected" ||
-    iceConnectionState === "completed";
+  const peerStatusLabel: Record<RTCPeerConnectionState, string> = {
+    new: "대기 중",
+    connecting: "연결 중…",
+    connected: "연결됨 ✅",
+    disconnected: "연결 끊김",
+    failed: "연결 실패",
+    closed: "종료됨",
+  };
 
   if (broadcastPhase === "loading") {
     return (
@@ -704,11 +610,9 @@ export function CameraBroadcastClient() {
         </div>
         {(broadcastPhase === "live" || broadcastPhase === "connecting") && (
           <span className={styles.liveBadge} aria-live="polite">
-            {broadcastPhase === "live" && isViewerMediaConnected
+            {broadcastPhase === "live" && peerConnectionState === "connected"
               ? "● LIVE"
-              : broadcastPhase === "live"
-                ? "● 송출"
-                : "○ 준비"}
+              : "○ 대기"}
           </span>
         )}
       </header>
@@ -720,7 +624,6 @@ export function CameraBroadcastClient() {
           autoPlay
           muted
           playsInline
-          controls={false}
           aria-label="카메라 미리보기"
         />
         {broadcastPhase === "idle" || broadcastPhase === "acquiring" ? (
@@ -730,7 +633,7 @@ export function CameraBroadcastClient() {
             </span>
           </div>
         ) : null}
-        {isViewerMediaConnected && (
+        {peerConnectionState === "connected" && (
           <div className={styles.viewerBadge} aria-live="polite">
             <Eye size={14} strokeWidth={2} aria-hidden /> 시청 중
           </div>
@@ -770,29 +673,11 @@ export function CameraBroadcastClient() {
 
         {broadcastPhase === "connecting" || broadcastPhase === "live" ? (
           <div className={styles.liveControls}>
-            <div className={styles.statusBlock}>
-              <p className={styles.statusText}>
-                {isViewerMediaConnected
-                  ? `● ${deviceIdentity?.deviceName ?? "카메라"} 방송 중 · 시청자와 연결됨`
-                  : `● 라이브 송출 중 — 홈(대시보드)에서 라이브 카메라를 열면 시청자와 연결돼요`}
-              </p>
-              {!isViewerMediaConnected ? (
-                <p className={styles.statusHint}>
-                  {isWebRtcTurnEnvComplete() ? (
-                    <>
-                      홈(대시보드)에서 같은 계정으로 라이브 카메라를 열면 붙어요. 잠시 후에도 안 되면
-                      Metered 대시보드의 호스트·비밀번호와 Vercel 재배포 여부를 확인해 주세요.
-                    </>
-                  ) : (
-                    <>
-                      홈(대시보드)에서 같은 계정으로 라이브 카메라를 열면 붙어요. LTE·외부망에서는 Vercel에{" "}
-                      <code className={styles.statusCode}>NEXT_PUBLIC_WEBRTC_TURN_*</code> TURN
-                      설정이 필요할 수 있어요.
-                    </>
-                  )}
-                </p>
-              ) : null}
-            </div>
+            <p className={styles.statusText}>
+              {peerConnectionState === "connected"
+                ? `● ${deviceIdentity?.deviceName ?? "카메라"} 방송 중`
+                : `○ 시청자 기다리는 중… (${peerStatusLabel[peerConnectionState]})`}
+            </p>
             <div className={styles.broadcastCareBar}>
               <div className={styles.broadcastCareHeader}>
                 <span className={styles.broadcastCareTitle}>빠른 케어 기록</span>
