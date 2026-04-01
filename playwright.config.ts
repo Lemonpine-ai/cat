@@ -11,6 +11,15 @@ export default defineConfig({
   retries: process.env.CI ? 1 : 0,
   use: {
     ...devices["Desktop Chrome"],
+    baseURL: process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3000",
     trace: "on-first-retry",
+  },
+  webServer: {
+    command: "npm run dev",
+    url: "http://localhost:3000",
+    reuseExistingServer: true,
+    timeout: 120_000,
+    stdout: "pipe",
+    stderr: "pipe",
   },
 });
