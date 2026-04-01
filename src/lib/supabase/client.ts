@@ -1,8 +1,10 @@
 import { createBrowserClient } from "@supabase/ssr";
+import { ensureHttpsApiUrl } from "@/lib/url/ensureHttpsApiUrl";
 
 /**
  * 브라우저 전용 Supabase 클라이언트 (클라이언트 컴포넌트·폼 제출에서 사용).
  * Vercel 환경 변수에 줄바꿈이 포함될 수 있으므로 .trim() 으로 정규화합니다.
+ * 프로덕션에서 `http://` 로 잘못 넣은 URL 은 HTTPS 로 승격합니다.
  */
 export function createSupabaseBrowserClient() {
   const rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -14,5 +16,6 @@ export function createSupabaseBrowserClient() {
     );
   }
 
-  return createBrowserClient(rawUrl.trim(), rawKey.trim());
+  const supabaseUrl = ensureHttpsApiUrl(rawUrl.trim());
+  return createBrowserClient(supabaseUrl, rawKey.trim());
 }

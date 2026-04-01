@@ -238,6 +238,7 @@ export default function CameraTestPage() {
             autoPlay
             playsInline
             muted
+            controls={false}
             style={videoStyle}
           />
           {!streamReady && !streamError ? (

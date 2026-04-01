@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { ensureHttpsApiUrl } from "@/lib/url/ensureHttpsApiUrl";
 
 /**
  * 보호 대상에서 제외할 경로 프리픽스.
@@ -26,7 +27,8 @@ export async function proxy(request: NextRequest) {
 
   let supabaseResponse = NextResponse.next({ request });
 
-  const supabase = createServerClient(supabaseUrl.trim(), supabaseAnonKey.trim(), {
+  const normalizedUrl = ensureHttpsApiUrl(supabaseUrl.trim());
+  const supabase = createServerClient(normalizedUrl, supabaseAnonKey.trim(), {
     cookies: {
       getAll() {
         return request.cookies.getAll();

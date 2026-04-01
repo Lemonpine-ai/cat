@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+import { ensureHttpsApiUrl } from "@/lib/url/ensureHttpsApiUrl";
 
 /**
  * Supabase Auth 콜백 핸들러.
@@ -42,7 +43,10 @@ export async function GET(request: Request) {
   const cookieStore = await cookies();
   const redirectResponse = NextResponse.redirect(`${origin}${safeNext}`);
 
-  const supabase = createServerClient(supabaseUrl.trim(), supabaseAnonKey.trim(), {
+  const supabase = createServerClient(
+    ensureHttpsApiUrl(supabaseUrl.trim()),
+    supabaseAnonKey.trim(),
+    {
     cookies: {
       getAll() {
         return cookieStore.getAll();

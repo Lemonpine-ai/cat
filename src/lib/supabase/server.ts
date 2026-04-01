@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { ensureHttpsApiUrl } from "@/lib/url/ensureHttpsApiUrl";
 
 /**
  * 서버 컴포넌트·Server Actions·Route Handler 에서 사용하는 Supabase 클라이언트.
@@ -16,7 +17,7 @@ export async function createSupabaseServerClient() {
     );
   }
 
-  const supabaseUrl = rawUrl.trim();
+  const supabaseUrl = ensureHttpsApiUrl(rawUrl.trim());
   const supabaseAnonKey = rawKey.trim();
 
   const cookieStore = await cookies();

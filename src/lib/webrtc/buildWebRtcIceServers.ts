@@ -7,9 +7,16 @@
  * 클라이언트 번들에 포함되므로 `NEXT_PUBLIC_*` 만 사용한다.
  */
 
+/**
+ * Google 공개 STUN — 외부망·NAT 뒤에서 peer 후보 탐색에 사용.
+ * `stun:stun.l.google.com:19302` 는 WebRTC 예제에서 가장 널리 쓰이는 기본값이다.
+ */
 const DEFAULT_STUN_SERVERS: RTCIceServer[] = [
   { urls: "stun:stun.l.google.com:19302" },
   { urls: "stun:stun1.l.google.com:19302" },
+  { urls: "stun:stun2.l.google.com:19302" },
+  { urls: "stun:stun3.l.google.com:19302" },
+  { urls: "stun:stun4.l.google.com:19302" },
   { urls: "stun:stun.cloudflare.com:3478" },
 ];
 
