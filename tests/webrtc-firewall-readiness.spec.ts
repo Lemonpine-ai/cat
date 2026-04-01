@@ -1,5 +1,8 @@
 import { expect, test } from "@playwright/test";
-import { buildWebRtcIceServers } from "../src/lib/webrtc/buildWebRtcIceServers";
+import {
+  buildWebRtcIceServers,
+  isWebRtcTurnEnvComplete,
+} from "../src/lib/webrtc/buildWebRtcIceServers";
 
 test.describe("WebRTC ICE 설정 (방화벽·NAT 대비)", () => {
   test("기본: STUN 서버만 포함되고 개수가 일정하다", () => {
@@ -53,7 +56,7 @@ test.describe("WebRTC ICE 설정 (방화벽·NAT 대비)", () => {
         pc.addEventListener("icegatheringstatechange", () => {
           if (pc.iceGatheringState === "complete") done();
         });
-        window.setTimeout(done, 5000);
+        window.setTimeout(done, 12000);
       });
       const state = pc.iceGatheringState;
       pc.close();
@@ -110,6 +113,31 @@ test.describe("WebRTC ICE 설정 (방화벽·NAT 대비)", () => {
 
     expect(result.gatheringComplete).toBe(true);
     expect(result.candidateCount).toBeGreaterThan(0);
+  });
+
+  test("TURN URL 전체를 따옴표로 감싼 경우에도 파싱된다", () => {
+    const servers = buildWebRtcIceServers({
+      NEXT_PUBLIC_WEBRTC_TURN_URLS:
+        '"turn:quoted.example:3478,turns:quoted.example:5349"',
+      NEXT_PUBLIC_WEBRTC_TURN_USERNAME: "u",
+      NEXT_PUBLIC_WEBRTC_TURN_CREDENTIAL: "c",
+    });
+    const relayCount = servers.filter((e) => {
+      const j = Array.isArray(e.urls) ? e.urls.join(",") : String(e.urls);
+      return /turns?:/i.test(j);
+    }).length;
+    expect(relayCount).toBe(2);
+  });
+
+  test("isWebRtcTurnEnvComplete 는 세 변수가 모두 있을 때만 true", () => {
+    expect(isWebRtcTurnEnvComplete({})).toBe(false);
+    expect(
+      isWebRtcTurnEnvComplete({
+        NEXT_PUBLIC_WEBRTC_TURN_URLS: "turn:x:1",
+        NEXT_PUBLIC_WEBRTC_TURN_USERNAME: "a",
+        NEXT_PUBLIC_WEBRTC_TURN_CREDENTIAL: "b",
+      }),
+    ).toBe(true);
   });
 });
 

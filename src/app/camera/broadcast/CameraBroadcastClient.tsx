@@ -22,15 +22,12 @@ import {
   decodeSdpFromDatabaseColumn,
   encodePlainSdpForDatabaseColumn,
 } from "@/lib/webrtc/sessionDescriptionPayload";
-import { buildWebRtcIceServers } from "@/lib/webrtc/buildWebRtcIceServers";
 import {
   logWebRtcDebug,
   summarizeIceServersForLog,
 } from "@/lib/webrtc/webrtcDebugLog";
+import { getWebRtcIceServersForPeerConnection } from "@/lib/webrtc/getWebRtcIceServersForPeerConnection";
 import styles from "./CameraBroadcastClient.module.css";
-
-/** STUN + (선택) TURN — `buildWebRtcIceServers` 참고 */
-const WEBRTC_ICE_SERVERS: RTCIceServer[] = buildWebRtcIceServers();
 
 /**
  * 마지막 관리 타임스탬프 → '0분 전' / 'n분 전' / 'n시간 전' / 'n일 전' 변환.
@@ -432,11 +429,12 @@ export function CameraBroadcastClient() {
       signalingPollTickRef.current = 0;
       hasLoggedWaitingForAnswerRef.current = false;
 
+      const iceServers = getWebRtcIceServersForPeerConnection();
       logWebRtcDebug("broadcaster", "signaling.start", {
-        ice: summarizeIceServersForLog(WEBRTC_ICE_SERVERS),
+        ice: summarizeIceServersForLog(iceServers),
       });
 
-      const pc = new RTCPeerConnection({ iceServers: WEBRTC_ICE_SERVERS });
+      const pc = new RTCPeerConnection({ iceServers });
       peerConnectionRef.current = pc;
       setIceConnectionState("new");
       setPeerConnectionState("new");

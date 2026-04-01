@@ -6,11 +6,11 @@ import {
   decodeSdpFromDatabaseColumn,
   encodePlainSdpForDatabaseColumn,
 } from "@/lib/webrtc/sessionDescriptionPayload";
-import { buildWebRtcIceServers } from "@/lib/webrtc/buildWebRtcIceServers";
 import {
   logWebRtcDebug,
   summarizeIceServersForLog,
 } from "@/lib/webrtc/webrtcDebugLog";
+import { getWebRtcIceServersForPeerConnection } from "@/lib/webrtc/getWebRtcIceServersForPeerConnection";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import {
   AlertTriangle,
@@ -30,9 +30,6 @@ import {
 } from "lucide-react";
 import { playPopSound } from "@/lib/sound/playPopSound";
 import { CATVISOR_SOUND_ENABLED_STORAGE_KEY } from "@/lib/sound/soundPreferenceStorageKey";
-
-/** STUN + (선택) TURN — `buildWebRtcIceServers` 참고 */
-const WEBRTC_ICE_SERVERS: RTCIceServer[] = buildWebRtcIceServers();
 
 type ViewerConnectionPhase =
   | "idle"
@@ -132,12 +129,13 @@ export function CameraLiveViewer({
       await closePeerConnection();
 
       try {
+        const iceServers = getWebRtcIceServersForPeerConnection();
         logWebRtcDebug("viewer", "connect.enter", {
           sessionId: session.id,
-          ice: summarizeIceServersForLog(WEBRTC_ICE_SERVERS),
+          ice: summarizeIceServersForLog(iceServers),
         });
 
-        const pc = new RTCPeerConnection({ iceServers: WEBRTC_ICE_SERVERS });
+        const pc = new RTCPeerConnection({ iceServers });
         peerConnectionRef.current = pc;
 
         const appliedBroadcasterIceKeys = new Set<string>();
