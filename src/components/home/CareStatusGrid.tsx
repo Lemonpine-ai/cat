@@ -2,17 +2,68 @@
 
 import {
   Activity,
+  Baby,
   Droplets,
   Pill,
+  RefreshCw,
   Sparkles,
-  Trash2,
-  UtensilsCrossed,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { formatElapsedTimeLabel } from "@/lib/time/formatElapsedTimeLabel";
 
 const MEAL_DAILY_GOAL = 3;
+
+/** 빠른 케어 기록 버튼과 동일 팔레트·아이콘 (맘마=Baby/민트, 식수=물방울+리프레시/블루, 화장실=스파클/코랄, 약=캡슐/라벤더) */
+function CareStatusIconBadge({
+  category,
+}: {
+  category: "litter" | "water" | "meal" | "medicine";
+}) {
+  if (category === "litter") {
+    return (
+      <span
+        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[rgba(255,171,145,0.38)] text-[#E65100]"
+        aria-hidden
+      >
+        <Sparkles size={18} strokeWidth={2} />
+      </span>
+    );
+  }
+  if (category === "water") {
+    return (
+      <span
+        className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[rgba(3,169,244,0.22)] text-[#0277BD]"
+        aria-hidden
+      >
+        <Droplets size={17} strokeWidth={2} className="relative z-[1]" />
+        <RefreshCw
+          size={11}
+          strokeWidth={2.5}
+          className="absolute bottom-0.5 right-0.5 opacity-95"
+        />
+      </span>
+    );
+  }
+  if (category === "meal") {
+    return (
+      <span
+        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[rgba(77,182,172,0.32)] text-[#00695C]"
+        aria-hidden
+      >
+        <Baby size={18} strokeWidth={2} />
+      </span>
+    );
+  }
+  return (
+    <span
+      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[rgba(179,136,255,0.3)] text-[#5E35B1]"
+      aria-hidden
+    >
+      <Pill size={18} strokeWidth={2} />
+    </span>
+  );
+}
 
 type CareStatusGridProps = {
   /** 분 단위 경과 라벨 갱신용 (부모에서 1분마다 증가) */
@@ -109,9 +160,7 @@ export function CareStatusGrid({
           className="flex flex-col gap-2 rounded-[1.75rem] border border-white/80 bg-white p-4 text-left shadow-[var(--shadow-card)] transition hover:shadow-[var(--shadow-card-hover)] active:scale-[0.99] disabled:opacity-60"
         >
           <div className="flex items-center gap-2">
-            <span className="flex h-9 w-9 items-center justify-center rounded-2xl bg-[rgba(79,209,197,0.15)] text-[var(--mint-700)]">
-              <Trash2 size={18} strokeWidth={2} aria-hidden />
-            </span>
+            <CareStatusIconBadge category="litter" />
             <span className="text-xs font-bold text-[var(--color-text-muted)]">화장실</span>
           </div>
           <p className="font-[family-name:var(--font-display)] text-lg font-semibold text-[var(--color-primary-dark)]">
@@ -131,9 +180,7 @@ export function CareStatusGrid({
           className="flex flex-col gap-2 rounded-[1.75rem] border border-white/80 bg-white p-4 text-left shadow-[var(--shadow-card)] transition hover:shadow-[var(--shadow-card-hover)] active:scale-[0.99] disabled:opacity-60"
         >
           <div className="flex items-center gap-2">
-            <span className="flex h-9 w-9 items-center justify-center rounded-2xl bg-[rgba(79,209,197,0.15)] text-[var(--mint-700)]">
-              <Droplets size={18} strokeWidth={2} aria-hidden />
-            </span>
+            <CareStatusIconBadge category="water" />
             <span className="text-xs font-bold text-[var(--color-text-muted)]">식수</span>
           </div>
           <p className="font-[family-name:var(--font-display)] text-lg font-semibold text-[var(--color-primary-dark)]">
@@ -148,9 +195,7 @@ export function CareStatusGrid({
 
         <div className="flex flex-col gap-2 rounded-[1.75rem] border border-white/80 bg-white p-4 shadow-[var(--shadow-card)]">
           <div className="flex items-center gap-2">
-            <span className="flex h-9 w-9 items-center justify-center rounded-2xl bg-[rgba(79,209,197,0.15)] text-[var(--mint-700)]">
-              <UtensilsCrossed size={18} strokeWidth={2} aria-hidden />
-            </span>
+            <CareStatusIconBadge category="meal" />
             <span className="text-xs font-bold text-[var(--color-text-muted)]">맘마 먹기</span>
           </div>
           <p className="font-[family-name:var(--font-display)] text-lg font-semibold text-[var(--color-primary-dark)]">
@@ -161,9 +206,7 @@ export function CareStatusGrid({
 
         <div className="flex flex-col gap-2 rounded-[1.75rem] border border-white/80 bg-white p-4 shadow-[var(--shadow-card)]">
           <div className="flex items-center gap-2">
-            <span className="flex h-9 w-9 items-center justify-center rounded-2xl bg-[rgba(234,179,8,0.18)] text-[#b45309]">
-              <Pill size={18} strokeWidth={2} aria-hidden />
-            </span>
+            <CareStatusIconBadge category="medicine" />
             <span className="text-xs font-bold text-[var(--color-text-muted)]">약 먹기</span>
           </div>
           <p className="font-[family-name:var(--font-display)] text-lg font-semibold text-[var(--color-primary-dark)]">

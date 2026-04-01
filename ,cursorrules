@@ -41,10 +41,10 @@ bunx cursor-talk-to-figma-socket
 모든 코드 수정 후, 에이전트는 사용자의 추가 지시가 없어도 다음 단계를 원클릭으로 수행하는 것을 목표로 한다.
 
 - **Dependency**: 패키지 변경 시 **`bun install` 우선** (Bun 미설치 시 `npm install`).
-- **Git**:
-  - `git add .` 수행.
+- **Git (필수)**:
+  - 사용자가 Vercel 배포본으로 바로 확인할 수 있도록, **기능·스타일 작업이 끝난 세션마다** 반드시 커밋 후 `git push origin master`까지 수행한다.
+  - 변경 파일만 스테이징한다. `.playwright-mcp/` 로그, `.vscode/` 등 로컬·디버그 전용 파일은 커밋하지 않는다. (범위가 명확하면 `git add`를 경로 지정으로 제한해도 된다.)
   - 커밋 메시지는 한국어로 명확히 작성 (예: "feat: 고양이 활동량 분석 차트 추가").
-  - `git push origin master` 실행.
 - **Vercel Build**:
   - GitHub와 Vercel이 연결되어 있으면 `git push`만으로 프로덕션 빌드가 돌아가는 경우가 많다. 그때는 `npx vercel ls cat` 또는 대시보드로 최신 배포 URL을 확인해 보고한다.
   - 필요 시 저장소 **루트**에서 `npx vercel --prod`를 실행하여 실운영에 배포한다. (폴더 이름 이슈 시 `npx vercel link`로 아래 프로젝트 `cat`을 다시 연결.)
@@ -71,4 +71,4 @@ bunx cursor-talk-to-figma-socket
 
 **로컬 CLI 연결**: `.vercel/` 디렉터리는 `.gitignore`에 포함되어 저장소에 올라가지 않는다. 새 PC에서는 저장소 루트에서 `npx vercel login` 후 `npx vercel link`로 위 프로젝트 `cat`을 선택하면 된다.
 
-다른 컴퓨터에서는 이 저장소를 클론하면 `AI_rules.md`가 함께 따라오므로 동일한 에이전트 규칙과 위 배포 설정을 쓸 수 있다.
+다른 컴퓨터에서는 이 저장소를 클론하면 `.cursorrules`가 함께 따라오므로 동일한 에이전트 규칙과 위 배포 설정을 쓸 수 있다.
