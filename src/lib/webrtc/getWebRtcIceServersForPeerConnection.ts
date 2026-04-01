@@ -11,3 +11,14 @@ import { buildWebRtcIceServers } from "@/lib/webrtc/buildWebRtcIceServers";
 export function getWebRtcIceServersForPeerConnection(): RTCIceServer[] {
   return buildWebRtcIceServers();
 }
+
+/**
+ * `RTCPeerConnection` 생성자에 넘길 통합 설정 (ICE + 기본 정책).
+ */
+export function getWebRtcPeerConnectionConfiguration(): RTCConfiguration {
+  return {
+    iceServers: buildWebRtcIceServers(),
+    bundlePolicy: "balanced",
+    rtcpMuxPolicy: "require",
+  };
+}

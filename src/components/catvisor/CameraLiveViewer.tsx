@@ -10,7 +10,9 @@ import {
   logWebRtcDebug,
   summarizeIceServersForLog,
 } from "@/lib/webrtc/webrtcDebugLog";
-import { getWebRtcIceServersForPeerConnection } from "@/lib/webrtc/getWebRtcIceServersForPeerConnection";
+import {
+  getWebRtcPeerConnectionConfiguration,
+} from "@/lib/webrtc/getWebRtcIceServersForPeerConnection";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import {
   AlertTriangle,
@@ -129,13 +131,13 @@ export function CameraLiveViewer({
       await closePeerConnection();
 
       try {
-        const iceServers = getWebRtcIceServersForPeerConnection();
+        const rtcConfig = getWebRtcPeerConnectionConfiguration();
         logWebRtcDebug("viewer", "connect.enter", {
           sessionId: session.id,
-          ice: summarizeIceServersForLog(iceServers),
+          ice: summarizeIceServersForLog(rtcConfig.iceServers ?? []),
         });
 
-        const pc = new RTCPeerConnection({ iceServers });
+        const pc = new RTCPeerConnection(rtcConfig);
         peerConnectionRef.current = pc;
 
         const appliedBroadcasterIceKeys = new Set<string>();
@@ -205,6 +207,22 @@ export function CameraLiveViewer({
           }
         };
 
+        /** createAnswer/setLocalDescription 이전에 등록 — 초기 ICE 후보 유실 방지 */
+        pc.onicecandidate = ({ candidate }) => {
+          if (!candidate) {
+            logWebRtcDebug("viewer", "ice.local_gathering_done", {
+              viewerCandidatesSent: viewerIceInsertCount,
+            });
+            return;
+          }
+          viewerIceInsertCount += 1;
+          void supabase.from("ice_candidates").insert({
+            session_id: session.id,
+            sender: "viewer",
+            candidate: candidate.toJSON(),
+          });
+        };
+
         const offerInit = decodeSdpFromDatabaseColumn(session.offer_sdp, "offer");
         await pc.setRemoteDescription(new RTCSessionDescription(offerInit));
         logWebRtcDebug("viewer", "signaling.remote_offer_applied", {});
@@ -255,22 +273,10 @@ export function CameraLiveViewer({
           );
         }
 
-        pc.onicecandidate = ({ candidate }) => {
-          if (!candidate) {
-            logWebRtcDebug("viewer", "ice.local_gathering_done", {
-              viewerCandidatesSent: viewerIceInsertCount,
-            });
-            return;
-          }
-          viewerIceInsertCount += 1;
-          void supabase.from("ice_candidates").insert({
-            session_id: session.id,
-            sender: "viewer",
-            candidate: candidate.toJSON(),
-          });
-        };
-
-        const answer = await pc.createAnswer();
+        const answer = await pc.createAnswer({
+          offerToReceiveVideo: true,
+          offerToReceiveAudio: false,
+        });
         await pc.setLocalDescription(answer);
         logWebRtcDebug("viewer", "signaling.local_answer_set", {
           sdpLines: (pc.localDescription?.sdp ?? "").split("\n").length,

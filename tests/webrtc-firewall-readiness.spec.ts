@@ -32,9 +32,12 @@ test.describe("WebRTC ICE 설정 (방화벽·NAT 대비)", () => {
         joined.includes("turn ")
       );
     });
-    expect(relayEntries.length).toBe(2);
+    expect(relayEntries.length).toBe(1);
     expect(relayEntries[0].username).toBe("test-user");
     expect(relayEntries[0].credential).toBe("test-credential");
+    const urls = relayEntries[0].urls;
+    const urlList = Array.isArray(urls) ? urls : [urls];
+    expect(urlList.length).toBe(2);
   });
 
   test("Chromium에서 RTCPeerConnection이 우리 ICE 목록을 받아들이고 후보 수집이 완료된다", async ({
@@ -122,11 +125,14 @@ test.describe("WebRTC ICE 설정 (방화벽·NAT 대비)", () => {
       NEXT_PUBLIC_WEBRTC_TURN_USERNAME: "u",
       NEXT_PUBLIC_WEBRTC_TURN_CREDENTIAL: "c",
     });
-    const relayCount = servers.filter((e) => {
+    const relayEntries = servers.filter((e) => {
       const j = Array.isArray(e.urls) ? e.urls.join(",") : String(e.urls);
       return /turns?:/i.test(j);
-    }).length;
-    expect(relayCount).toBe(2);
+    });
+    expect(relayEntries.length).toBe(1);
+    const u = relayEntries[0]?.urls;
+    const list = Array.isArray(u) ? u : [u];
+    expect(list.length).toBe(2);
   });
 
   test("isWebRtcTurnEnvComplete 는 세 변수가 모두 있을 때만 true", () => {

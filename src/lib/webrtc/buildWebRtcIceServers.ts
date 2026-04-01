@@ -109,14 +109,11 @@ export function buildWebRtcIceServers(
   );
 
   if (turnUrlsRaw && turnUsername && turnCredential) {
-    const turnUrlList = turnUrlsRaw
-      .split(",")
-      .map((urlPart) => stripSurroundingQuotes(urlPart).trim())
-      .filter(Boolean);
-
-    for (const turnUrl of turnUrlList) {
+    const turnUrlList = parseTurnUrlList(turnUrlsRaw);
+    if (turnUrlList.length > 0) {
+      /** Metered 등은 동일 자격증명으로 여러 turn/turns URL 을 한 항목의 urls 배열로 쓰는 것을 권장한다. */
       servers.push({
-        urls: turnUrl,
+        urls: turnUrlList,
         username: turnUsername,
         credential: turnCredential,
       });
@@ -124,4 +121,13 @@ export function buildWebRtcIceServers(
   }
 
   return servers;
+}
+
+/** 쉼표·줄바꿈으로 구분된 TURN URL 목록 (Vercel 다줄 붙여넣기 대응) */
+function parseTurnUrlList(raw: string): string[] {
+  const normalized = raw.replace(/\r\n/g, "\n").trim();
+  return normalized
+    .split(/[\n,]+/)
+    .map((part) => stripSurroundingQuotes(part).trim())
+    .filter(Boolean);
 }

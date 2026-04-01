@@ -26,7 +26,10 @@ import {
   logWebRtcDebug,
   summarizeIceServersForLog,
 } from "@/lib/webrtc/webrtcDebugLog";
-import { getWebRtcIceServersForPeerConnection } from "@/lib/webrtc/getWebRtcIceServersForPeerConnection";
+import {
+  getWebRtcPeerConnectionConfiguration,
+} from "@/lib/webrtc/getWebRtcIceServersForPeerConnection";
+import { isWebRtcTurnEnvComplete } from "@/lib/webrtc/buildWebRtcIceServers";
 import styles from "./CameraBroadcastClient.module.css";
 
 /**
@@ -429,12 +432,12 @@ export function CameraBroadcastClient() {
       signalingPollTickRef.current = 0;
       hasLoggedWaitingForAnswerRef.current = false;
 
-      const iceServers = getWebRtcIceServersForPeerConnection();
+      const rtcConfig = getWebRtcPeerConnectionConfiguration();
       logWebRtcDebug("broadcaster", "signaling.start", {
-        ice: summarizeIceServersForLog(iceServers),
+        ice: summarizeIceServersForLog(rtcConfig.iceServers ?? []),
       });
 
-      const pc = new RTCPeerConnection({ iceServers });
+      const pc = new RTCPeerConnection(rtcConfig);
       peerConnectionRef.current = pc;
       setIceConnectionState("new");
       setPeerConnectionState("new");
@@ -775,9 +778,18 @@ export function CameraBroadcastClient() {
               </p>
               {!isViewerMediaConnected ? (
                 <p className={styles.statusHint}>
-                  홈(대시보드)에서 같은 계정으로 라이브 카메라를 열면 붙어요. LTE·외부망에서는 Vercel에{" "}
-                  <code className={styles.statusCode}>NEXT_PUBLIC_WEBRTC_TURN_*</code> TURN
-                  설정이 필요할 수 있어요.
+                  {isWebRtcTurnEnvComplete() ? (
+                    <>
+                      홈(대시보드)에서 같은 계정으로 라이브 카메라를 열면 붙어요. 잠시 후에도 안 되면
+                      Metered 대시보드의 호스트·비밀번호와 Vercel 재배포 여부를 확인해 주세요.
+                    </>
+                  ) : (
+                    <>
+                      홈(대시보드)에서 같은 계정으로 라이브 카메라를 열면 붙어요. LTE·외부망에서는 Vercel에{" "}
+                      <code className={styles.statusCode}>NEXT_PUBLIC_WEBRTC_TURN_*</code> TURN
+                      설정이 필요할 수 있어요.
+                    </>
+                  )}
                 </p>
               ) : null}
             </div>
