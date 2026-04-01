@@ -560,7 +560,8 @@ export function CameraLiveViewer({
             className={`absolute inset-0 flex flex-col items-center justify-center gap-3 bg-[#0d1a18]/88 p-6 text-center backdrop-blur-[2px] ${
               isFigmaVariant ? "rounded-[1.75rem]" : "rounded-3xl"
             }`}
-            aria-hidden
+            role="region"
+            aria-label="라이브 카메라 상태 안내"
           >
             {connectionPhase === "watching_for_broadcast" ? (
               <>
