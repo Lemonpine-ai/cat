@@ -22,14 +22,13 @@ import {
   decodeSdpFromDatabaseColumn,
   encodePlainSdpForDatabaseColumn,
 } from "@/lib/webrtc/sessionDescriptionPayload";
+import {
+  normalizeBroadcasterSignalingRpcPayload,
+  parseViewerIceCandidatesFromRpcPayload,
+} from "@/lib/webrtc/broadcasterSignalingRpcPayload";
+import { resolveWebRtcPeerConnectionConfiguration } from "@/lib/webrtc/getWebRtcIceServersForPeerConnection";
+import { buildWebRtcNetworkFailureUserMessage } from "@/lib/webrtc/buildWebRtcNetworkFailureUserMessage";
 import styles from "./CameraBroadcastClient.module.css";
-
-/** STUN만 사용 (무료 공개 서버). 첫 항목은 Google 기본 STUN. */
-const WEBRTC_ICE_SERVERS: RTCIceServer[] = [
-  { urls: "stun:stun.l.google.com:19302" },
-  { urls: "stun:stun1.l.google.com:19302" },
-  { urls: "stun:stun.cloudflare.com:3478" },
-];
 
 /**
  * 마지막 관리 타임스탬프 → '0분 전' / 'n분 전' / 'n시간 전' / 'n일 전' 변환.
@@ -137,6 +136,8 @@ export function CameraBroadcastClient() {
   const signalingPollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const appliedViewerIceKeysRef = useRef<Set<string>>(new Set());
   const autostartBroadcastSequenceStartedRef = useRef(false);
+  /** 카메라 켜기·autostart 가 동시에 getUserMedia 를 호출해 NotReadable 이 나는 것 방지 */
+  const acquireCameraInFlightRef = useRef(false);
 
   useEffect(() => {
     const { token: storedToken, name: storedName } =
@@ -420,18 +421,28 @@ export function CameraBroadcastClient() {
   }
 
   async function acquireCamera() {
+    if (acquireCameraInFlightRef.current) {
+      return;
+    }
+    acquireCameraInFlightRef.current = true;
+
     setBroadcastPhase("acquiring");
     setErrorMessage(null);
 
     if (!navigator.mediaDevices?.getUserMedia) {
       setErrorMessage("이 브라우저는 카메라를 지원하지 않아요.");
       setBroadcastPhase("error");
+      acquireCameraInFlightRef.current = false;
       return;
     }
 
     stopLocalPreviewTracksAndClearVideo();
     await delayMs(120);
 
+    const minimalConstraints: MediaStreamConstraints = {
+      video: true,
+      audio: false,
+    };
     const preferredConstraints: MediaStreamConstraints = {
       video: {
         facingMode: { ideal: "environment" },
@@ -441,28 +452,34 @@ export function CameraBroadcastClient() {
       audio: false,
     };
 
+    function mediaErrorName(err: unknown): string {
+      if (err instanceof DOMException) return err.name;
+      if (err instanceof Error) return err.name;
+      return "";
+    }
+
+    async function getUserMediaWithNotReadableRetry(
+      constraints: MediaStreamConstraints,
+    ): Promise<MediaStream> {
+      try {
+        return await navigator.mediaDevices.getUserMedia(constraints);
+      } catch (err) {
+        const name = mediaErrorName(err);
+        if (name === "NotReadableError" || name === "TrackStartError") {
+          stopLocalPreviewTracksAndClearVideo();
+          await delayMs(280);
+          return navigator.mediaDevices.getUserMedia(constraints);
+        }
+        throw err;
+      }
+    }
+
     try {
       let stream: MediaStream | null = null;
       try {
-        stream = await navigator.mediaDevices.getUserMedia(preferredConstraints);
-      } catch (firstErr) {
-        const firstName =
-          firstErr instanceof DOMException
-            ? firstErr.name
-            : (firstErr as Error)?.name;
-        if (
-          firstName === "NotReadableError" ||
-          firstName === "TrackStartError"
-        ) {
-          stopLocalPreviewTracksAndClearVideo();
-          await delayMs(200);
-          stream = await navigator.mediaDevices.getUserMedia({
-            video: true,
-            audio: false,
-          });
-        } else {
-          throw firstErr;
-        }
+        stream = await getUserMediaWithNotReadableRetry(minimalConstraints);
+      } catch (minimalErr) {
+        stream = await getUserMediaWithNotReadableRetry(preferredConstraints);
       }
 
       if (!stream) {
@@ -478,6 +495,8 @@ export function CameraBroadcastClient() {
       stopLocalPreviewTracksAndClearVideo();
       setErrorMessage(mapGetUserMediaErrorToUserMessage(err));
       setBroadcastPhase("error");
+    } finally {
+      acquireCameraInFlightRef.current = false;
     }
   }
 
@@ -489,15 +508,21 @@ export function CameraBroadcastClient() {
     try {
       sessionIdRef.current = null;
 
-      const pc = new RTCPeerConnection({ iceServers: WEBRTC_ICE_SERVERS });
+      const { rtcConfiguration: rtcConfig, turnRelayConfigured } =
+        await resolveWebRtcPeerConnectionConfiguration();
+      const pc = new RTCPeerConnection(rtcConfig);
       peerConnectionRef.current = pc;
 
       pc.onconnectionstatechange = () => {
         setPeerConnectionState(pc.connectionState);
-        if (
-          pc.connectionState === "failed" ||
-          pc.connectionState === "closed"
-        ) {
+        if (pc.connectionState === "failed") {
+          setErrorMessage(
+            buildWebRtcNetworkFailureUserMessage({ turnRelayConfigured }),
+          );
+          setBroadcastPhase("error");
+          return;
+        }
+        if (pc.connectionState === "closed") {
           setErrorMessage("연결이 끊겼어요. 방송을 다시 시작해 주세요.");
           setBroadcastPhase("error");
         }
@@ -577,11 +602,17 @@ export function CameraBroadcastClient() {
             },
           );
 
-          if (signalingError || !signalingPayload || signalingPayload.error) {
+          if (signalingError) {
             return;
           }
 
-          const answerSdpRaw = signalingPayload.answer_sdp as string | null | undefined;
+          const normalizedPayload =
+            normalizeBroadcasterSignalingRpcPayload(signalingPayload);
+          if (!normalizedPayload || normalizedPayload.error) {
+            return;
+          }
+
+          const answerSdpRaw = normalizedPayload.answer_sdp;
           if (answerSdpRaw && currentPc.remoteDescription === null) {
             try {
               const answerInit = decodeSdpFromDatabaseColumn(answerSdpRaw, "answer");
@@ -592,11 +623,9 @@ export function CameraBroadcastClient() {
             }
           }
 
-          const viewerIceList = signalingPayload.viewer_ice as
-            | RTCIceCandidateInit[]
-            | null
-            | undefined;
-          if (!viewerIceList || !Array.isArray(viewerIceList)) return;
+          const viewerIceList = parseViewerIceCandidatesFromRpcPayload(
+            normalizedPayload.viewer_ice,
+          );
 
           for (const rawCandidate of viewerIceList) {
             const dedupeKey = JSON.stringify(rawCandidate);

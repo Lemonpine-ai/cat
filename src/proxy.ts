@@ -7,13 +7,15 @@ import { ensureHttpsApiUrl } from "@/lib/url/ensureHttpsApiUrl";
  * - /login, /auth: 인증 전용 페이지
  * - /camera/pair: 로그인 없이 4자리 코드로 카메라 페어링
  * - /camera/broadcast: device_token으로 자체 인증하는 방송 페이지
+ * - /api/webrtc/*: 로그인 없이 방송 탭에서도 ICE 설정 JSON 을 받아야 함 (TURN 은 웹에 노출되는 패턴과 동일)
  */
 function isPublicPath(pathname: string): boolean {
   return (
     pathname.startsWith("/login") ||
     pathname.startsWith("/auth") ||
     pathname.startsWith("/camera/pair") ||
-    pathname.startsWith("/camera/broadcast")
+    pathname.startsWith("/camera/broadcast") ||
+    pathname.startsWith("/api/webrtc/")
   );
 }
 

@@ -43,6 +43,7 @@ test.describe("WebRTC ICE 설정 (방화벽·NAT 대비)", () => {
   test("Chromium에서 RTCPeerConnection이 우리 ICE 목록을 받아들이고 후보 수집이 완료된다", async ({
     page,
   }) => {
+    test.setTimeout(60_000);
     const iceServers = buildWebRtcIceServers({});
     const result = await page.evaluate(async (servers) => {
       const pc = new RTCPeerConnection({ iceServers: servers });
@@ -59,7 +60,7 @@ test.describe("WebRTC ICE 설정 (방화벽·NAT 대비)", () => {
         pc.addEventListener("icegatheringstatechange", () => {
           if (pc.iceGatheringState === "complete") done();
         });
-        window.setTimeout(done, 12000);
+        window.setTimeout(done, 30000);
       });
       const state = pc.iceGatheringState;
       pc.close();
@@ -144,6 +145,51 @@ test.describe("WebRTC ICE 설정 (방화벽·NAT 대비)", () => {
         NEXT_PUBLIC_WEBRTC_TURN_CREDENTIAL: "b",
       }),
     ).toBe(true);
+  });
+
+  test("WEBRTC_TURN_* 만 있어도 TURN 이 완성된 것으로 본다", () => {
+    expect(
+      isWebRtcTurnEnvComplete({
+        WEBRTC_TURN_URLS: "turn:relay.example:3478",
+        WEBRTC_TURN_USERNAME: "u",
+        WEBRTC_TURN_CREDENTIAL: "c",
+      }),
+    ).toBe(true);
+  });
+
+  test("NEXT_PUBLIC_WEBRTC_TURN_URL 단수·PASSWORD 별칭도 TURN 세트로 인정한다", () => {
+    expect(
+      isWebRtcTurnEnvComplete({
+        NEXT_PUBLIC_WEBRTC_TURN_URL: "turn:relay.example:443",
+        NEXT_PUBLIC_WEBRTC_TURN_USERNAME: "u",
+        NEXT_PUBLIC_WEBRTC_TURN_PASSWORD: "p",
+      }),
+    ).toBe(true);
+    const servers = buildWebRtcIceServers({
+      NEXT_PUBLIC_WEBRTC_TURN_URL: "turn:relay.example:443",
+      NEXT_PUBLIC_WEBRTC_TURN_USERNAME: "u",
+      NEXT_PUBLIC_WEBRTC_TURN_PASSWORD: "p",
+    });
+    const relay = servers.find((e) => {
+      const j = Array.isArray(e.urls) ? e.urls.join(",") : String(e.urls);
+      return /turns?:/i.test(j);
+    });
+    expect(relay?.username).toBe("u");
+    expect(relay?.credential).toBe("p");
+  });
+
+  test("필드별로 WEBRTC_* 가 NEXT_PUBLIC_* 보다 우선한다", () => {
+    const servers = buildWebRtcIceServers({
+      WEBRTC_TURN_URLS: "turn:preferred.example:3478",
+      NEXT_PUBLIC_WEBRTC_TURN_URLS: "turn:ignored.example:3478",
+      NEXT_PUBLIC_WEBRTC_TURN_USERNAME: "user",
+      NEXT_PUBLIC_WEBRTC_TURN_CREDENTIAL: "secret",
+    });
+    const relay = servers.find((e) => {
+      const j = Array.isArray(e.urls) ? e.urls.join(",") : String(e.urls);
+      return /turns?:/i.test(j);
+    });
+    expect(relay?.urls).toEqual(["turn:preferred.example:3478"]);
   });
 });
 

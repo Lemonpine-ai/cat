@@ -25,13 +25,12 @@ import {
 } from "lucide-react";
 import { playPopSound } from "@/lib/sound/playPopSound";
 import { CATVISOR_SOUND_ENABLED_STORAGE_KEY } from "@/lib/sound/soundPreferenceStorageKey";
-
-/** STUN만 사용. 첫 URL은 Google 무료 STUN (요구사항과 동일). */
-const WEBRTC_ICE_SERVERS: RTCIceServer[] = [
-  { urls: "stun:stun.l.google.com:19302" },
-  { urls: "stun:stun1.l.google.com:19302" },
-  { urls: "stun:stun.cloudflare.com:3478" },
-];
+import { resolveWebRtcPeerConnectionConfiguration } from "@/lib/webrtc/getWebRtcIceServersForPeerConnection";
+import { buildWebRtcNetworkFailureUserMessage } from "@/lib/webrtc/buildWebRtcNetworkFailureUserMessage";
+import {
+  logWebRtcDebug,
+  summarizeIceServersForLog,
+} from "@/lib/webrtc/webrtcDebugLog";
 
 type ViewerConnectionPhase =
   | "idle"
@@ -85,8 +84,9 @@ export function CameraLiveViewer({
   heroPlaceLabel = "거실",
 }: CameraLiveViewerProps = {}) {
   const isFigmaVariant = variant === "figma";
+  /** homeId 확보 후 첫 프레임부터 대기 — effect 순서로 연결 시도가 건너뛰어지지 않게 함 */
   const [connectionPhase, setConnectionPhase] =
-    useState<ViewerConnectionPhase>("idle");
+    useState<ViewerConnectionPhase>("watching_for_broadcast");
   const [homeId, setHomeId] = useState<string | null>(null);
   const [liveSession, setLiveSession] = useState<LiveSession | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -109,6 +109,7 @@ export function CameraLiveViewer({
   const closePeerConnection = useCallback(async () => {
     if (peerConnectionRef.current) {
       peerConnectionRef.current.ontrack = null;
+      peerConnectionRef.current.oniceconnectionstatechange = null;
       peerConnectionRef.current.onconnectionstatechange = null;
       peerConnectionRef.current.onicecandidate = null;
       peerConnectionRef.current.close();
@@ -131,10 +132,30 @@ export function CameraLiveViewer({
       await closePeerConnection();
 
       try {
-        const pc = new RTCPeerConnection({ iceServers: WEBRTC_ICE_SERVERS });
+        const { rtcConfiguration: rtcConfig, turnRelayConfigured } =
+          await resolveWebRtcPeerConnectionConfiguration();
+        logWebRtcDebug("viewer", "connect.enter", {
+          sessionId: session.id,
+          ice: summarizeIceServersForLog(rtcConfig.iceServers ?? []),
+        });
+
+        const pc = new RTCPeerConnection(rtcConfig);
         peerConnectionRef.current = pc;
 
+        let hasReportedWebRtcConnectionFailure = false;
+        function reportWebRtcConnectionFailureToUser() {
+          if (hasReportedWebRtcConnectionFailure) return;
+          hasReportedWebRtcConnectionFailure = true;
+          setConnectionPhase("error");
+          setErrorMessage(
+            buildWebRtcNetworkFailureUserMessage({ turnRelayConfigured }),
+          );
+          setLiveSession(null);
+          void closePeerConnection();
+        }
+
         const appliedBroadcasterIceKeys = new Set<string>();
+        let viewerIceInsertCount = 0;
 
         async function applyBroadcasterIceCandidate(
           rawCandidate: RTCIceCandidateInit,
@@ -153,26 +174,78 @@ export function CameraLiveViewer({
         pc.ontrack = ({ streams }) => {
           if (remoteVideoRef.current && streams[0]) {
             remoteVideoRef.current.srcObject = streams[0];
+            logWebRtcDebug("viewer", "media.on_track", {
+              trackCount: streams[0].getTracks().length,
+            });
+          }
+        };
+
+        pc.oniceconnectionstatechange = () => {
+          const ice = pc.iceConnectionState;
+          logWebRtcDebug("viewer", "ice.connection_state", {
+            iceConnectionState: ice,
+          });
+          if (ice === "connected" || ice === "completed") {
+            setConnectionPhase("connected");
+          }
+          if (ice === "failed") {
+            reportWebRtcConnectionFailureToUser();
           }
         };
 
         pc.onconnectionstatechange = () => {
-          if (pc.connectionState === "connected") {
+          const state = pc.connectionState;
+          logWebRtcDebug("viewer", "peer.connection_state", {
+            connectionState: state,
+          });
+          if (state === "connected") {
             setConnectionPhase("connected");
           }
+          if (state === "failed") {
+            reportWebRtcConnectionFailureToUser();
+            return;
+          }
           if (
-            pc.connectionState === "failed" ||
-            pc.connectionState === "closed" ||
-            pc.connectionState === "disconnected"
+            state === "closed" ||
+            state === "disconnected"
           ) {
+            if (hasReportedWebRtcConnectionFailure) return;
             setConnectionPhase("watching_for_broadcast");
             setLiveSession(null);
             void closePeerConnection();
           }
         };
 
+        /** setRemoteDescription 전에 등록 — 초기 viewer ICE 가 DB 로 들어가도록 */
+        pc.onicecandidate = ({ candidate }) => {
+          if (!candidate) {
+            logWebRtcDebug("viewer", "ice.local_gathering_done", {
+              viewerCandidatesSent: viewerIceInsertCount,
+            });
+            return;
+          }
+          viewerIceInsertCount += 1;
+          const payload = candidate.toJSON();
+          void (async () => {
+            const { error: iceInsertError } = await supabase
+              .from("ice_candidates")
+              .insert({
+                session_id: session.id,
+                sender: "viewer",
+                candidate: payload,
+              });
+            if (iceInsertError) {
+              logWebRtcDebug("viewer", "ice.viewer_insert_failed", {
+                message: iceInsertError.message,
+                code: iceInsertError.code,
+              });
+            }
+          })();
+        };
+
         const offerInit = decodeSdpFromDatabaseColumn(session.offer_sdp, "offer");
         await pc.setRemoteDescription(new RTCSessionDescription(offerInit));
+        logWebRtcDebug("viewer", "signaling.remote_offer_applied", {});
 
         const channel = supabase.channel(`viewer-ice-${session.id}`);
         channel.on(
@@ -203,6 +276,9 @@ export function CameraLiveViewer({
         });
 
         signalingChannelRef.current = channel;
+        logWebRtcDebug("viewer", "signaling.ice_channel_subscribed", {
+          channel: `viewer-ice-${session.id}`,
+        });
 
         const { data: existingBroadcasterIceRows } = await supabase
           .from("ice_candidates")
@@ -217,33 +293,40 @@ export function CameraLiveViewer({
           );
         }
 
-        pc.onicecandidate = ({ candidate }) => {
-          if (!candidate) return;
-          void supabase.from("ice_candidates").insert({
-            session_id: session.id,
-            sender: "viewer",
-            candidate: candidate.toJSON(),
-          });
-        };
-
-        const answer = await pc.createAnswer();
+        const answer = await pc.createAnswer({
+          offerToReceiveVideo: true,
+          offerToReceiveAudio: false,
+        });
         await pc.setLocalDescription(answer);
+        logWebRtcDebug("viewer", "signaling.local_answer_set", {
+          sdpLines: (pc.localDescription?.sdp ?? "").split("\n").length,
+        });
 
         const committedAnswer = pc.localDescription;
         if (!committedAnswer?.sdp) {
           throw new Error("로컬 SDP(answer)를 확정할 수 없어요.");
         }
 
-        await supabase
+        const { error: answerUpdateError } = await supabase
           .from("camera_sessions")
           .update({
-            /** answer_sdp 도 순수 SDP 텍스트만 저장 */
             answer_sdp: encodePlainSdpForDatabaseColumn(committedAnswer.sdp),
           })
           .eq("id", session.id);
+
+        if (answerUpdateError) {
+          logWebRtcDebug("viewer", "signaling.answer_db_update_failed", {
+            message: answerUpdateError.message,
+          });
+          throw new Error(answerUpdateError.message);
+        }
+        logWebRtcDebug("viewer", "signaling.answer_persisted", {
+          sessionId: session.id,
+        });
       } catch (err) {
         const message =
           err instanceof Error ? err.message : "연결에 실패했어요.";
+        logWebRtcDebug("viewer", "connect.failed", { message });
         setErrorMessage(message);
         setConnectionPhase("error");
         void closePeerConnection();
@@ -326,7 +409,7 @@ export function CameraLiveViewer({
         setCareLogPending(false);
       }
     },
-    [homeId, isSoundEnabled, liveSession, supabase],
+    [homeId, isSoundEnabled, liveSession, supabase, onWaterChangeRecorded, onLitterCleanRecorded],
   );
 
   const recordCareLogForMedicine = useCallback(
@@ -476,11 +559,15 @@ export function CameraLiveViewer({
     };
   }, [homeId, supabase, closePeerConnection]);
 
-  // 3단계: live 세션 감지 → 자동 WebRTC 연결
+  const retryLiveConnection = useCallback(() => {
+    setErrorMessage(null);
+    setConnectionPhase("watching_for_broadcast");
+  }, []);
+
+  // 3단계: live 세션 감지 → 자동 WebRTC 연결 (error 시 무한 재시도 방지: watching 일 때만)
   useEffect(() => {
     if (!liveSession?.offer_sdp) return;
-    if (connectionPhase === "connecting" || connectionPhase === "connected")
-      return;
+    if (connectionPhase !== "watching_for_broadcast") return;
 
     void connectToLiveSession(liveSession);
   }, [liveSession, connectionPhase, connectToLiveSession]);
@@ -602,6 +689,13 @@ export function CameraLiveViewer({
                 <span className="max-w-[22ch] text-sm text-slate-300">
                   {errorMessage ?? "연결에 실패했어요."}
                 </span>
+                <button
+                  type="button"
+                  onClick={retryLiveConnection}
+                  className="mt-1 rounded-full border border-[#4FD1C5]/50 bg-[#1e8f83]/40 px-4 py-2 text-sm font-semibold text-[#4FD1C5] transition hover:bg-[#1e8f83]/60"
+                >
+                  다시 시도
+                </button>
               </>
             ) : null}
           </div>

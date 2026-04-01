@@ -4,7 +4,10 @@
  * - TURN: 선택. 대칭 NAT·모바일 통신사·공용 Wi‑Fi 등에서는 STUN만으로는 P2P가 실패할 수 있어
  *   중계(TURN)가 필요하다. UDP가 막힌 환경은 `turns:`(TLS 443) URL을 함께 넣는 것이 좋다.
  *
- * 클라이언트 번들에 포함되므로 `NEXT_PUBLIC_*` 만 사용한다.
+ * TURN 환경 변수 (각 항목마다 아래 순으로 먼저 있는 값을 씀):
+ * - `WEBRTC_TURN_URLS` / `WEBRTC_TURN_USERNAME` / `WEBRTC_TURN_CREDENTIAL` — 서버(API)에서만 읽히며
+ *   Vercel에 넣은 뒤 재배포하면 **빌드 캐시 없이** 런타임에 반영되기 쉽다.
+ * - `NEXT_PUBLIC_WEBRTC_TURN_*` — `next build` 시 클라이언트 번들에 인라인된다. 값을 바꾼 뒤에는 **재빌드·재배포**가 필요하다.
  */
 
 /**
@@ -45,21 +48,50 @@ function readOptionalTrimmedEnv(
 
 let partialTurnEnvWarningShown = false;
 
+/**
+ * 필드별로 `WEBRTC_TURN_*` 를 우선하고, 없으면 `NEXT_PUBLIC_WEBRTC_TURN_*` 를 쓴다.
+ *
+ * 별칭(다른 대시보드·문서에서 흔한 이름):
+ * - URL: `*_TURN_URL` 단수 → `*_TURN_URLS` 와 동일 취급
+ * - 비밀: `*_TURN_PASSWORD` → `*_TURN_CREDENTIAL` 과 동일 취급
+ */
+export function resolveWebRtcTurnTripleFromEnv(env: NodeJS.ProcessEnv): {
+  urls: string | undefined;
+  username: string | undefined;
+  credential: string | undefined;
+} {
+  const urls =
+    readOptionalTrimmedEnv(env, "WEBRTC_TURN_URLS") ??
+    readOptionalTrimmedEnv(env, "NEXT_PUBLIC_WEBRTC_TURN_URLS") ??
+    readOptionalTrimmedEnv(env, "WEBRTC_TURN_URL") ??
+    readOptionalTrimmedEnv(env, "NEXT_PUBLIC_WEBRTC_TURN_URL");
+
+  const username =
+    readOptionalTrimmedEnv(env, "WEBRTC_TURN_USERNAME") ??
+    readOptionalTrimmedEnv(env, "NEXT_PUBLIC_WEBRTC_TURN_USERNAME");
+
+  const credential =
+    readOptionalTrimmedEnv(env, "WEBRTC_TURN_CREDENTIAL") ??
+    readOptionalTrimmedEnv(env, "NEXT_PUBLIC_WEBRTC_TURN_CREDENTIAL") ??
+    readOptionalTrimmedEnv(env, "WEBRTC_TURN_PASSWORD") ??
+    readOptionalTrimmedEnv(env, "NEXT_PUBLIC_WEBRTC_TURN_PASSWORD");
+
+  return { urls, username, credential };
+}
+
 function warnIfPartialTurnEnv(
   env: NodeJS.ProcessEnv,
 ): void {
   if (typeof window === "undefined") return;
   if (partialTurnEnvWarningShown) return;
-  const urls = readOptionalTrimmedEnv(env, "NEXT_PUBLIC_WEBRTC_TURN_URLS");
-  const user = readOptionalTrimmedEnv(env, "NEXT_PUBLIC_WEBRTC_TURN_USERNAME");
-  const cred = readOptionalTrimmedEnv(env, "NEXT_PUBLIC_WEBRTC_TURN_CREDENTIAL");
-  const setCount = [urls, user, cred].filter(Boolean).length;
+  const { urls, username, credential } = resolveWebRtcTurnTripleFromEnv(env);
+  const setCount = [urls, username, credential].filter(Boolean).length;
   if (setCount > 0 && setCount < 3) {
     partialTurnEnvWarningShown = true;
     console.warn(
       "[CATvisor WebRTC] TURN 환경 변수가 일부만 설정되었습니다. " +
-        "NEXT_PUBLIC_WEBRTC_TURN_URLS, NEXT_PUBLIC_WEBRTC_TURN_USERNAME, NEXT_PUBLIC_WEBRTC_TURN_CREDENTIAL " +
-        "세 가지를 모두 채워야 TURN(릴레이)이 PeerConnection에 추가됩니다. (.env.local.example 참고)",
+        "WEBRTC_TURN_URLS·WEBRTC_TURN_USERNAME·WEBRTC_TURN_CREDENTIAL 또는 " +
+        "NEXT_PUBLIC_WEBRTC_TURN_* 세트를 모두 채워야 TURN(릴레이)이 추가됩니다. (.env.local.example 참고)",
     );
   }
 }
@@ -73,19 +105,8 @@ function warnIfPartialTurnEnv(
 export function isWebRtcTurnEnvComplete(
   env: NodeJS.ProcessEnv = process.env,
 ): boolean {
-  const turnUrlsRaw = readOptionalTrimmedEnv(
-    env,
-    "NEXT_PUBLIC_WEBRTC_TURN_URLS",
-  );
-  const turnUsername = readOptionalTrimmedEnv(
-    env,
-    "NEXT_PUBLIC_WEBRTC_TURN_USERNAME",
-  );
-  const turnCredential = readOptionalTrimmedEnv(
-    env,
-    "NEXT_PUBLIC_WEBRTC_TURN_CREDENTIAL",
-  );
-  return Boolean(turnUrlsRaw && turnUsername && turnCredential);
+  const { urls, username, credential } = resolveWebRtcTurnTripleFromEnv(env);
+  return Boolean(urls && username && credential);
 }
 
 export function buildWebRtcIceServers(
@@ -95,18 +116,8 @@ export function buildWebRtcIceServers(
 
   const servers: RTCIceServer[] = [...DEFAULT_STUN_SERVERS];
 
-  const turnUrlsRaw = readOptionalTrimmedEnv(
-    env,
-    "NEXT_PUBLIC_WEBRTC_TURN_URLS",
-  );
-  const turnUsername = readOptionalTrimmedEnv(
-    env,
-    "NEXT_PUBLIC_WEBRTC_TURN_USERNAME",
-  );
-  const turnCredential = readOptionalTrimmedEnv(
-    env,
-    "NEXT_PUBLIC_WEBRTC_TURN_CREDENTIAL",
-  );
+  const { urls: turnUrlsRaw, username: turnUsername, credential: turnCredential } =
+    resolveWebRtcTurnTripleFromEnv(env);
 
   if (turnUrlsRaw && turnUsername && turnCredential) {
     const turnUrlList = parseTurnUrlList(turnUrlsRaw);
