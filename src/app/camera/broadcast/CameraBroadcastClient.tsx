@@ -112,6 +112,9 @@ export function CameraBroadcastClient() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [peerConnectionState, setPeerConnectionState] =
     useState<RTCPeerConnectionState>("new");
+  /** 모바일 크롬 등에서 connectionState보다 먼저 안정되는 경우가 많아 시청 연결 판별에 함께 씀 */
+  const [iceConnectionState, setIceConnectionState] =
+    useState<RTCIceConnectionState>("new");
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [isSoundEnabled, setIsSoundEnabled] = useState(true);
   const [careLogPending, setCareLogPending] = useState(false);
@@ -421,6 +424,12 @@ export function CameraBroadcastClient() {
 
       const pc = new RTCPeerConnection({ iceServers: WEBRTC_ICE_SERVERS });
       peerConnectionRef.current = pc;
+      setIceConnectionState("new");
+      setPeerConnectionState("new");
+
+      pc.oniceconnectionstatechange = () => {
+        setIceConnectionState(pc.iceConnectionState);
+      };
 
       pc.onconnectionstatechange = () => {
         setPeerConnectionState(pc.connectionState);
@@ -517,6 +526,8 @@ export function CameraBroadcastClient() {
               const answerInit = decodeSdpFromDatabaseColumn(answerSdpRaw, "answer");
               await currentPc.setRemoteDescription(new RTCSessionDescription(answerInit));
               setBroadcastPhase("live");
+              setPeerConnectionState(currentPc.connectionState);
+              setIceConnectionState(currentPc.iceConnectionState);
             } catch (answerErr) {
               console.error("[broadcaster] setRemoteDescription 오류", answerErr);
             }
@@ -556,16 +567,13 @@ export function CameraBroadcastClient() {
     await cleanupSessionAndStopOnServer(true);
     setBroadcastPhase("ready");
     setPeerConnectionState("new");
+    setIceConnectionState("new");
   }
 
-  const peerStatusLabel: Record<RTCPeerConnectionState, string> = {
-    new: "대기 중",
-    connecting: "연결 중…",
-    connected: "연결됨 ✅",
-    disconnected: "연결 끊김",
-    failed: "연결 실패",
-    closed: "종료됨",
-  };
+  const isViewerMediaConnected =
+    peerConnectionState === "connected" ||
+    iceConnectionState === "connected" ||
+    iceConnectionState === "completed";
 
   if (broadcastPhase === "loading") {
     return (
@@ -607,9 +615,11 @@ export function CameraBroadcastClient() {
         </div>
         {(broadcastPhase === "live" || broadcastPhase === "connecting") && (
           <span className={styles.liveBadge} aria-live="polite">
-            {broadcastPhase === "live" && peerConnectionState === "connected"
+            {broadcastPhase === "live" && isViewerMediaConnected
               ? "● LIVE"
-              : "○ 대기"}
+              : broadcastPhase === "live"
+                ? "● 송출"
+                : "○ 준비"}
           </span>
         )}
       </header>
@@ -630,7 +640,7 @@ export function CameraBroadcastClient() {
             </span>
           </div>
         ) : null}
-        {peerConnectionState === "connected" && (
+        {isViewerMediaConnected && (
           <div className={styles.viewerBadge} aria-live="polite">
             <Eye size={14} strokeWidth={2} aria-hidden /> 시청 중
           </div>
@@ -670,11 +680,20 @@ export function CameraBroadcastClient() {
 
         {broadcastPhase === "connecting" || broadcastPhase === "live" ? (
           <div className={styles.liveControls}>
-            <p className={styles.statusText}>
-              {peerConnectionState === "connected"
-                ? `● ${deviceIdentity?.deviceName ?? "카메라"} 방송 중`
-                : `○ 시청자 기다리는 중… (${peerStatusLabel[peerConnectionState]})`}
-            </p>
+            <div className={styles.statusBlock}>
+              <p className={styles.statusText}>
+                {isViewerMediaConnected
+                  ? `● ${deviceIdentity?.deviceName ?? "카메라"} 방송 중 · 시청자와 연결됨`
+                  : `● 라이브 송출 중 — 홈(대시보드)에서 라이브 카메라를 열면 시청자와 연결돼요`}
+              </p>
+              {!isViewerMediaConnected ? (
+                <p className={styles.statusHint}>
+                  홈(대시보드)에서 같은 계정으로 라이브 카메라를 열면 붙어요. LTE·외부망에서는 Vercel에{" "}
+                  <code className={styles.statusCode}>NEXT_PUBLIC_WEBRTC_TURN_*</code> TURN
+                  설정이 필요할 수 있어요.
+                </p>
+              ) : null}
+            </div>
             <div className={styles.broadcastCareBar}>
               <div className={styles.broadcastCareHeader}>
                 <span className={styles.broadcastCareTitle}>빠른 케어 기록</span>

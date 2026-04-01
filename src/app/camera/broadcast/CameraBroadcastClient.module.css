@@ -308,6 +308,29 @@
   line-height: 1.5;
 }
 
+.statusBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  align-items: stretch;
+}
+
+.statusHint {
+  margin: 0;
+  font-size: 0.72rem;
+  line-height: 1.45;
+  color: #6b908a;
+  text-align: center;
+}
+
+.statusCode {
+  font-size: 0.65rem;
+  background: rgba(79, 209, 197, 0.14);
+  padding: 0.12rem 0.35rem;
+  border-radius: 0.35rem;
+  word-break: break-all;
+}
+
 .errorText {
   margin: 0;
   font-size: 0.88rem;

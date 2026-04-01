@@ -153,6 +153,13 @@ export function CameraLiveViewer({
           }
         };
 
+        pc.oniceconnectionstatechange = () => {
+          const ice = pc.iceConnectionState;
+          if (ice === "connected" || ice === "completed") {
+            setConnectionPhase("connected");
+          }
+        };
+
         pc.onconnectionstatechange = () => {
           if (pc.connectionState === "connected") {
             setConnectionPhase("connected");
