@@ -500,22 +500,38 @@ export function CameraBroadcastClient() {
     }
   }
 
-  async function startBroadcast() {
+  /** relay-only 재시도 추적 — ICE 실패 시 1회 자동 재시도 */
+  const broadcasterRelayRetryRef = useRef(false);
+
+  async function startBroadcast(opts?: { forceRelay?: boolean }) {
     if (!localStreamRef.current || !deviceIdentity) return;
     setBroadcastPhase("connecting");
     setErrorMessage(null);
+
+    const forceRelay = opts?.forceRelay ?? false;
 
     try {
       sessionIdRef.current = null;
 
       const { rtcConfiguration: rtcConfig, turnRelayConfigured } =
-        await resolveWebRtcPeerConnectionConfiguration();
+        await resolveWebRtcPeerConnectionConfiguration({ forceRelay });
       const pc = new RTCPeerConnection(rtcConfig);
       peerConnectionRef.current = pc;
 
       pc.onconnectionstatechange = () => {
         setPeerConnectionState(pc.connectionState);
+        if (pc.connectionState === "connected") {
+          broadcasterRelayRetryRef.current = false;
+        }
         if (pc.connectionState === "failed") {
+          // relay-only 재시도: 첫 실패이고 TURN 설정 있으면 relay 강제로 1회 재시도
+          if (!forceRelay && turnRelayConfigured && !broadcasterRelayRetryRef.current) {
+            broadcasterRelayRetryRef.current = true;
+            void cleanupSessionAndStopOnServer(true).then(() => {
+              void startBroadcast({ forceRelay: true });
+            });
+            return;
+          }
           setErrorMessage(
             buildWebRtcNetworkFailureUserMessage({ turnRelayConfigured }),
           );

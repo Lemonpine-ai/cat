@@ -124,18 +124,24 @@ export function CameraLiveViewer({
     }
   }, [supabase]);
 
+  /** relay-only 재시도 중인지 추적 — ICE 실패 시 1회 자동 재시도 */
+  const relayRetryAttemptedRef = useRef(false);
+
   const connectToLiveSession = useCallback(
-    async (session: LiveSession) => {
+    async (session: LiveSession, opts?: { forceRelay?: boolean }) => {
       if (!session.offer_sdp) return;
       setConnectionPhase("connecting");
 
       await closePeerConnection();
 
+      const forceRelay = opts?.forceRelay ?? false;
+
       try {
         const { rtcConfiguration: rtcConfig, turnRelayConfigured } =
-          await resolveWebRtcPeerConnectionConfiguration();
+          await resolveWebRtcPeerConnectionConfiguration({ forceRelay });
         logWebRtcDebug("viewer", "connect.enter", {
           sessionId: session.id,
+          forceRelay,
           ice: summarizeIceServersForLog(rtcConfig.iceServers ?? []),
         });
 
@@ -146,6 +152,17 @@ export function CameraLiveViewer({
         function reportWebRtcConnectionFailureToUser() {
           if (hasReportedWebRtcConnectionFailure) return;
           hasReportedWebRtcConnectionFailure = true;
+
+          // relay-only 재시도: 첫 실패(일반 모드)이고 TURN 이 설정되어 있으면 relay 강제 모드로 1회 재시도
+          if (!forceRelay && turnRelayConfigured && !relayRetryAttemptedRef.current) {
+            relayRetryAttemptedRef.current = true;
+            logWebRtcDebug("viewer", "connect.retry_relay_only", { sessionId: session.id });
+            void closePeerConnection().then(() => {
+              void connectToLiveSession(session, { forceRelay: true });
+            });
+            return;
+          }
+
           setConnectionPhase("error");
           setErrorMessage(
             buildWebRtcNetworkFailureUserMessage({ turnRelayConfigured }),
@@ -186,6 +203,7 @@ export function CameraLiveViewer({
             iceConnectionState: ice,
           });
           if (ice === "connected" || ice === "completed") {
+            relayRetryAttemptedRef.current = false;
             setConnectionPhase("connected");
           }
           if (ice === "failed") {
@@ -586,6 +604,7 @@ export function CameraLiveViewer({
   }, [homeId, supabase, closePeerConnection]);
 
   const retryLiveConnection = useCallback(() => {
+    relayRetryAttemptedRef.current = false;
     setErrorMessage(null);
     setConnectionPhase("watching_for_broadcast");
   }, []);

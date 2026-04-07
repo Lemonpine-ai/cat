@@ -171,6 +171,19 @@ function expandTurnTransportVariants(urls: string[]): string[] {
       ? `${tlsUrl}&transport=tcp`
       : `${tlsUrl}?transport=tcp`;
     add(tlsTcpUrl);
+
+    // 포트 80, 3478 변형 추가 — 443 이 차단된 네트워크 대응
+    const portMatch = url.match(/^turn:([^:/?]+):(\d+)/);
+    if (portMatch) {
+      const host = portMatch[1];
+      const port = portMatch[2];
+      for (const altPort of ["80", "3478"]) {
+        if (altPort === port) continue;
+        const altUrl = `turn:${host}:${altPort}`;
+        add(altUrl);
+        add(`${altUrl}?transport=tcp`);
+      }
+    }
   }
 
   return result;

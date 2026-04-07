@@ -16,12 +16,15 @@ export function getWebRtcIceServersForPeerConnection(): RTCIceServer[] {
 
 function buildRtcConfigurationWithIceServers(
   iceServers: RTCIceServer[],
+  options?: { forceRelay?: boolean },
 ): RTCConfiguration {
   return {
     iceServers,
     /** 기본 0 — TURN 과 함께 큰 pool 은 일부 환경에서 ICE 수집이 길어지거나 실패하는 경우가 있어 두지 않는다. */
     bundlePolicy: "balanced",
     rtcpMuxPolicy: "require",
+    /** forceRelay 일 때 TURN 릴레이만 사용 — STUN P2P 가 안 되는 환경에서 강제 우회 */
+    ...(options?.forceRelay ? { iceTransportPolicy: "relay" as const } : {}),
   };
 }
 
@@ -43,12 +46,17 @@ export type ResolvedWebRtcPeerConnectionConfiguration = {
  * 서버 `/api/webrtc/ice-config` 에서 최신 `WEBRTC_TURN_*` 를 반영한 ICE 목록을 가져온다.
  * 실패 시(오프라인 등) 클라이언트 번들의 `buildWebRtcIceServers()` 로 폴백한다.
  */
-export async function resolveWebRtcPeerConnectionConfiguration(): Promise<ResolvedWebRtcPeerConnectionConfiguration> {
+export async function resolveWebRtcPeerConnectionConfiguration(
+  options?: { forceRelay?: boolean },
+): Promise<ResolvedWebRtcPeerConnectionConfiguration> {
+  const forceRelay = options?.forceRelay;
+
   if (typeof window === "undefined") {
     const env = process.env;
     return {
       rtcConfiguration: buildRtcConfigurationWithIceServers(
         buildWebRtcIceServers(env),
+        { forceRelay },
       ),
       turnRelayConfigured: isWebRtcTurnEnvComplete(env),
     };
@@ -72,12 +80,12 @@ export async function resolveWebRtcPeerConnectionConfiguration(): Promise<Resolv
     };
     const iceServers = payload.iceServers ?? buildWebRtcIceServers();
     return {
-      rtcConfiguration: buildRtcConfigurationWithIceServers(iceServers),
+      rtcConfiguration: buildRtcConfigurationWithIceServers(iceServers, { forceRelay }),
       turnRelayConfigured: Boolean(payload.turnRelayConfigured),
     };
   } catch {
     return {
-      rtcConfiguration: getWebRtcPeerConnectionConfiguration(),
+      rtcConfiguration: buildRtcConfigurationWithIceServers(buildWebRtcIceServers(), { forceRelay }),
       turnRelayConfigured: isWebRtcTurnEnvComplete(),
     };
   }
