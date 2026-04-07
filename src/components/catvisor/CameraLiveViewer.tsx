@@ -193,22 +193,48 @@ export function CameraLiveViewer({
           }
         };
 
+        let disconnectedGraceTimer: ReturnType<typeof setTimeout> | null = null;
+
         pc.onconnectionstatechange = () => {
           const state = pc.connectionState;
           logWebRtcDebug("viewer", "peer.connection_state", {
             connectionState: state,
           });
           if (state === "connected") {
+            if (disconnectedGraceTimer) {
+              clearTimeout(disconnectedGraceTimer);
+              disconnectedGraceTimer = null;
+            }
             setConnectionPhase("connected");
           }
           if (state === "failed") {
+            if (disconnectedGraceTimer) {
+              clearTimeout(disconnectedGraceTimer);
+              disconnectedGraceTimer = null;
+            }
             reportWebRtcConnectionFailureToUser();
             return;
           }
-          if (
-            state === "closed" ||
-            state === "disconnected"
-          ) {
+          if (state === "disconnected") {
+            if (hasReportedWebRtcConnectionFailure) return;
+            // disconnected 는 일시적일 수 있으므로 5초 유예 후 정리
+            if (!disconnectedGraceTimer) {
+              disconnectedGraceTimer = setTimeout(() => {
+                disconnectedGraceTimer = null;
+                if (pc.connectionState === "disconnected") {
+                  logWebRtcDebug("viewer", "peer.disconnected_grace_expired", {});
+                  setConnectionPhase("watching_for_broadcast");
+                  setLiveSession(null);
+                  void closePeerConnection();
+                }
+              }, 5000);
+            }
+          }
+          if (state === "closed") {
+            if (disconnectedGraceTimer) {
+              clearTimeout(disconnectedGraceTimer);
+              disconnectedGraceTimer = null;
+            }
             if (hasReportedWebRtcConnectionFailure) return;
             setConnectionPhase("watching_for_broadcast");
             setLiveSession(null);

@@ -121,10 +121,11 @@ export function buildWebRtcIceServers(
 
   if (turnUrlsRaw && turnUsername && turnCredential) {
     const turnUrlList = parseTurnUrlList(turnUrlsRaw);
-    if (turnUrlList.length > 0) {
+    const expandedUrls = expandTurnTransportVariants(turnUrlList);
+    if (expandedUrls.length > 0) {
       /** Metered 등은 동일 자격증명으로 여러 turn/turns URL 을 한 항목의 urls 배열로 쓰는 것을 권장한다. */
       servers.push({
-        urls: turnUrlList,
+        urls: expandedUrls,
         username: turnUsername,
         credential: turnCredential,
       });
@@ -132,6 +133,47 @@ export function buildWebRtcIceServers(
   }
 
   return servers;
+}
+
+/**
+ * TURN URL 하나에서 TCP·TLS 변형을 자동 생성한다.
+ * 예: `turn:host:443` → `turn:host:443`, `turn:host:443?transport=tcp`, `turns:host:443?transport=tcp`
+ * 이미 transport= 파라미터가 있거나 turns: 로 시작하는 URL 은 건드리지 않는다.
+ * 같은 Wi-Fi 안에서도 AP 격리·대칭 NAT 환경에서 UDP 가 차단되면 TCP/TLS 가 필요하다.
+ */
+function expandTurnTransportVariants(urls: string[]): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+
+  function add(url: string) {
+    if (!seen.has(url)) {
+      seen.add(url);
+      result.push(url);
+    }
+  }
+
+  for (const url of urls) {
+    add(url);
+
+    // 이미 transport 지정이 있거나 turns: 이면 변형 생성 불필요
+    if (url.includes("transport=") || url.startsWith("turns:")) continue;
+    if (!url.startsWith("turn:")) continue;
+
+    // turn:host:port → turn:host:port?transport=tcp
+    const tcpUrl = url.includes("?")
+      ? `${url}&transport=tcp`
+      : `${url}?transport=tcp`;
+    add(tcpUrl);
+
+    // turn:host:port → turns:host:port?transport=tcp (TLS)
+    const tlsUrl = `turns:${url.slice("turn:".length)}`;
+    const tlsTcpUrl = tlsUrl.includes("?")
+      ? `${tlsUrl}&transport=tcp`
+      : `${tlsUrl}?transport=tcp`;
+    add(tlsTcpUrl);
+  }
+
+  return result;
 }
 
 /** 쉼표·줄바꿈으로 구분된 TURN URL 목록 (Vercel 다줄 붙여넣기 대응) */
