@@ -45,3 +45,13 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 .env*.local
+.gstack/
+
+# legacy files (migrated to Next.js)
+dashboard.js
+index.html
+styles.css
+,cursorrules
+
+# screenshots (dev/debug only)
+*.png
