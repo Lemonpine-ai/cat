@@ -105,6 +105,11 @@ function warnIfPartialTurnEnv(
 export function isWebRtcTurnEnvComplete(
   env: NodeJS.ProcessEnv = process.env,
 ): boolean {
+  // Cloudflare Calls TURN (서버 전용 — 동적 credential 발급)
+  const cfKeyId = env.CLOUDFLARE_TURN_KEY_ID?.trim();
+  const cfToken = env.CLOUDFLARE_TURN_API_TOKEN?.trim();
+  if (cfKeyId && cfToken) return true;
+
   const { urls, username, credential } = resolveWebRtcTurnTripleFromEnv(env);
   return Boolean(urls && username && credential);
 }
