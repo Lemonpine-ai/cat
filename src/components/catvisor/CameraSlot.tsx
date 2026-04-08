@@ -85,6 +85,9 @@ export function CameraSlot({
       updatePhase("connecting");
       await cleanup();
 
+      /* auth 세션 복원 보장 — RLS 로 보호된 테이블 접근 전 필수 */
+      await supabase.auth.getUser();
+
       try {
         const { rtcConfiguration, turnRelayConfigured } =
           await resolveWebRtcPeerConnectionConfiguration({ forceRelay });

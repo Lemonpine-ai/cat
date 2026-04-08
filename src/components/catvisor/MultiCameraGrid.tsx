@@ -39,7 +39,10 @@ export function MultiCameraGrid({ homeId }: MultiCameraGridProps) {
 
     /* 초기 조회: 현재 live 인 세션 최대 4개 */
     async function loadSessions() {
-      /* 원본 CameraLiveViewer 와 동일한 컬럼만 조회 (device_id 는 없을 수 있음) */
+      /* auth 세션 복원 보장 — 이걸 안 하면 JWT 없이 쿼리해서 RLS 가 전부 차단 */
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
       const { data, error } = await supabase
         .from("camera_sessions")
         .select("id, offer_sdp")
