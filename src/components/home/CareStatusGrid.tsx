@@ -11,7 +11,7 @@ import { useEffect, useState } from "react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { formatElapsedTimeLabel } from "@/lib/time/formatElapsedTimeLabel";
 
-const MEAL_DAILY_GOAL = 3;
+/* 고양이는 조금씩 자주 먹으므로 목표 없이 횟수만 표시 */
 
 /** 빠른 케어 기록 버튼과 동일 팔레트·아이콘 (맘마=Baby/민트, 식수=물방울+리프레시/블루, 화장실=스파클/코랄, 약=캡슐/라벤더) */
 function CareStatusIconBadge({
@@ -214,7 +214,7 @@ export function CareStatusGrid({
             <span className="text-xs font-bold text-[var(--color-text-muted)]">맘마 먹기</span>
           </div>
           <p className="font-[family-name:var(--font-display)] text-lg font-semibold text-[var(--color-primary-dark)]">
-            {mealCount}/{MEAL_DAILY_GOAL}
+            {mealCount}회
           </p>
           <p className="text-[0.72rem] text-[var(--color-text-muted)]">탭해서 식사 기록</p>
         </button>
