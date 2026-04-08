@@ -22,6 +22,7 @@ export default async function HomePage() {
   let todayMealCount = 0;
   let lastWaterChangeAt: string | null = null;
   let lastLitterCleanAt: string | null = null;
+  let lastMedicineAt: string | null = null;
 
   try {
     const supabase = await createSupabaseServerClient();
@@ -114,6 +115,17 @@ export default async function HomePage() {
         .limit(1)
         .maybeSingle();
       lastLitterCleanAt = lastLitterRow?.created_at ?? null;
+
+      // 마지막 약 복용 시각 조회
+      const { data: lastMedicineRow } = await supabase
+        .from("cat_care_logs")
+        .select("created_at")
+        .eq("home_id", homeId)
+        .eq("care_kind", "medicine")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      lastMedicineAt = lastMedicineRow?.created_at ?? null;
     }
   } catch (unknownError) {
     const message =
@@ -142,6 +154,7 @@ export default async function HomePage() {
       initialTodayMealCount={todayMealCount}
       initialLastWaterChangeAt={lastWaterChangeAt}
       initialLastLitterCleanAt={lastLitterCleanAt}
+      initialLastMedicineAt={lastMedicineAt}
     >
       <HomeProfileRow cats={cats} fetchErrorMessage={catsFetchError} />
       {cats.length > 0 ? (

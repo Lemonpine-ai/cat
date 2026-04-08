@@ -74,6 +74,8 @@ type CareStatusGridProps = {
   initialTodayMedicineCount: number;
   onRequestWaterChange: () => void;
   onRequestLitterClean: () => void;
+  /** 마지막 약 복용 ISO 타임스탬프 */
+  lastMedicineAt: string | null;
   /** 맘마 기록 클릭 콜백 */
   onRequestMeal: () => void;
   /** 약 기록 클릭 콜백 */
@@ -96,6 +98,7 @@ export function CareStatusGrid({
   initialTodayMedicineCount,
   onRequestWaterChange,
   onRequestLitterClean,
+  lastMedicineAt,
   onRequestMeal,
   onRequestMedicine,
   envSavingWater,
@@ -147,7 +150,7 @@ export function CareStatusGrid({
 
   const waterLabel = lastWaterChangeAt ? "교체 완료" : "기록 없음";
   const litterLabel = lastLitterCleanAt ? "깨끗함" : "기록 없음";
-  const medicineLabel = medicineCount > 0 ? "완료" : "기록 없음";
+  const medicineLabel = lastMedicineAt ? "복용 완료" : "기록 없음";
 
   void revalidateTick;
 
@@ -231,9 +234,13 @@ export function CareStatusGrid({
             <span className="text-xs font-bold text-[var(--color-text-muted)]">약 먹기</span>
           </div>
           <p className="font-[family-name:var(--font-display)] text-lg font-semibold text-[var(--color-primary-dark)]">
-            {medicineCount}회
+            {medicineLabel}
           </p>
-          <p className="text-[0.72rem] text-[var(--color-text-muted)]">탭해서 약 기록</p>
+          <p className="text-[0.72rem] text-[var(--color-text-muted)]">
+            {lastMedicineAt
+              ? formatElapsedTimeLabel(lastMedicineAt)
+              : "복용 기록을 남겨 주세요"}
+          </p>
         </button>
       </div>
     </section>
