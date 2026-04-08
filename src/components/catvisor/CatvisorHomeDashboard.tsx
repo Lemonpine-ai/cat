@@ -29,6 +29,8 @@ type CatvisorHomeDashboardProps = {
   initialLastWaterChangeAt: string | null;
   /** 가장 최근 화장실 청소 ISO 타임스탬프 (없으면 null) */
   initialLastLitterCleanAt: string | null;
+  /** 가장 최근 약 복용 ISO 타임스탬프 (없으면 null) */
+  initialLastMedicineAt: string | null;
 };
 
 /**
@@ -44,9 +46,11 @@ export function CatvisorHomeDashboard({
   initialTodayMealCount,
   initialLastWaterChangeAt,
   initialLastLitterCleanAt,
+  initialLastMedicineAt,
 }: CatvisorHomeDashboardProps) {
   const [lastWaterChangeAt, setLastWaterChangeAt] = useState<string | null>(initialLastWaterChangeAt);
   const [lastLitterCleanAt, setLastLitterCleanAt] = useState<string | null>(initialLastLitterCleanAt);
+  const [lastMedicineAt, setLastMedicineAt] = useState<string | null>(initialLastMedicineAt);
 
   // 1분마다 경과 시간 레이블 강제 갱신 (setInterval tick 전용 카운터)
   const [elapsedTick, setElapsedTick] = useState(0);
@@ -103,6 +107,8 @@ export function CatvisorHomeDashboard({
             setLastWaterChangeAt(row.created_at);
           } else if (row.care_kind === "litter_clean") {
             setLastLitterCleanAt(row.created_at);
+          } else if (row.care_kind === "medicine") {
+            setLastMedicineAt(row.created_at);
           }
         },
       )
@@ -156,8 +162,10 @@ export function CatvisorHomeDashboard({
         // Realtime 도착보다 먼저 UI 즉시 반영
         if (careKind === "water_change") {
           setLastWaterChangeAt(nowIso);
-        } else {
+        } else if (careKind === "litter_clean") {
           setLastLitterCleanAt(nowIso);
+        } else if (careKind === "medicine") {
+          setLastMedicineAt(nowIso);
         }
 
         const kindLabels: Record<CareKind, string> = {
@@ -191,6 +199,7 @@ export function CatvisorHomeDashboard({
             lastLitterCleanAt={lastLitterCleanAt}
             initialTodayMealCount={initialTodayMealCount}
             initialTodayMedicineCount={initialTodayMedicineCount}
+            lastMedicineAt={lastMedicineAt}
             onRequestWaterChange={() => void handleClickEnvCare("water_change")}
             onRequestLitterClean={() => void handleClickEnvCare("litter_clean")}
             onRequestMeal={() => void handleClickEnvCare("meal")}

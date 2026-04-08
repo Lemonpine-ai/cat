@@ -19,6 +19,8 @@ type PairingModalState =
   | { kind: "ready"; pairingCode: string; deviceId: string; expiresAt: number };
 
 const PAIRING_CODE_VALID_DURATION_MS = 5 * 60 * 1000;
+/** 한 home 당 등록 가능한 최대 카메라 기기 수 */
+const MAX_DEVICES_PER_HOME = 6;
 
 /**
  * 대시보드 카메라 기기 관리 섹션.
@@ -35,6 +37,9 @@ export function CameraDeviceManager({ homeId }: { homeId: string }) {
   const [newDeviceName, setNewDeviceName] = useState("새 카메라");
   const [isLoadingDevices, setIsLoadingDevices] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  /** 이름 편집 중인 기기 ID (null 이면 편집 모드 아님) */
+  const [editingDeviceId, setEditingDeviceId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState("");
 
   /** Realtime 콜백에서 최신 페어링 중 기기 id 참조 (클로저 끊김 방지) */
   const pairingDeviceIdRef = useRef<string | null>(null);
@@ -117,6 +122,20 @@ export function CameraDeviceManager({ homeId }: { homeId: string }) {
     setPairingModal({ kind: "creating" });
     setErrorMessage(null);
 
+    /* ── 기기 수 제한: 6대 초과 시 가장 오래된 비활성 기기를 삭제 ── */
+    const { data: existingDevices } = await supabase
+      .from("camera_devices")
+      .select("id, is_active, is_paired, created_at")
+      .eq("home_id", homeId)
+      .order("created_at", { ascending: true });
+
+    if (existingDevices && existingDevices.length >= MAX_DEVICES_PER_HOME) {
+      /* 비활성(방송 중 아닌) 기기 중 가장 오래된 것부터 삭제 */
+      const inactive = existingDevices.filter((d) => !d.is_active);
+      const toRemove = inactive.length > 0 ? inactive[0] : existingDevices[0];
+      await deleteDevice(toRemove.id);
+    }
+
     const pairingCode = String(Math.floor(Math.random() * 10000)).padStart(4, "0");
     const expiresAt = new Date(Date.now() + PAIRING_CODE_VALID_DURATION_MS);
 
@@ -149,7 +168,36 @@ export function CameraDeviceManager({ homeId }: { homeId: string }) {
   }
 
   async function deleteDevice(deviceId: string) {
+    /* 연쇄 정리: 기기에 속한 세션의 ICE 후보 → 세션 → 기기 순서로 삭제 */
+    const { data: sessions } = await supabase
+      .from("camera_sessions")
+      .select("id")
+      .eq("device_id", deviceId);
+    if (sessions && sessions.length > 0) {
+      const sessionIds = sessions.map((s) => s.id);
+      await supabase.from("ice_candidates").delete().in("session_id", sessionIds);
+      await supabase.from("camera_sessions").delete().eq("device_id", deviceId);
+    }
     await supabase.from("camera_devices").delete().eq("id", deviceId);
+    void fetchCameraDevices();
+  }
+
+  /** 기기 이름 인라인 편집 시작 */
+  function startEditingName(device: CameraDevice) {
+    setEditingDeviceId(device.id);
+    setEditingName(device.device_name);
+  }
+
+  /** 기기 이름 저장 (Enter / blur) — 중복 호출 방지 */
+  async function saveDeviceName(deviceId: string) {
+    if (editingDeviceId !== deviceId) return;
+    setEditingDeviceId(null);
+    const trimmed = editingName.trim();
+    if (!trimmed) return;
+    await supabase
+      .from("camera_devices")
+      .update({ device_name: trimmed })
+      .eq("id", deviceId);
     void fetchCameraDevices();
   }
 
@@ -275,7 +323,30 @@ export function CameraDeviceManager({ homeId }: { homeId: string }) {
                     }`}
                     aria-hidden
                   />
-                  <span className={styles.deviceName}>{device.device_name}</span>
+                  {editingDeviceId === device.id ? (
+                    <input
+                      className={styles.deviceNameInput}
+                      type="text"
+                      maxLength={30}
+                      value={editingName}
+                      onChange={(e) => setEditingName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") void saveDeviceName(device.id);
+                        if (e.key === "Escape") setEditingDeviceId(null);
+                      }}
+                      onBlur={() => void saveDeviceName(device.id)}
+                      autoFocus
+                    />
+                  ) : (
+                    <button
+                      type="button"
+                      className={styles.deviceNameBtn}
+                      onClick={() => startEditingName(device)}
+                      title="이름 변경"
+                    >
+                      {device.device_name} ✏️
+                    </button>
+                  )}
                 </div>
                 <span className={styles.deviceMeta}>
                   {device.is_active

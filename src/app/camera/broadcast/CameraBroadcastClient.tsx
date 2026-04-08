@@ -129,6 +129,8 @@ export function CameraBroadcastClient() {
   const envBroadcastChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
   const localVideoRef = useRef<HTMLVideoElement>(null);
+  /** viewer 로부터 수신한 오디오를 재생하는 숨겨진 audio 엘리먼트 */
+  const remoteAudioRef = useRef<HTMLAudioElement>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
   const sessionIdRef = useRef<string | null>(null);
@@ -331,8 +333,12 @@ export function CameraBroadcastClient() {
       if (peerConnectionRef.current) {
         peerConnectionRef.current.onconnectionstatechange = null;
         peerConnectionRef.current.onicecandidate = null;
+        peerConnectionRef.current.ontrack = null;
         peerConnectionRef.current.close();
         peerConnectionRef.current = null;
+      }
+      if (remoteAudioRef.current) {
+        remoteAudioRef.current.srcObject = null;
       }
 
       if (!keepCameraStream && localStreamRef.current) {
@@ -441,7 +447,7 @@ export function CameraBroadcastClient() {
 
     const minimalConstraints: MediaStreamConstraints = {
       video: true,
-      audio: false,
+      audio: true,
     };
     const preferredConstraints: MediaStreamConstraints = {
       video: {
@@ -449,7 +455,7 @@ export function CameraBroadcastClient() {
         width: { ideal: 1280 },
         height: { ideal: 720 },
       },
-      audio: false,
+      audio: true,
     };
 
     function mediaErrorName(err: unknown): string {
@@ -541,6 +547,13 @@ export function CameraBroadcastClient() {
         if (pc.connectionState === "closed") {
           setErrorMessage("연결이 끊겼어요. 방송을 다시 시작해 주세요.");
           setBroadcastPhase("error");
+        }
+      };
+
+      /* viewer 에서 보낸 오디오(인터컴) 수신 → 스피커 재생 */
+      pc.ontrack = ({ streams }) => {
+        if (remoteAudioRef.current && streams[0]) {
+          remoteAudioRef.current.srcObject = streams[0];
         }
       };
 
@@ -728,6 +741,9 @@ export function CameraBroadcastClient() {
           </span>
         )}
       </header>
+
+      {/* viewer 인터컴 오디오 재생 (화면에 보이지 않음) */}
+      <audio ref={remoteAudioRef} autoPlay playsInline />
 
       <div className={styles.videoWrap}>
         <video
