@@ -1,0 +1,383 @@
+/* ================================================================
+   다이어리 페이지 — 힐링/귀여운 톤앤매너
+   파스텔 민트 배경, 둥근 카드, 고양이 시점 멘트
+================================================================ */
+
+/* ─── 전체 페이지 ─── */
+.diaryPage {
+  padding: 1rem 1rem 2rem;
+  max-width: 56rem;
+  margin: 0 auto;
+}
+
+/* ─── 고양이 프로필 셀렉터 (가로 스크롤) ─── */
+.catSelector {
+  display: flex;
+  gap: 0.75rem;
+  overflow-x: auto;
+  padding: 0.5rem 0;
+  scrollbar-width: none;
+}
+.catSelector::-webkit-scrollbar {
+  display: none;
+}
+
+.catSelectorItem {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: transform 0.15s ease;
+}
+.catSelectorItem:active {
+  transform: scale(0.93);
+}
+
+.catSelectorAvatar {
+  width: 3.5rem;
+  height: 3.5rem;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 3px solid transparent;
+  transition: border-color 0.2s ease;
+  background: var(--mint-100);
+}
+.catSelectorAvatar.selected {
+  border-color: var(--mint-500);
+  box-shadow: 0 0 0 3px rgba(56, 189, 176, 0.25);
+}
+
+/* 사진 없는 고양이용 기본 아이콘 */
+.catSelectorPlaceholder {
+  width: 3.5rem;
+  height: 3.5rem;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--mint-100), var(--mint-200));
+  border: 3px solid transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  transition: border-color 0.2s ease;
+}
+.catSelectorPlaceholder.selected {
+  border-color: var(--mint-500);
+  box-shadow: 0 0 0 3px rgba(56, 189, 176, 0.25);
+}
+
+.catSelectorName {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-text-sub);
+  text-align: center;
+  max-width: 4rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ─── 공통 카드 ─── */
+.diaryCard {
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  padding: 1.25rem;
+  margin-top: 1rem;
+  animation: fadeInUp 0.4s ease both;
+}
+
+/* ─── 오늘의 냥이 카드 ─── */
+.todayCard {
+  composes: diaryCard;
+  text-align: center;
+}
+
+.todayPhoto {
+  width: 8rem;
+  height: 8rem;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 4px solid var(--mint-200);
+  margin: 0 auto 0.75rem;
+  display: block;
+}
+
+.todayPlaceholder {
+  width: 8rem;
+  height: 8rem;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--mint-100), var(--mint-200));
+  border: 4px solid var(--mint-200);
+  margin: 0 auto 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 3rem;
+}
+
+.todayName {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--color-text);
+  margin-bottom: 0.25rem;
+}
+
+.todayStatus {
+  font-size: 0.85rem;
+  color: var(--color-text-sub);
+  margin-bottom: 0.5rem;
+}
+
+/* 말풍선 스타일 멘트 */
+.speechBubble {
+  display: inline-block;
+  background: var(--mint-100);
+  color: var(--mint-700);
+  border-radius: 1.25rem;
+  padding: 0.5rem 1rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  position: relative;
+  margin-top: 0.5rem;
+}
+.speechBubble::after {
+  content: "";
+  position: absolute;
+  top: -6px;
+  left: 50%;
+  transform: translateX(-50%);
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-bottom: 6px solid var(--mint-100);
+}
+
+/* ─── 이번 주 하이라이트 (2x2 그리드) ─── */
+.highlightGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.highlightCard {
+  background: var(--color-surface);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
+  padding: 1rem;
+  text-align: center;
+  animation: fadeInUp 0.4s ease both;
+}
+
+.highlightIcon {
+  font-size: 1.5rem;
+  margin-bottom: 0.3rem;
+}
+
+.highlightCount {
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: var(--color-text);
+}
+
+.highlightUnit {
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.highlightLabel {
+  font-size: 0.75rem;
+  color: var(--color-text-sub);
+  margin-top: 0.15rem;
+}
+
+/* ─── 귀여운 영상 포착 ─── */
+.captureSection {
+  composes: diaryCard;
+}
+
+.captureTitle {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--color-text);
+  margin-bottom: 0.75rem;
+}
+
+.captureList {
+  display: flex;
+  gap: 0.75rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding-bottom: 0.25rem;
+}
+.captureList::-webkit-scrollbar {
+  display: none;
+}
+
+.captureCard {
+  flex-shrink: 0;
+  width: 9rem;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--mint-50);
+  box-shadow: var(--shadow-card);
+}
+
+.captureImage {
+  width: 100%;
+  height: 6rem;
+  object-fit: cover;
+  background: var(--mint-100);
+}
+
+.captureTime {
+  padding: 0.4rem 0.5rem;
+  font-size: 0.7rem;
+  color: var(--color-text-sub);
+  text-align: center;
+}
+
+.captureEmpty {
+  text-align: center;
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+  padding: 1.5rem 0;
+}
+
+/* ─── 집사 일기장 ─── */
+.diaryMemo {
+  composes: diaryCard;
+}
+
+.diaryMemoTitle {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--color-text);
+  margin-bottom: 0.5rem;
+}
+
+.diaryTextarea {
+  width: 100%;
+  min-height: 5rem;
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 0.75rem;
+  font-size: 0.9rem;
+  font-family: inherit;
+  color: var(--color-text);
+  background: var(--mint-50);
+  resize: vertical;
+  outline: none;
+  transition: border-color 0.2s ease;
+}
+.diaryTextarea:focus {
+  border-color: var(--mint-500);
+}
+
+.diaryCharCount {
+  text-align: right;
+  font-size: 0.7rem;
+  color: var(--color-text-muted);
+  margin-top: 0.25rem;
+}
+
+.diarySaveBtn {
+  display: block;
+  width: 100%;
+  margin-top: 0.5rem;
+  padding: 0.6rem;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(135deg, var(--mint-500), var(--mint-700));
+  color: #fff;
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity 0.15s ease, transform 0.1s ease;
+}
+.diarySaveBtn:hover {
+  opacity: 0.9;
+}
+.diarySaveBtn:active {
+  transform: scale(0.97);
+}
+.diarySaveBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ─── 건강 트렌드 차트 ─── */
+.chartSection {
+  composes: diaryCard;
+}
+
+.chartWrapper {
+  margin-top: 0.5rem;
+}
+
+.chartEmpty {
+  text-align: center;
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+  padding: 2rem 0;
+}
+
+/* 오늘 vs 평균 비교 카드 (4열 그리드) */
+.avgGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.avgCard {
+  text-align: center;
+  padding: 0.5rem 0.25rem;
+  background: var(--mint-50);
+  border-radius: var(--radius-sm);
+}
+
+.avgLabel {
+  font-size: 0.7rem;
+  font-weight: 700;
+  margin-bottom: 0.15rem;
+}
+
+.avgToday {
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: var(--color-text);
+}
+
+.avgAvg {
+  font-size: 0.65rem;
+  color: var(--color-text-sub);
+  margin-top: 0.1rem;
+}
+
+/* ─── 섹션 제목 ─── */
+.sectionTitle {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--color-text);
+  margin-top: 1.5rem;
+  margin-bottom: 0.25rem;
+}
+
+/* ─── 토스트 메시지 ─── */
+.toast {
+  position: fixed;
+  bottom: 5.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--mint-700);
+  color: #fff;
+  padding: 0.55rem 1.25rem;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  box-shadow: 0 4px 20px rgba(14, 85, 81, 0.3);
+  z-index: 200;
+  animation: fadeInUp 0.3s ease;
+}

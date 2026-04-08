@@ -19,14 +19,15 @@
     "postcss": "^8.5.8",
     "react": "19.2.3",
     "react-dom": "19.2.3",
+    "recharts": "^3.8.1",
     "tailwindcss": "^4.2.2"
   },
   "devDependencies": {
+    "@playwright/test": "^1.58.2",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "@playwright/test": "^1.58.2",
     "eslint-config-next": "16.1.7",
     "playwright": "^1.58.2",
     "typescript": "^5"

@@ -3,6 +3,7 @@ import { DiaryPageClient } from "./DiaryPageClient";
 import type {
   DiaryCatProfile,
   CatHealthLog,
+  WeeklyCareStats,
   CuteCapture,
   DiaryMemo,
   DailyChartPoint,
@@ -19,14 +20,16 @@ export default async function ReportsPage() {
   let homeId = "";
   let userId = "";
   let healthMap: Record<string, CatHealthLog> = {};
+  let weeklyStats: WeeklyCareStats = {
+    totalMeals: 0,
+    totalWater: 0,
+    totalLitter: 0,
+    totalMedicine: 0,
+  };
   let captures: CuteCapture[] = [];
   let memoMap: Record<string, DiaryMemo> = {};
+  /** 고양이별 7일치 차트 데이터 */
   let chartMap: Record<string, DailyChartPoint[]> = {};
-  /** 고양이별 오늘 돌봄 횟수 (일기 생성용) */
-  type CareCount = { meal: number; water: number; litter: number; medicine: number; total: number };
-  let todayCareMap: Record<string, CareCount> = {};
-  /** 30일 평균 */
-  let monthlyAvg = { meal: 0, water: 0, poop: 0, activity: 0 };
 
   try {
     const supabase = await createSupabaseServerClient();
@@ -61,22 +64,20 @@ export default async function ReportsPage() {
 
     if (cats.length === 0) return <FallbackMessage text="등록된 고양이가 없어요 🐱" />;
 
-    /* ── 3. 최근 30일 건강 기록 조회 (차트 7일 + 평균 30일) ── */
+    /* ── 3. 최근 7일 건강 기록 조회 (cat_health_logs) ── */
     const today = new Date().toISOString().slice(0, 10);
-    const monthAgo = new Date();
-    monthAgo.setDate(monthAgo.getDate() - 30);
-    const monthAgoDate = monthAgo.toISOString().slice(0, 10);
     const weekAgo = new Date();
     weekAgo.setDate(weekAgo.getDate() - 7);
+    const weekAgoDate = weekAgo.toISOString().slice(0, 10);
 
     const { data: healthRows } = await supabase
       .from("cat_health_logs")
       .select("*")
       .eq("home_id", homeId)
-      .gte("record_date", monthAgoDate)
+      .gte("record_date", weekAgoDate)
       .order("record_date", { ascending: true });
 
-    /* 오늘 건강 기록 맵 */
+    /* 오늘 건강 기록 맵 (기존 기능 유지) */
     if (healthRows) {
       for (const row of healthRows as CatHealthLog[]) {
         if (row.record_date === today) {
@@ -85,52 +86,33 @@ export default async function ReportsPage() {
       }
     }
 
-    /* 30일 평균 계산 (건강 기록 기반) */
-    if (healthRows && healthRows.length > 0) {
-      let totalMeal = 0, totalPoop = 0, count = 0;
-      for (const row of healthRows as CatHealthLog[]) {
-        totalMeal += row.meal_count;
-        totalPoop += row.poop_count;
-        count++;
-      }
-      if (count > 0) {
-        monthlyAvg.meal = Math.round((totalMeal / count) * 10) / 10;
-        monthlyAvg.poop = Math.round((totalPoop / count) * 10) / 10;
-      }
-    }
-
-    /* ── 4. 최근 30일 돌봄 로그 (차트 + 평균 + 일기) ── */
-    const monthAgoIso = monthAgo.toISOString();
+    /* ── 4. 최근 7일 돌봄 로그 (cat_care_logs) — 차트 + 통계용 ── */
+    const weekAgoIso = weekAgo.toISOString();
 
     const { data: careRows } = await supabase
       .from("cat_care_logs")
       .select("care_kind, cat_id, created_at")
       .eq("home_id", homeId)
-      .gte("created_at", monthAgoIso);
+      .gte("created_at", weekAgoIso);
 
-    /* 30일 평균 (돌봄 로그 기반) + 오늘 돌봄 횟수 맵 */
+    /* 주간 통계 집계 (기존 기능 유지) */
     if (careRows) {
-      let totalWater = 0, totalActivity = 0;
       for (const row of careRows as { care_kind: string; cat_id: string; created_at: string }[]) {
-        if (row.care_kind === "water_change") totalWater++;
-        totalActivity++;
-
-        /* 오늘 데이터만 todayCareMap에 집계 */
-        if (row.created_at.slice(0, 10) === today) {
-          if (!todayCareMap[row.cat_id]) {
-            todayCareMap[row.cat_id] = { meal: 0, water: 0, litter: 0, medicine: 0, total: 0 };
-          }
-          const c = todayCareMap[row.cat_id];
-          if (row.care_kind === "meal") c.meal++;
-          if (row.care_kind === "water_change") c.water++;
-          if (row.care_kind === "litter_clean") c.litter++;
-          if (row.care_kind === "medicine") c.medicine++;
-          c.total++;
+        switch (row.care_kind) {
+          case "meal":
+            weeklyStats.totalMeals += 1;
+            break;
+          case "water_change":
+            weeklyStats.totalWater += 1;
+            break;
+          case "litter_clean":
+            weeklyStats.totalLitter += 1;
+            break;
+          case "medicine":
+            weeklyStats.totalMedicine += 1;
+            break;
         }
       }
-      const days = 30;
-      monthlyAvg.water = Math.round((totalWater / days) * 10) / 10;
-      monthlyAvg.activity = Math.round((totalActivity / days) * 10) / 10;
     }
 
     /* ── 4-1. 고양이별 7일 차트 데이터 빌드 ── */
@@ -203,21 +185,18 @@ export default async function ReportsPage() {
       .limit(10);
 
     if (logRows) {
-      captures = (logRows as unknown as Array<{
+      captures = (logRows as Array<{
         id: string;
         captured_at: string;
         cat_id: string;
         storage_path: string | null;
-        cats: { name: string }[] | { name: string } | null;
-      }>).map((row) => {
-        const catObj = Array.isArray(row.cats) ? row.cats[0] : row.cats;
-        return {
-          id: row.id,
-          captured_at: row.captured_at,
-          cat_name: catObj?.name ?? "알 수 없는 냥이",
-          storage_path: row.storage_path,
-        };
-      });
+        cats: { name: string } | null;
+      }>).map((row) => ({
+        id: row.id,
+        captured_at: row.captured_at,
+        cat_name: row.cats?.name ?? "알 수 없는 냥이",
+        storage_path: row.storage_path,
+      }));
     }
 
     /* ── 6. 오늘 집사 메모 조회 (cat_diary) ── */
@@ -242,13 +221,11 @@ export default async function ReportsPage() {
     <DiaryPageClient
       cats={cats}
       homeId={homeId}
-      userId={userId}
       healthMap={healthMap}
+      weeklyStats={weeklyStats}
       captures={captures}
       memoMap={memoMap}
       chartMap={chartMap}
-      todayCareMap={todayCareMap}
-      monthlyAvg={monthlyAvg}
     />
   );
 }
