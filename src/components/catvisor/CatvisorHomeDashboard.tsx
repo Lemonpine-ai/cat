@@ -2,14 +2,14 @@
 
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { CameraDeviceManager } from "@/components/catvisor/CameraDeviceManager";
-import { CameraLiveViewer } from "@/components/catvisor/CameraLiveViewer";
+import { MultiCameraGrid } from "@/components/catvisor/MultiCameraGrid";
 import { RecentCatActivityLog } from "@/components/catvisor/RecentCatActivityLog";
 import { CareStatusGrid } from "@/components/home/CareStatusGrid";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { ActivityLogListItem } from "@/types/catLog";
 import styles from "./CatvisorHomeDashboard.module.css";
 
-type EnvironmentKind = "water_change" | "litter_clean";
+type CareKind = "water_change" | "litter_clean" | "meal" | "medicine";
 
 type CatLookupForActivity = {
   id: string;
@@ -50,7 +50,7 @@ export function CatvisorHomeDashboard({
 
   // 1분마다 경과 시간 레이블 강제 갱신 (setInterval tick 전용 카운터)
   const [elapsedTick, setElapsedTick] = useState(0);
-  const [envSaving, setEnvSaving] = useState<EnvironmentKind | null>(null);
+  const [envSaving, setEnvSaving] = useState<CareKind | null>(null);
 
   /** 하단 토스트 메시지. 빈 문자열이면 숨김. */
   const [toastMessage, setToastMessage] = useState("");
@@ -136,9 +136,9 @@ export function CatvisorHomeDashboard({
     };
   }, [homeId]);
 
-  /** 클릭 즉시 DB에 환경 관리 기록 저장 — 모달 없이 바로 처리 */
+  /** 클릭 즉시 DB에 돌봄 기록 저장 — 모달 없이 바로 처리 */
   const handleClickEnvCare = useCallback(
-    async (careKind: EnvironmentKind) => {
+    async (careKind: CareKind) => {
       if (!homeId || envSaving) return;
       setEnvSaving(careKind);
       try {
@@ -160,8 +160,13 @@ export function CatvisorHomeDashboard({
           setLastLitterCleanAt(nowIso);
         }
 
-        const kindLabel = careKind === "water_change" ? "💧 식수 교체" : "🚽 화장실 청소";
-        showToast(`${kindLabel} 완료! 0분 전으로 업데이트됐어요 🐾`);
+        const kindLabels: Record<CareKind, string> = {
+          water_change: "💧 식수 교체",
+          litter_clean: "🚽 화장실 청소",
+          meal: "🍚 맘마 먹기",
+          medicine: "💊 약 먹기",
+        };
+        showToast(`${kindLabels[careKind]} 기록 완료! 🐾`);
       } catch (unknownError) {
         const message =
           unknownError instanceof Error ? unknownError.message : "저장에 실패했습니다.";
@@ -188,20 +193,19 @@ export function CatvisorHomeDashboard({
             initialTodayMedicineCount={initialTodayMedicineCount}
             onRequestWaterChange={() => void handleClickEnvCare("water_change")}
             onRequestLitterClean={() => void handleClickEnvCare("litter_clean")}
+            onRequestMeal={() => void handleClickEnvCare("meal")}
+            onRequestMedicine={() => void handleClickEnvCare("medicine")}
             envSavingWater={envSaving === "water_change"}
             envSavingLitter={envSaving === "litter_clean"}
+            envSavingMeal={envSaving === "meal"}
+            envSavingMedicine={envSaving === "medicine"}
           />
         ) : null}
 
         <section className={styles.cameraSection} aria-label="카메라 뷰">
           {homeId ? <CameraDeviceManager homeId={homeId} /> : null}
 
-          <CameraLiveViewer
-            variant="figma"
-            heroPlaceLabel="거실"
-            onWaterChangeRecorded={setLastWaterChangeAt}
-            onLitterCleanRecorded={setLastLitterCleanAt}
-          />
+          <MultiCameraGrid homeId={homeId} />
         </section>
 
         <RecentCatActivityLog

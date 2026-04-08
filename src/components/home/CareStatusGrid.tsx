@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  Activity,
   Baby,
   Droplets,
   Pill,
@@ -75,8 +74,14 @@ type CareStatusGridProps = {
   initialTodayMedicineCount: number;
   onRequestWaterChange: () => void;
   onRequestLitterClean: () => void;
+  /** 맘마 기록 클릭 콜백 */
+  onRequestMeal: () => void;
+  /** 약 기록 클릭 콜백 */
+  onRequestMedicine: () => void;
   envSavingWater: boolean;
   envSavingLitter: boolean;
+  envSavingMeal: boolean;
+  envSavingMedicine: boolean;
 };
 
 /**
@@ -91,8 +96,12 @@ export function CareStatusGrid({
   initialTodayMedicineCount,
   onRequestWaterChange,
   onRequestLitterClean,
+  onRequestMeal,
+  onRequestMedicine,
   envSavingWater,
   envSavingLitter,
+  envSavingMeal,
+  envSavingMedicine,
 }: CareStatusGridProps) {
   const [mealCount, setMealCount] = useState(initialTodayMealCount);
   const [medicineCount, setMedicineCount] = useState(initialTodayMedicineCount);
@@ -193,7 +202,13 @@ export function CareStatusGrid({
           </p>
         </button>
 
-        <div className="flex flex-col gap-2 rounded-[1.75rem] border border-white/80 bg-white p-4 shadow-[var(--shadow-card)]">
+        {/* 맘마 — 클릭하면 식사 기록 +1 */}
+        <button
+          type="button"
+          onClick={onRequestMeal}
+          disabled={envSavingMeal}
+          className="flex flex-col gap-2 rounded-[1.75rem] border border-white/80 bg-white p-4 text-left shadow-[var(--shadow-card)] transition hover:shadow-[var(--shadow-card-hover)] active:scale-[0.99] disabled:opacity-60"
+        >
           <div className="flex items-center gap-2">
             <CareStatusIconBadge category="meal" />
             <span className="text-xs font-bold text-[var(--color-text-muted)]">맘마 먹기</span>
@@ -201,34 +216,25 @@ export function CareStatusGrid({
           <p className="font-[family-name:var(--font-display)] text-lg font-semibold text-[var(--color-primary-dark)]">
             {mealCount}/{MEAL_DAILY_GOAL}
           </p>
-          <p className="text-[0.72rem] text-[var(--color-text-muted)]">오늘 기록 횟수</p>
-        </div>
+          <p className="text-[0.72rem] text-[var(--color-text-muted)]">탭해서 식사 기록</p>
+        </button>
 
-        <div className="flex flex-col gap-2 rounded-[1.75rem] border border-white/80 bg-white p-4 shadow-[var(--shadow-card)]">
+        {/* 약 — 클릭하면 약 기록 +1 */}
+        <button
+          type="button"
+          onClick={onRequestMedicine}
+          disabled={envSavingMedicine}
+          className="flex flex-col gap-2 rounded-[1.75rem] border border-white/80 bg-white p-4 text-left shadow-[var(--shadow-card)] transition hover:shadow-[var(--shadow-card-hover)] active:scale-[0.99] disabled:opacity-60"
+        >
           <div className="flex items-center gap-2">
             <CareStatusIconBadge category="medicine" />
             <span className="text-xs font-bold text-[var(--color-text-muted)]">약 먹기</span>
           </div>
           <p className="font-[family-name:var(--font-display)] text-lg font-semibold text-[var(--color-primary-dark)]">
-            {medicineLabel}
+            {medicineCount}회
           </p>
-          <p className="text-[0.72rem] text-[var(--color-text-muted)]">
-            {medicineCount > 0 ? "오늘 복약이 기록됐어요" : "아직 기록 없음"}
-          </p>
-        </div>
-
-        <div className="col-span-2 flex flex-col gap-2 rounded-[1.75rem] border border-white/80 bg-white p-4 shadow-[var(--shadow-card)]">
-          <div className="flex items-center gap-2">
-            <span className="flex h-9 w-9 items-center justify-center rounded-2xl bg-[rgba(148,163,184,0.2)] text-[var(--color-text-sub)]">
-              <Activity size={18} strokeWidth={2} aria-hidden />
-            </span>
-            <span className="text-xs font-bold text-[var(--color-text-muted)]">오늘의 활동</span>
-            <Sparkles className="ml-auto h-4 w-4 text-[var(--mint-500)]" aria-hidden />
-          </div>
-          <p className="font-[family-name:var(--font-display)] text-sm font-medium text-[var(--color-text-sub)]">
-            맘마 {mealCount}회 · 약 {medicineCount}회 기록
-          </p>
-        </div>
+          <p className="text-[0.72rem] text-[var(--color-text-muted)]">탭해서 약 기록</p>
+        </button>
       </div>
     </section>
   );
