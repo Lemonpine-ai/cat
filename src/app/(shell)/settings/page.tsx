@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { CameraDeviceManager } from "@/components/catvisor/CameraDeviceManager";
+import { LogoutButton } from "@/components/shell/LogoutButton";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 /**
@@ -50,14 +51,10 @@ export default async function SettingsPage() {
         </div>
       )}
 
-      <p style={{ marginBottom: "1rem" }}>
-        <Link href="/login" style={{ color: "#0d9488", fontWeight: 600 }}>
-          로그인 · 회원가입
-        </Link>
-      </p>
-      <Link href="/" style={{ color: "#0d9488", fontWeight: 600 }}>
-        ← HOME
-      </Link>
+      {/* 로그아웃 버튼 — 설정 페이지 하단 */}
+      <div style={{ marginTop: "1.5rem" }}>
+        <LogoutButton />
+      </div>
     </div>
   );
 }
