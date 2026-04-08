@@ -19,6 +19,7 @@ type LiveSession = {
   id: string;
   offer_sdp: string;
   device_name: string;
+  device_id: string | null;
 };
 
 type MultiCameraGridProps = {
@@ -43,21 +44,48 @@ export function MultiCameraGrid({ homeId }: MultiCameraGridProps) {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
+      /* created_at DESC 로 정렬 — updated_at 는 스테일 세션에 answer 쓸 때 갱신돼서 순서가 꼬임 */
       const { data, error } = await supabase
         .from("camera_sessions")
-        .select("id, offer_sdp")
+        .select("id, offer_sdp, device_id")
         .eq("home_id", homeId!)
         .eq("status", "live")
         .not("offer_sdp", "is", null)
-        .order("updated_at", { ascending: false })
-        .limit(MAX_SLOTS);
+        .order("created_at", { ascending: false })
+        .limit(MAX_SLOTS * 3);
 
       if (error || !data) return;
 
-      const next = data.map((row, idx) => ({
+      /* device_id 기준 중복 제거 — 같은 기기의 스테일 세션은 최신만 남김 */
+      const seenDevices = new Set<string>();
+      const deduped: typeof data = [];
+      for (const row of data) {
+        if (row.device_id) {
+          if (seenDevices.has(row.device_id)) continue;
+          seenDevices.add(row.device_id);
+        }
+        deduped.push(row);
+        if (deduped.length >= MAX_SLOTS) break;
+      }
+
+      /* device_id 로 기기 이름 조회 — 사용자가 설정한 이름 표시 */
+      const deviceIds = deduped.map((r) => r.device_id).filter(Boolean) as string[];
+      let deviceNameMap: Record<string, string> = {};
+      if (deviceIds.length > 0) {
+        const { data: devices } = await supabase
+          .from("camera_devices")
+          .select("id, device_name")
+          .in("id", deviceIds);
+        if (devices) {
+          deviceNameMap = Object.fromEntries(devices.map((d) => [d.id, d.device_name]));
+        }
+      }
+
+      const next = deduped.map((row, idx) => ({
         id: row.id,
         offer_sdp: row.offer_sdp!,
-        device_name: `카메라 ${idx + 1}`,
+        device_name: (row.device_id && deviceNameMap[row.device_id]) || `카메라 ${idx + 1}`,
+        device_id: row.device_id ?? null,
       }));
       setSessions(next);
       setExpandedId((prev) => (prev && !next.some((s) => s.id === prev) ? null : prev));
