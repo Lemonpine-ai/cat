@@ -50,8 +50,6 @@ export function CameraSlot({
   const iceChannelRef = useRef<RealtimeChannel | null>(null);
   /** viewer 마이크 트랙 — enabled 토글로 PTT 구현 */
   const micTrackRef = useRef<MediaStreamTrack | null>(null);
-  /** silent audio 용 AudioContext — cleanup 시 close */
-  const silentAudioCtxRef = useRef<AudioContext | null>(null);
   const relayRetried = useRef(false);
 
   const updatePhase = useCallback(
@@ -65,11 +63,6 @@ export function CameraSlot({
     if (micTrackRef.current) {
       micTrackRef.current.stop();
       micTrackRef.current = null;
-    }
-    /* silent audio context 해제 */
-    if (silentAudioCtxRef.current) {
-      void silentAudioCtxRef.current.close();
-      silentAudioCtxRef.current = null;
     }
     if (pcRef.current) {
       pcRef.current.ontrack = null;
@@ -190,22 +183,7 @@ export function CameraSlot({
           await applyIce(row.candidate as RTCIceCandidateInit);
         }
 
-        /* ④ silent audio track 추가 — answer SDP 에 sendrecv audio 확보.
-         *    나중에 마이크 버튼 클릭 시 replaceTrack 으로 실제 마이크로 교체.
-         *    AudioContext 는 권한 요청 없이 무음 트랙 생성 가능. */
-        const silentCtx = new AudioContext();
-        silentAudioCtxRef.current = silentCtx;
-        const oscillator = silentCtx.createOscillator();
-        const dst = silentCtx.createMediaStreamDestination();
-        oscillator.connect(dst);
-        oscillator.start();
-        const silentTrack = dst.stream.getAudioTracks()[0];
-        if (silentTrack) {
-          silentTrack.enabled = false;
-          pc.addTrack(silentTrack, dst.stream);
-        }
-
-        /* ⑤ answer 생성 → DB 저장 */
+        /* ④ answer 생성 → DB 저장 */
         const answer = await pc.createAnswer({ offerToReceiveVideo: true, offerToReceiveAudio: true });
         await pc.setLocalDescription(answer);
 
@@ -242,14 +220,14 @@ export function CameraSlot({
 
   /* ── 마이크 토글 (viewer → broadcaster 인터컴) ── */
   const toggleMic = useCallback(async () => {
-    /* 이미 실제 마이크 있으면 enabled 토글 */
+    /* 이미 마이크 있으면 enabled 토글 */
     if (micTrackRef.current) {
       const next = !micTrackRef.current.enabled;
       micTrackRef.current.enabled = next;
       setIsMicOn(next);
       return;
     }
-    /* 최초: 마이크 권한 획득 → silent track 을 실제 마이크로 replaceTrack */
+    /* 최초: 마이크 권한 획득 → addTrack */
     const pc = pcRef.current;
     if (!pc) return;
     try {
@@ -259,12 +237,7 @@ export function CameraSlot({
       micTrack.enabled = true;
       micTrackRef.current = micTrack;
       setIsMicOn(true);
-
-      /* silent track 이 들어있는 audio sender 찾아서 실제 마이크로 교체 */
-      const audioSender = pc.getSenders().find((s) => s.track?.kind === "audio");
-      if (audioSender) {
-        await audioSender.replaceTrack(micTrack);
-      }
+      pc.addTrack(micTrack, micStream);
     } catch {
       /* 마이크 권한 거부 — 무시 */
     }

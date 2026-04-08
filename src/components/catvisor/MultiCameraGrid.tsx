@@ -39,38 +39,25 @@ export function MultiCameraGrid({ homeId }: MultiCameraGridProps) {
 
     /* 초기 조회: 현재 live 인 세션 최대 4개 */
     async function loadSessions() {
-      const { data } = await supabase
+      /* 원본 CameraLiveViewer 와 동일한 컬럼만 조회 (device_id 는 없을 수 있음) */
+      const { data, error } = await supabase
         .from("camera_sessions")
-        .select("id, offer_sdp, device_id")
+        .select("id, offer_sdp")
         .eq("home_id", homeId!)
         .eq("status", "live")
         .not("offer_sdp", "is", null)
         .order("updated_at", { ascending: false })
         .limit(MAX_SLOTS);
 
-      if (data) {
-        /* device_id → device_name 매핑: camera_devices 테이블에서 이름 조회 */
-        const deviceIds = data.map((s) => s.device_id).filter(Boolean);
-        let nameMap: Record<string, string> = {};
-        if (deviceIds.length > 0) {
-          const { data: devices } = await supabase
-            .from("camera_devices")
-            .select("id, device_name")
-            .in("id", deviceIds);
-          if (devices) {
-            nameMap = Object.fromEntries(devices.map((d) => [d.id, d.device_name]));
-          }
-        }
+      if (error || !data) return;
 
-        const next = data.map((row, idx) => ({
-          id: row.id,
-          offer_sdp: row.offer_sdp!,
-          device_name: nameMap[row.device_id] ?? `카메라 ${idx + 1}`,
-        }));
-        setSessions(next);
-        /* 확대 중인 세션이 사라졌으면 그리드로 복귀 */
-        setExpandedId((prev) => (prev && !next.some((s) => s.id === prev) ? null : prev));
-      }
+      const next = data.map((row, idx) => ({
+        id: row.id,
+        offer_sdp: row.offer_sdp!,
+        device_name: `카메라 ${idx + 1}`,
+      }));
+      setSessions(next);
+      setExpandedId((prev) => (prev && !next.some((s) => s.id === prev) ? null : prev));
     }
     void loadSessions();
 
