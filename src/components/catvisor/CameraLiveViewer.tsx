@@ -179,8 +179,8 @@ export function CameraLiveViewer({
         ) {
           const dedupeKey = JSON.stringify(rawCandidate);
           if (appliedBroadcasterIceKeys.has(dedupeKey)) return;
-          appliedBroadcasterIceKeys.add(dedupeKey);
           if (!pc.remoteDescription) return;
+          appliedBroadcasterIceKeys.add(dedupeKey);
           try {
             await pc.addIceCandidate(new RTCIceCandidate(rawCandidate));
           } catch {

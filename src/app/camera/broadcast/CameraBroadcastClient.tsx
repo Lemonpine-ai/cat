@@ -646,8 +646,8 @@ export function CameraBroadcastClient() {
           for (const rawCandidate of viewerIceList) {
             const dedupeKey = JSON.stringify(rawCandidate);
             if (appliedViewerIceKeysRef.current.has(dedupeKey)) continue;
-            appliedViewerIceKeysRef.current.add(dedupeKey);
             if (!currentPc.remoteDescription) continue;
+            appliedViewerIceKeysRef.current.add(dedupeKey);
             try {
               await currentPc.addIceCandidate(new RTCIceCandidate(rawCandidate));
             } catch {
