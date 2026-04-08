@@ -19,7 +19,6 @@ type LiveSession = {
   id: string;
   offer_sdp: string;
   device_name: string;
-  device_id: string | null;
 };
 
 type MultiCameraGridProps = {
@@ -33,6 +32,8 @@ export function MultiCameraGrid({ homeId }: MultiCameraGridProps) {
   const watcherRef = useRef<RealtimeChannel | null>(null);
   /* 확대 중인 슬롯 (null 이면 그리드 모드) */
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  /* 연결 실패(스테일)한 세션 id — 그리드에서 숨김 */
+  const [failedIds, setFailedIds] = useState<Set<string>>(new Set());
 
   /* ── live 세션 초기 로드 + Realtime 감시 ── */
   useEffect(() => {
@@ -44,50 +45,30 @@ export function MultiCameraGrid({ homeId }: MultiCameraGridProps) {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      /* created_at DESC 로 정렬 — updated_at 는 스테일 세션에 answer 쓸 때 갱신돼서 순서가 꼬임 */
+      /*
+       * CameraLiveViewer 와 동일한 컬럼만 SELECT (id, offer_sdp)
+       * device_id 는 PostgREST 에서 접근 불가 — SELECT 에 넣으면 쿼리 자체가 실패
+       * created_at DESC 정렬 — updated_at 는 스테일 세션에 answer 쓸 때 갱신돼서 순서 꼬임
+       */
       const { data, error } = await supabase
         .from("camera_sessions")
-        .select("id, offer_sdp, device_id")
+        .select("id, offer_sdp")
         .eq("home_id", homeId!)
         .eq("status", "live")
         .not("offer_sdp", "is", null)
         .order("created_at", { ascending: false })
-        .limit(MAX_SLOTS * 3);
+        .limit(MAX_SLOTS);
 
       if (error || !data) return;
 
-      /* device_id 기준 중복 제거 — 같은 기기의 스테일 세션은 최신만 남김 */
-      const seenDevices = new Set<string>();
-      const deduped: typeof data = [];
-      for (const row of data) {
-        if (row.device_id) {
-          if (seenDevices.has(row.device_id)) continue;
-          seenDevices.add(row.device_id);
-        }
-        deduped.push(row);
-        if (deduped.length >= MAX_SLOTS) break;
-      }
-
-      /* device_id 로 기기 이름 조회 — 사용자가 설정한 이름 표시 */
-      const deviceIds = deduped.map((r) => r.device_id).filter(Boolean) as string[];
-      let deviceNameMap: Record<string, string> = {};
-      if (deviceIds.length > 0) {
-        const { data: devices } = await supabase
-          .from("camera_devices")
-          .select("id, device_name")
-          .in("id", deviceIds);
-        if (devices) {
-          deviceNameMap = Object.fromEntries(devices.map((d) => [d.id, d.device_name]));
-        }
-      }
-
-      const next = deduped.map((row, idx) => ({
+      const next = data.map((row, idx) => ({
         id: row.id,
         offer_sdp: row.offer_sdp!,
-        device_name: (row.device_id && deviceNameMap[row.device_id]) || `카메라 ${idx + 1}`,
-        device_id: row.device_id ?? null,
+        device_name: `카메라 ${idx + 1}`,
       }));
       setSessions(next);
+      /* 새 세션 목록이면 이전 실패 기록 초기화 */
+      setFailedIds(new Set());
       setExpandedId((prev) => (prev && !next.some((s) => s.id === prev) ? null : prev));
     }
     void loadSessions();
@@ -112,6 +93,16 @@ export function MultiCameraGrid({ homeId }: MultiCameraGridProps) {
       watcherRef.current = null;
     };
   }, [homeId, supabase]);
+
+  /* 스테일 세션이 에러 나면 그리드에서 제거하는 콜백 */
+  const handleSlotPhase = useCallback((sessionId: string, phase: "connecting" | "connected" | "error") => {
+    if (phase === "error") {
+      setFailedIds((prev) => new Set(prev).add(sessionId));
+    }
+  }, []);
+
+  /* 실제 표시할 세션 (에러 난 스테일 세션 제외) */
+  const visibleSessions = sessions.filter((s) => !failedIds.has(s.id));
 
   /* homeId 없으면 미렌더 */
   if (!homeId) return null;
@@ -141,8 +132,8 @@ export function MultiCameraGrid({ homeId }: MultiCameraGridProps) {
     );
   }
 
-  /* ── 대기 화면: 세션 없음 ── */
-  if (sessions.length === 0) {
+  /* ── 대기 화면: 표시할 세션 없음 ── */
+  if (visibleSessions.length === 0) {
     return (
       <section
         className="flex w-full flex-col items-center justify-center gap-3 rounded-2xl bg-[#0d1a18] p-10 text-center shadow-lg"
@@ -167,7 +158,7 @@ export function MultiCameraGrid({ homeId }: MultiCameraGridProps) {
 
   /* ── 그리드 레이아웃 (1~4대) ── */
   const gridCols =
-    sessions.length === 1
+    visibleSessions.length === 1
       ? "grid-cols-1"
       : "grid-cols-1 sm:grid-cols-2";
 
@@ -179,20 +170,21 @@ export function MultiCameraGrid({ homeId }: MultiCameraGridProps) {
           <Video className="size-4 text-[#4FD1C5]" strokeWidth={2} />
           LIVE CAM
           <span className="ml-1 rounded-full bg-red-500/12 px-2 py-0.5 text-[0.6rem] font-bold uppercase text-red-600">
-            {sessions.length}대
+            {visibleSessions.length}대
           </span>
         </h2>
       </div>
 
       {/* 그리드 */}
       <div className={`grid ${gridCols} gap-2`}>
-        {sessions.map((s) => (
+        {visibleSessions.map((s) => (
           <CameraSlot
             key={s.id}
             sessionId={s.id}
             offerSdp={s.offer_sdp}
             deviceName={s.device_name}
             onExpand={() => setExpandedId(s.id)}
+            onPhaseChange={(phase) => handleSlotPhase(s.id, phase)}
           />
         ))}
       </div>
