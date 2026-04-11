@@ -75,9 +75,23 @@ export function MultiCameraGrid({ homeId }: MultiCameraGridProps) {
         offer_sdp: row.offer_sdp!,
         device_name: `카메라 ${idx + 1}`,
       }));
-      setSessions(next);
-      /* 새 세션 목록이면 이전 실패 기록 초기화 */
-      setFailedIds(new Set());
+
+      /*
+       * 세션 목록이 변경되었을 때만 failedIds 초기화.
+       * 새 세션이 추가되었으면 그 세션만 시도하도록 기존 실패 기록 유지.
+       * 세션 ID 집합이 같으면 이미 실패한 세션을 다시 시도하지 않는다.
+       */
+      setSessions((prev) => {
+        const prevIds = new Set(prev.map((s) => s.id));
+        const nextIds = new Set(next.map((s) => s.id));
+        const hasNewSession = next.some((s) => !prevIds.has(s.id));
+        const hasRemovedSession = prev.some((s) => !nextIds.has(s.id));
+        if (hasNewSession || hasRemovedSession) {
+          /* 새 세션이 추가되었거나 세션이 제거되었으면 실패 기록 초기화 */
+          setFailedIds(new Set());
+        }
+        return next;
+      });
       setExpandedId((prev) => (prev && !next.some((s) => s.id === prev) ? null : prev));
     }
     void loadSessions();
@@ -140,11 +154,13 @@ export function MultiCameraGrid({ homeId }: MultiCameraGridProps) {
             .order("updated_at", { ascending: false })
             .limit(MAX_SLOTS);
           if (fresh && fresh.length > 0) {
-            setSessions(fresh.map((row, idx) => ({
+            const freshSessions = fresh.map((row, idx) => ({
               id: row.id,
               offer_sdp: row.offer_sdp!,
               device_name: `카메라 ${idx + 1}`,
-            })));
+            }));
+            setSessions(freshSessions);
+            /* 폴링으로 새 세션 발견 → 실패 기록 초기화 */
             setFailedIds(new Set());
           }
         }
