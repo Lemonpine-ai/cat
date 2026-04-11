@@ -209,16 +209,17 @@ export function CameraSlot({
         if (ansResult?.error) throw new Error(ansResult.error);
         console.log("[CameraSlot] ② answer DB 저장 완료 (RPC)");
 
-        /* broadcaster 에게 answer 도착 알림 (폴링 외 push 보완) */
+        /* broadcaster 에게 answer SDP 를 직접 전달 (DB 폴링 실패 대비) */
+        const answerSdpForBroadcast = encodePlainSdpForDatabaseColumn(committed.sdp);
         const answerNotifyCh = supabase.channel(`answer_ready_${sessionId}`);
         answerNotifyCh.subscribe((status) => {
           if (status === "SUBSCRIBED") {
             void answerNotifyCh.send({
               type: "broadcast",
               event: "answer_ready",
-              payload: { session_id: sessionId },
+              payload: { session_id: sessionId, answer_sdp: answerSdpForBroadcast },
             });
-            setTimeout(() => void supabase.removeChannel(answerNotifyCh), 2000);
+            setTimeout(() => void supabase.removeChannel(answerNotifyCh), 3000);
           }
         });
 

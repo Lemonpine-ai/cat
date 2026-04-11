@@ -651,16 +651,34 @@ export function CameraBroadcastClient() {
         });
       }
 
-      /* viewer 가 answer 저장 후 보내는 push 알림 구독 — 폴링보다 빠르게 반응 */
+      /* viewer 가 answer SDP 를 직접 보내는 broadcast 채널 구독 (DB 폴링 실패 대비) */
       if (answerReadyChRef.current) {
         void supabase.removeChannel(answerReadyChRef.current);
       }
       const answerReadyCh = supabase.channel(`answer_ready_${sessionId}`);
       answerReadyChRef.current = answerReadyCh;
-      answerReadyCh.on("broadcast", { event: "answer_ready" }, () => {
-        console.log("[broadcaster] answer_ready 알림 수신 → 즉시 폴링");
-        /* 다음 폴링 주기를 기다리지 않고 즉시 signaling 확인 */
-        void pollSignalingOnce();
+      answerReadyCh.on("broadcast", { event: "answer_ready" }, (event) => {
+        const payload = event.payload as { answer_sdp?: string } | undefined;
+        const currentPc = peerConnectionRef.current;
+        console.log("[broadcaster] answer_ready 수신, answer_sdp 포함:", !!payload?.answer_sdp);
+
+        /* payload 에 answer_sdp 가 있으면 DB 폴링 없이 직접 적용 */
+        if (payload?.answer_sdp && currentPc && currentPc.remoteDescription === null) {
+          void (async () => {
+            try {
+              const answerInit = decodeSdpFromDatabaseColumn(payload.answer_sdp!, "answer");
+              await currentPc.setRemoteDescription(new RTCSessionDescription(answerInit));
+              console.log("[broadcaster] answer 직접 적용 완료 (push 경로)");
+              setBroadcastPhase("live");
+            } catch (err) {
+              console.error("[broadcaster] answer 직접 적용 실패, 폴링으로 재시도", err);
+              void pollSignalingOnce();
+            }
+          })();
+        } else {
+          /* answer_sdp 없으면 기존 폴링으로 fallback */
+          void pollSignalingOnce();
+        }
       }).subscribe();
 
       /** 단일 signaling 폴링 실행 (push 알림 + interval 공용) */
