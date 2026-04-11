@@ -51,7 +51,7 @@ export function MultiCameraGrid({ homeId }: MultiCameraGridProps) {
       /*
        * CameraLiveViewer 와 동일한 컬럼만 SELECT (id, offer_sdp)
        * device_id 는 PostgREST 에서 접근 불가 — SELECT 에 넣으면 쿼리 자체가 실패
-       * status='live' 필터로 스테일 세션 제외되므로 updated_at 정렬 사용 가능
+       * updated_at 정렬 제거 — PostgREST 스키마 캐시에 없으면 쿼리 전체가 실패함
        */
       const { data, error } = await supabase
         .from("camera_sessions")
@@ -59,7 +59,6 @@ export function MultiCameraGrid({ homeId }: MultiCameraGridProps) {
         .eq("home_id", homeId!)
         .eq("status", "live")
         .not("offer_sdp", "is", null)
-        .order("updated_at", { ascending: false })
         .limit(MAX_SLOTS);
 
       if (error) {
@@ -151,7 +150,6 @@ export function MultiCameraGrid({ homeId }: MultiCameraGridProps) {
             .eq("home_id", homeId)
             .eq("status", "live")
             .not("offer_sdp", "is", null)
-            .order("updated_at", { ascending: false })
             .limit(MAX_SLOTS);
           if (fresh && fresh.length > 0) {
             const freshSessions = fresh.map((row, idx) => ({

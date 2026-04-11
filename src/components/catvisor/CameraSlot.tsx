@@ -206,13 +206,12 @@ export function CameraSlot({
         }
         iceChannelRef.current = ch;
 
-        /* ④ 기존 broadcaster ICE 일괄 적용 */
+        /* ④ 기존 broadcaster ICE 일괄 적용 (정렬 제거 — PostgREST 캐시 문제 방지) */
         const { data: existingIce } = await supabase
           .from("ice_candidates")
           .select("candidate")
           .eq("session_id", sessionId)
-          .eq("sender", "broadcaster")
-          .order("created_at", { ascending: true });
+          .eq("sender", "broadcaster");
         console.log("[CameraSlot] ④ 기존 broadcaster ICE:", existingIce?.length ?? 0, "건");
         for (const row of existingIce ?? []) {
           await applyIce(row.candidate as RTCIceCandidateInit);
