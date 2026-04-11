@@ -142,7 +142,17 @@ export function CameraSlot({
           const s = pc.iceConnectionState;
           console.log("[CameraSlot] ICE 상태:", s);
           if (s === "connected" || s === "completed") { clearConnectTimeout(); relayRetried.current = false; updatePhase("connected"); }
-          if (s === "failed") { clearConnectTimeout(); reportFailure(); }
+          /* disconnected/failed 모두 relay 재시도 대상 (STUN-only 환경 대응) */
+          if (s === "failed" || s === "disconnected") {
+            if (!forceRelay && turnRelayConfigured && !relayRetried.current) {
+              clearConnectTimeout();
+              relayRetried.current = true;
+              console.log("[CameraSlot] ICE", s, "→ relay 재시도");
+              void cleanup().then(() => void connect(true));
+              return;
+            }
+            if (s === "failed") { clearConnectTimeout(); reportFailure(); }
+          }
         };
 
         let graceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -154,8 +164,8 @@ export function CameraSlot({
             if (!graceTimer) {
               graceTimer = setTimeout(() => {
                 graceTimer = null;
-                if (pc.connectionState === "disconnected") { updatePhase("error"); void cleanup(); }
-              }, 5000);
+                if (pc.connectionState === "disconnected") { reportFailure(); }
+              }, 10000);
             }
           }
           if (s === "closed") { if (graceTimer) { clearTimeout(graceTimer); graceTimer = null; } if (!reported) { updatePhase("error"); void cleanup(); } }
