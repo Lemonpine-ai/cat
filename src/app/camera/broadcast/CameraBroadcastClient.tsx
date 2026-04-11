@@ -643,12 +643,19 @@ export function CameraBroadcastClient() {
         });
       }
 
-      const pollIntervalMs = 400;
-      signalingPollIntervalRef.current = setInterval(() => {
-        void (async () => {
+      /* viewer 가 answer 저장 후 보내는 push 알림 구독 — 폴링보다 빠르게 반응 */
+      const answerReadyCh = supabase.channel(`answer_ready_${sessionId}`);
+      answerReadyCh.on("broadcast", { event: "answer_ready" }, () => {
+        console.log("[broadcaster] answer_ready 알림 수신 → 즉시 폴링");
+        /* 다음 폴링 주기를 기다리지 않고 즉시 signaling 확인 */
+        void pollSignalingOnce();
+      }).subscribe();
+
+      /** 단일 signaling 폴링 실행 (push 알림 + interval 공용) */
+      async function pollSignalingOnce() {
           const currentPc = peerConnectionRef.current;
           const currentSessionId = sessionIdRef.current;
-          if (!currentPc || !currentSessionId) return;
+          if (!currentPc || !currentSessionId || !deviceIdentity) return;
 
           const { data: signalingPayload, error: signalingError } = await supabase.rpc(
             "get_broadcaster_signaling_state",
@@ -694,7 +701,11 @@ export function CameraBroadcastClient() {
               // 중복 후보 등은 무시
             }
           }
-        })();
+      }
+
+      const pollIntervalMs = 400;
+      signalingPollIntervalRef.current = setInterval(() => {
+        void pollSignalingOnce();
       }, pollIntervalMs);
 
       setBroadcastPhase("live");

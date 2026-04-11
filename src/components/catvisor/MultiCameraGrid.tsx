@@ -142,8 +142,13 @@ export function MultiCameraGrid({ homeId }: MultiCameraGridProps) {
           .eq("status", "live")
           .not("offer_sdp", "is", null)
           .limit(1);
-        /* live 세션이 있는데 현재 표시 중인 게 없으면 전체 재조회 */
-        if (data && data.length > 0 && sessions.length === 0) {
+        /*
+         * live 세션이 있는데 화면에 안 보이면 전체 재조회.
+         * sessions 배열이 비어있거나, 전부 failedIds에 있어 visibleSessions가 0인 경우 모두 포함.
+         */
+        const visibleCount = sessions.filter((s) => !failedIds.has(s.id)).length;
+        const hasNewLiveSession = data ? data.some((d: { id: string }) => !sessions.some((s) => s.id === d.id)) : false;
+        if (data && data.length > 0 && (visibleCount === 0 || hasNewLiveSession)) {
           const { data: fresh } = await supabase
             .from("camera_sessions")
             .select("id, offer_sdp")
@@ -165,7 +170,7 @@ export function MultiCameraGrid({ homeId }: MultiCameraGridProps) {
       })();
     }, 3000);
     return () => clearInterval(fallback);
-  }, [homeId, supabase, sessions.length]);
+  }, [homeId, supabase, sessions, failedIds]);
 
   /* 스테일 세션이 에러 나면 그리드에서 제거하는 콜백 */
   const handleSlotPhase = useCallback((sessionId: string, phase: "connecting" | "connected" | "error") => {

@@ -209,6 +209,19 @@ export function CameraSlot({
         if (ansResult?.error) throw new Error(ansResult.error);
         console.log("[CameraSlot] ② answer DB 저장 완료 (RPC)");
 
+        /* broadcaster 에게 answer 도착 알림 (폴링 외 push 보완) */
+        const answerNotifyCh = supabase.channel(`answer_ready_${sessionId}`);
+        answerNotifyCh.subscribe((status) => {
+          if (status === "SUBSCRIBED") {
+            void answerNotifyCh.send({
+              type: "broadcast",
+              event: "answer_ready",
+              payload: { session_id: sessionId },
+            });
+            setTimeout(() => void supabase.removeChannel(answerNotifyCh), 2000);
+          }
+        });
+
         /* ③ broadcaster ICE 실시간 구독 (타임아웃 5초 — 실패해도 계속 진행) */
         const ch = supabase.channel(`slot-ice-${sessionId}`);
         ch.on(
