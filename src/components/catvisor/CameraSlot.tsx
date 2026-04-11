@@ -146,14 +146,15 @@ export function CameraSlot({
           if (s === "closed") { if (graceTimer) { clearTimeout(graceTimer); graceTimer = null; } if (!reported) { updatePhase("error"); void cleanup(); } }
         };
 
+        /* viewer ICE 후보 → RPC 로 삽입 (직접 INSERT 는 RLS 차단됨) */
         pc.onicecandidate = ({ candidate }) => {
           if (!candidate) return;
-          void supabase
-            .from("ice_candidates")
-            .insert({ session_id: sessionId, sender: "viewer", candidate: candidate.toJSON() })
-            .then(({ error }) => {
-              if (error) console.error("[CameraSlot] viewer ICE INSERT 실패:", error.message);
-            });
+          void supabase.rpc("viewer_add_ice_candidate", {
+            p_session_id: sessionId,
+            p_candidate: candidate.toJSON(),
+          }).then(({ error }) => {
+            if (error) console.error("[CameraSlot] viewer ICE RPC 실패:", error.message);
+          });
         };
 
         /* ① offer 적용 */
@@ -170,12 +171,18 @@ export function CameraSlot({
         const committed = pc.localDescription;
         if (!committed?.sdp) throw new Error("answer SDP 확정 실패");
 
-        const { error: ansErr, count: ansCount } = await supabase
-          .from("camera_sessions")
-          .update({ answer_sdp: encodePlainSdpForDatabaseColumn(committed.sdp) })
-          .eq("id", sessionId);
+        /* answer SDP → RPC 로 저장 (직접 UPDATE 는 RLS 차단될 수 있음) */
+        const { data: ansData, error: ansErr } = await supabase.rpc(
+          "viewer_update_answer_sdp",
+          {
+            p_session_id: sessionId,
+            p_answer_sdp: encodePlainSdpForDatabaseColumn(committed.sdp),
+          },
+        );
         if (ansErr) throw new Error(ansErr.message);
-        console.log("[CameraSlot] ② answer DB 저장 완료, 수정 행:", ansCount);
+        const ansResult = ansData as { success?: boolean; error?: string } | null;
+        if (ansResult?.error) throw new Error(ansResult.error);
+        console.log("[CameraSlot] ② answer DB 저장 완료 (RPC)");
 
         /* ③ broadcaster ICE 실시간 구독 (타임아웃 5초 — 실패해도 계속 진행) */
         const ch = supabase.channel(`slot-ice-${sessionId}`);

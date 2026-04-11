@@ -270,18 +270,16 @@ export function CameraLiveViewer({
           }
           viewerIceInsertCount += 1;
           const payload = candidate.toJSON();
+          /* viewer ICE 후보 → RPC 로 삽입 (직접 INSERT 는 RLS 차단됨) */
           void (async () => {
-            const { error: iceInsertError } = await supabase
-              .from("ice_candidates")
-              .insert({
-                session_id: session.id,
-                sender: "viewer",
-                candidate: payload,
-              });
-            if (iceInsertError) {
+            const { error: iceRpcError } = await supabase.rpc(
+              "viewer_add_ice_candidate",
+              { p_session_id: session.id, p_candidate: payload },
+            );
+            if (iceRpcError) {
               logWebRtcDebug("viewer", "ice.viewer_insert_failed", {
-                message: iceInsertError.message,
-                code: iceInsertError.code,
+                message: iceRpcError.message,
+                code: iceRpcError.code,
               });
             }
           })();
@@ -351,18 +349,24 @@ export function CameraLiveViewer({
           throw new Error("로컬 SDP(answer)를 확정할 수 없어요.");
         }
 
-        const { error: answerUpdateError } = await supabase
-          .from("camera_sessions")
-          .update({
-            answer_sdp: encodePlainSdpForDatabaseColumn(committedAnswer.sdp),
-          })
-          .eq("id", session.id);
+        /* answer SDP → RPC 로 저장 (직접 UPDATE 는 RLS 차단될 수 있음) */
+        const { data: ansRpcData, error: answerRpcError } = await supabase.rpc(
+          "viewer_update_answer_sdp",
+          {
+            p_session_id: session.id,
+            p_answer_sdp: encodePlainSdpForDatabaseColumn(committedAnswer.sdp),
+          },
+        );
 
-        if (answerUpdateError) {
+        if (answerRpcError) {
           logWebRtcDebug("viewer", "signaling.answer_db_update_failed", {
-            message: answerUpdateError.message,
+            message: answerRpcError.message,
           });
-          throw new Error(answerUpdateError.message);
+          throw new Error(answerRpcError.message);
+        }
+        const ansRpcResult = ansRpcData as { success?: boolean; error?: string } | null;
+        if (ansRpcResult?.error) {
+          throw new Error(ansRpcResult.error);
         }
         logWebRtcDebug("viewer", "signaling.answer_persisted", {
           sessionId: session.id,
