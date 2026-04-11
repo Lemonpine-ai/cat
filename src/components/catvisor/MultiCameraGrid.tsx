@@ -43,7 +43,10 @@ export function MultiCameraGrid({ homeId }: MultiCameraGridProps) {
     async function loadSessions() {
       /* auth 세션 복원 보장 — 이걸 안 하면 JWT 없이 쿼리해서 RLS 가 전부 차단 */
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user) {
+        console.warn("[MultiCameraGrid] auth 유저 없음 — 세션 조회 건너뜀");
+        return;
+      }
 
       /*
        * CameraLiveViewer 와 동일한 컬럼만 SELECT (id, offer_sdp)
@@ -59,7 +62,13 @@ export function MultiCameraGrid({ homeId }: MultiCameraGridProps) {
         .order("updated_at", { ascending: false })
         .limit(MAX_SLOTS);
 
-      if (error || !data) return;
+      if (error) {
+        console.error("[MultiCameraGrid] 세션 조회 실패:", error.message, error.code);
+        return;
+      }
+      if (!data) return;
+
+      console.log("[MultiCameraGrid] 세션 조회 결과:", data.length, "건");
 
       const next = data.map((row, idx) => ({
         id: row.id,
@@ -73,14 +82,14 @@ export function MultiCameraGrid({ homeId }: MultiCameraGridProps) {
     }
     void loadSessions();
 
-    /* Realtime: 세션 추가/종료 감지 */
+    /* Realtime: 세션 추가/종료 감지 (postgres_changes) */
     const watcher = supabase
       .channel(`multi-cam-${homeId}`)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "camera_sessions", filter: `home_id=eq.${homeId}` },
         () => {
-          /* 세션 변경 감지 시 목록 전체 재조회 (device_name 포함) */
+          /* 세션 변경 감지 시 목록 전체 재조회 */
           void loadSessions();
         },
       )
@@ -88,8 +97,22 @@ export function MultiCameraGrid({ homeId }: MultiCameraGridProps) {
 
     watcherRef.current = watcher;
 
+    /*
+     * Broadcast 채널 fallback — SECURITY DEFINER RPC 로 INSERT 된 세션은
+     * postgres_changes 이벤트가 안 올 수 있으므로 별도 broadcast 구독.
+     * 방송 기기(CameraBroadcastClient)가 이 채널로 알림을 보내면 즉시 재조회.
+     */
+    const broadcastCh = supabase
+      .channel(`cam_session_broadcast_${homeId}`)
+      .on("broadcast", { event: "session_started" }, () => {
+        console.log("[MultiCameraGrid] broadcast 이벤트 수신 → 세션 재조회");
+        void loadSessions();
+      })
+      .subscribe();
+
     return () => {
       void supabase.removeChannel(watcher);
+      void supabase.removeChannel(broadcastCh);
       watcherRef.current = null;
     };
   }, [homeId, supabase]);

@@ -607,6 +607,26 @@ export function CameraBroadcastClient() {
       sessionIdRef.current = sessionId;
       setActiveSessionId(sessionId);
 
+      /*
+       * 대시보드에 세션 생성 알림 — SECURITY DEFINER RPC 는
+       * postgres_changes Realtime 이벤트를 트리거하지 않으므로
+       * broadcast 채널로 직접 알려준다.
+       */
+      if (broadcastHomeId) {
+        const notifyCh = supabase.channel(`cam_session_broadcast_${broadcastHomeId}`);
+        notifyCh.subscribe((status) => {
+          if (status === "SUBSCRIBED") {
+            void notifyCh.send({
+              type: "broadcast",
+              event: "session_started",
+              payload: { session_id: sessionId },
+            });
+            /* 알림 전송 후 채널 정리 (일회성) */
+            setTimeout(() => void supabase.removeChannel(notifyCh), 2000);
+          }
+        });
+      }
+
       for (const queuedCandidate of iceCandidatesWaitingForSessionId) {
         await supabase.rpc("add_device_ice_candidate", {
           input_device_token: deviceIdentity.deviceToken,
