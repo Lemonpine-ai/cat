@@ -379,6 +379,20 @@ export function CameraBroadcastClient() {
           await supabase.rpc("stop_device_broadcast", {
             input_device_token: deviceIdentity.deviceToken,
           });
+          /* 대시보드에 세션 종료 알림 */
+          if (broadcastHomeId) {
+            const stopCh = supabase.channel(`cam_session_broadcast_${broadcastHomeId}`);
+            stopCh.subscribe((status) => {
+              if (status === "SUBSCRIBED") {
+                void stopCh.send({
+                  type: "broadcast",
+                  event: "session_stopped",
+                  payload: {},
+                });
+                setTimeout(() => void supabase.removeChannel(stopCh), 2000);
+              }
+            });
+          }
         }
         sessionIdRef.current = null;
         setActiveSessionId(null);
@@ -386,7 +400,7 @@ export function CameraBroadcastClient() {
         isCleaningUpRef.current = false;
       }
     },
-    [supabase, deviceIdentity, cleanupPeerResourcesOnly],
+    [supabase, deviceIdentity, cleanupPeerResourcesOnly, broadcastHomeId],
   );
 
   useEffect(() => {
@@ -394,6 +408,23 @@ export function CameraBroadcastClient() {
       void cleanupPeerResourcesOnly(false);
     };
   }, [cleanupPeerResourcesOnly]);
+
+  /* 탭 닫기/숨기기 시 세션 정리 — stale live 세션 방지 */
+  useEffect(() => {
+    function handleUnload() {
+      const token = deviceIdentity?.deviceToken;
+      if (!token || !sessionIdRef.current) return;
+      /* sendBeacon 으로 비동기 종료 — 탭 닫힘 후에도 전송 보장 */
+      const url = `${window.location.origin}/api/webrtc/stop-broadcast`;
+      navigator.sendBeacon(url, JSON.stringify({ device_token: token }));
+    }
+    window.addEventListener("beforeunload", handleUnload);
+    window.addEventListener("pagehide", handleUnload);
+    return () => {
+      window.removeEventListener("beforeunload", handleUnload);
+      window.removeEventListener("pagehide", handleUnload);
+    };
+  }, [deviceIdentity]);
 
   /**
    * 이전에 연 미리보기/방송 트랙을 모두 stop — 같은 탭에서 두 번째 getUserMedia 가
@@ -542,6 +573,11 @@ export function CameraBroadcastClient() {
         setPeerConnectionState(pc.connectionState);
         if (pc.connectionState === "connected") {
           broadcasterRelayRetryRef.current = false;
+          /* 연결 완료 → signaling 폴링 종료 (불필요한 RPC 호출 방지) */
+          if (signalingPollIntervalRef.current) {
+            clearInterval(signalingPollIntervalRef.current);
+            signalingPollIntervalRef.current = null;
+          }
         }
         if (pc.connectionState === "failed") {
           /* relay-only 재시도: 첫 실패이고 TURN 설정 있으면 relay 강제로 1회 재시도 */
@@ -624,13 +660,20 @@ export function CameraBroadcastClient() {
       sessionIdRef.current = sessionId;
       setActiveSessionId(sessionId);
 
+      /* RPC 응답에서 home_id 확보 (session_stopped broadcast 전송에 필요) */
+      const rpcHomeId = broadcastResult.home_id as string | undefined;
+      if (rpcHomeId && !broadcastHomeId) {
+        setBroadcastHomeId(rpcHomeId);
+      }
+      const effectiveHomeId = rpcHomeId ?? broadcastHomeId;
+
       /*
        * 대시보드에 세션 생성 알림 — SECURITY DEFINER RPC 는
        * postgres_changes Realtime 이벤트를 트리거하지 않으므로
        * broadcast 채널로 직접 알려준다.
        */
-      if (broadcastHomeId) {
-        const notifyCh = supabase.channel(`cam_session_broadcast_${broadcastHomeId}`);
+      if (effectiveHomeId) {
+        const notifyCh = supabase.channel(`cam_session_broadcast_${effectiveHomeId}`);
         notifyCh.subscribe((status) => {
           if (status === "SUBSCRIBED") {
             void notifyCh.send({

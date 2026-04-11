@@ -118,7 +118,11 @@ export function MultiCameraGrid({ homeId }: MultiCameraGridProps) {
     const broadcastCh = supabase
       .channel(`cam_session_broadcast_${homeId}`)
       .on("broadcast", { event: "session_started" }, () => {
-        console.log("[MultiCameraGrid] broadcast 이벤트 수신 → 세션 재조회");
+        console.log("[MultiCameraGrid] session_started 수신 → 세션 재조회");
+        void loadSessions();
+      })
+      .on("broadcast", { event: "session_stopped" }, () => {
+        console.log("[MultiCameraGrid] session_stopped 수신 → 세션 재조회");
         void loadSessions();
       })
       .subscribe();

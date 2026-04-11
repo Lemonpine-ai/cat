@@ -382,7 +382,8 @@ export function CameraLiveViewer({
               event: "answer_ready",
               payload: { session_id: session.id, answer_sdp: answerSdpForBroadcast },
             });
-            setTimeout(() => void supabase.removeChannel(answerNotifyCh), 3000);
+            /* broadcaster 구독 대기 여유 — 느린 네트워크 대비 10초 유지 */
+            setTimeout(() => void supabase.removeChannel(answerNotifyCh), 10000);
           }
         });
       } catch (err) {
