@@ -168,17 +168,24 @@ export function CameraDeviceManager({ homeId }: { homeId: string }) {
   }
 
   async function deleteDevice(deviceId: string) {
-    /* 연쇄 정리: 기기에 속한 세션의 ICE 후보 → 세션 → 기기 순서로 삭제 */
-    const { data: sessions } = await supabase
-      .from("camera_sessions")
-      .select("id")
-      .eq("device_id", deviceId);
-    if (sessions && sessions.length > 0) {
-      const sessionIds = sessions.map((s) => s.id);
-      await supabase.from("ice_candidates").delete().in("session_id", sessionIds);
-      await supabase.from("camera_sessions").delete().eq("device_id", deviceId);
+    /*
+     * 연쇄 삭제: ICE 후보 → 세션 → 기기.
+     * device_id 컬럼은 PostgREST 에서 접근 불가하므로,
+     * SECURITY DEFINER RPC 로 DB 내부에서 처리한다.
+     */
+    const { data, error } = await supabase.rpc("delete_device_cascade", {
+      p_device_id: deviceId,
+    });
+
+    if (error) {
+      console.error("[CameraDeviceManager] 기기 삭제 RPC 실패:", error.message);
     }
-    await supabase.from("camera_devices").delete().eq("id", deviceId);
+    /* RPC 결과 확인 — 실패해도 목록은 갱신 */
+    const result = data as { success?: boolean; error?: string } | null;
+    if (result && !result.success) {
+      console.warn("[CameraDeviceManager] 기기 삭제 실패:", result.error);
+    }
+
     void fetchCameraDevices();
   }
 

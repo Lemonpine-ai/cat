@@ -48,7 +48,7 @@ export function MultiCameraGrid({ homeId }: MultiCameraGridProps) {
       /*
        * CameraLiveViewer 와 동일한 컬럼만 SELECT (id, offer_sdp)
        * device_id 는 PostgREST 에서 접근 불가 — SELECT 에 넣으면 쿼리 자체가 실패
-       * created_at DESC 정렬 — updated_at 는 스테일 세션에 answer 쓸 때 갱신돼서 순서 꼬임
+       * status='live' 필터로 스테일 세션 제외되므로 updated_at 정렬 사용 가능
        */
       const { data, error } = await supabase
         .from("camera_sessions")
@@ -56,7 +56,7 @@ export function MultiCameraGrid({ homeId }: MultiCameraGridProps) {
         .eq("home_id", homeId!)
         .eq("status", "live")
         .not("offer_sdp", "is", null)
-        .order("created_at", { ascending: false })
+        .order("updated_at", { ascending: false })
         .limit(MAX_SLOTS);
 
       if (error || !data) return;
@@ -93,6 +93,42 @@ export function MultiCameraGrid({ homeId }: MultiCameraGridProps) {
       watcherRef.current = null;
     };
   }, [homeId, supabase]);
+
+  /* SECURITY DEFINER RPC 로 생성된 세션은 Realtime 이벤트가 안 올 수 있으므로 폴링 보완 */
+  useEffect(() => {
+    if (!homeId) return;
+    const fallback = setInterval(() => {
+      void (async () => {
+        const { data } = await supabase
+          .from("camera_sessions")
+          .select("id")
+          .eq("home_id", homeId)
+          .eq("status", "live")
+          .not("offer_sdp", "is", null)
+          .limit(1);
+        /* live 세션이 있는데 현재 표시 중인 게 없으면 전체 재조회 */
+        if (data && data.length > 0 && sessions.length === 0) {
+          const { data: fresh } = await supabase
+            .from("camera_sessions")
+            .select("id, offer_sdp")
+            .eq("home_id", homeId)
+            .eq("status", "live")
+            .not("offer_sdp", "is", null)
+            .order("updated_at", { ascending: false })
+            .limit(MAX_SLOTS);
+          if (fresh && fresh.length > 0) {
+            setSessions(fresh.map((row, idx) => ({
+              id: row.id,
+              offer_sdp: row.offer_sdp!,
+              device_name: `카메라 ${idx + 1}`,
+            })));
+            setFailedIds(new Set());
+          }
+        }
+      })();
+    }, 3000);
+    return () => clearInterval(fallback);
+  }, [homeId, supabase, sessions.length]);
 
   /* 스테일 세션이 에러 나면 그리드에서 제거하는 콜백 */
   const handleSlotPhase = useCallback((sessionId: string, phase: "connecting" | "connected" | "error") => {
