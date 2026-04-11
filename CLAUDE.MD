@@ -1,11 +1,62 @@
-## gstack
-- 모든 웹 브라우징 작업에는 반드시 gstack의 `/browse` 스킬을 사용하십시오.
-- **중요:** `mcp__claude-in-chrome__*` 관련 도구는 어떠한 경우에도 절대 사용하지 마십시오.
+# CATvisor 팀 하네스 수칙
 
-### 사용 가능한 기술 목록 (Available Skills)
-필요한 경우 다음 명령어를 적절히 활용하여 작업을 수행하십시오:
-- `/office-hours`, `/plan-ceo-review`, `/plan-eng-review`, `/plan-design-review`, `/design-consult`
-- `/design-shotgun`, `/design-html`, `/review`, `/ship`, `/land-and-deploy`, `/canary`, `/benchmark`, `/browse`
-- `/connect-chrome`, `/qa`, `/qa-only`, `/design-review`, `/setup-browser-cookies`, `/setup-deploy`, `/retro`
-- `/investigate`, `/document-release`, `/codex`, `/cso`, `/autoplan`, `/plan-devex-review`, `/devex-review`
-- `/careful`, `/freeze`, `/guard`, `/unfreeze`, `/gstack-upgrade`, `/learn`
+## 팀 구성
+
+| # | 역할 | 담당 |
+|---|------|------|
+| **팀장** | 총괄 | 사장님 소통, 팀원 조율 |
+| **1번 Arch** | 시니어 구조화 AI (10년차+) | 설계도 작성, 구조/데이터 흐름/API 스펙 확정 |
+| **2번 Dev** | 시니어 구현 AI (10년차+) | 설계서 기반 staging/ 코딩, 한글 주석 |
+| **3번 QA** | 시니어 깐깐한 검증 AI (10년차+) | 9라운드+ 반복 개선, REJECT 권한, 최종 승인 |
+
+## 파이프라인
+
+① 기획 → ② 1번 Arch 설계 → 사장님 컨펌 → ③ 2번 Dev staging/ 초안 → ④ **9라운드+ 반복 개선** → ⑤ 3번 QA 최종 승인 → 사장님 컨펌 → ⑥ src/ 반영
+
+## 9라운드+ 반복 개선 시스템 (기본 적용)
+
+**특별한 지시가 없는 한 모든 작업에 자동 적용.** 사장님이 "스킵해"라고 말한 경우에만 생략 가능.
+1번 Arch ↔ 2번 Dev ↔ 3번 QA가 티키타카로 주고받으며 코드를 **9라운드 이상 반복 개선**한다. R9까지 무조건 돌리고, 개선점 있으면 R10+ 계속.
+
+| R | 관점 | 질문 |
+|---|------|------|
+| 1 | 동작 | 빌드/타입 에러 없이 돌아가는가? |
+| 2 | 설계 일치 | ARCHITECTURE.md와 100% 일치하는가? |
+| 3 | 단순화 | 더 짧고 단순하게 쓸 수 있는가? |
+| 4 | 가독성 | 변수명 직관적? 비전공자가 읽을 수 있는가? 한글 주석 충분? |
+| 5 | 엣지케이스 | null, undefined, 빈 배열, 네트워크 에러 시 안 깨지는가? |
+| 6 | 성능 | 불필요한 리렌더, 중복 호출 없는가? |
+| 7 | 보안 | XSS, 하드코딩 시크릿, RLS 우회 없는가? |
+| 8 | 영향 범위 | 다른 컴포넌트/페이지 깨뜨리지 않는가? |
+| 9 | 최종 품질 | 시니어에게 보여줘도 부끄럽지 않은가? |
+
+- REJECT 시 "이렇게 고쳐라"까지 제시. 문제만 지적 금지.
+- 매 라운드 실시간 보고. 개선 발견 → 2번 수정 → 3번 재확인.
+
+## 핵심 규칙
+
+- 1번 Arch 설계 없이 코딩 금지. 설계 먼저.
+- 2번 Dev는 staging/에만 작성. src/ 직접 수정 금지.
+- 3번 QA 9라운드+ 승인 없이 최종 결과물 불인정.
+- 설계서(docs/ARCHITECTURE.md)와 코드 100% 일치.
+- **파일 삭제 절대 금지.** rm, checkout, restore, clean up 사용 불가. 수정(Edit)만 허용.
+
+## 코드 품질 기준
+
+- 컴포넌트 100줄 이내, 파일 400줄 초과 금지
+- useEffect 7개, useState 8개, props 12개 초과 시 분리
+- 콜백 중첩 3단계 이상 금지
+- 모든 코드에 한국어 주석 필수
+- 불필요한 추상화, 제네릭, 패턴 금지
+
+## 기술 스택
+
+Next.js 16 (App Router) + React 19 + TypeScript / Supabase / Tailwind CSS + CSS Modules / lucide-react
+
+## gstack
+
+- 웹 브라우징은 `/browse` 스킬 사용. `mcp__claude-in-chrome__*` 사용 금지.
+
+## Skill routing
+
+버그 → `/investigate` | 배포 → `/ship` | QA → `/qa` | 코드 리뷰 → `/review` | 설계 검토 → `/plan-eng-review`

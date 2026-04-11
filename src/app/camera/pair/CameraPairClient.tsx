@@ -92,6 +92,19 @@ export function CameraPairClient() {
     setPairingPhase("pairing");
     setErrorMessage(null);
 
+    /* FIX-3: 스토리지 가용성을 RPC 전에 미리 검사 — 인앱 브라우저 대응 */
+    try {
+      const testKey = "__catvisor_storage_test__";
+      localStorage.setItem(testKey, "1");
+      localStorage.removeItem(testKey);
+    } catch {
+      setErrorMessage(
+        "이 브라우저가 저장소를 막고 있어요. Safari·Chrome 등 일반 브라우저에서 열거나, 카카오톡 ⋮ 메뉴에서 「다른 브라우저로 열기」를 시도해 주세요.",
+      );
+      setPairingPhase("error");
+      return;
+    }
+
     const normalizedPairingCode = pairingCode.trim();
     const { data, error } = await supabase.rpc("pair_camera_device", {
       input_pairing_code: normalizedPairingCode,

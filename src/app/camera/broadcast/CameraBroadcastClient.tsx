@@ -137,6 +137,8 @@ export function CameraBroadcastClient() {
   const isCleaningUpRef = useRef(false);
   const signalingPollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const appliedViewerIceKeysRef = useRef<Set<string>>(new Set());
+  /** 세션 ID 도착 전 수집된 ICE 캔디데이트 큐 (함수 스코프 → ref 이동으로 소실 방지) */
+  const pendingIceCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
   const autostartBroadcastSequenceStartedRef = useRef(false);
   /** 카메라 켜기·autostart 가 동시에 getUserMedia 를 호출해 NotReadable 이 나는 것 방지 */
   const acquireCameraInFlightRef = useRef(false);
@@ -530,12 +532,14 @@ export function CameraBroadcastClient() {
           broadcasterRelayRetryRef.current = false;
         }
         if (pc.connectionState === "failed") {
-          // relay-only 재시도: 첫 실패이고 TURN 설정 있으면 relay 강제로 1회 재시도
+          /* relay-only 재시도: 첫 실패이고 TURN 설정 있으면 relay 강제로 1회 재시도 */
           if (!forceRelay && turnRelayConfigured && !broadcasterRelayRetryRef.current) {
             broadcasterRelayRetryRef.current = true;
-            void cleanupSessionAndStopOnServer(true).then(() => {
+            /* cleanup 완료를 await 한 뒤 재시도 (race condition 방지) */
+            void (async () => {
+              await cleanupSessionAndStopOnServer(true);
               void startBroadcast({ forceRelay: true });
-            });
+            })();
             return;
           }
           setErrorMessage(
@@ -561,14 +565,15 @@ export function CameraBroadcastClient() {
         pc.addTrack(track, localStreamRef.current!);
       });
 
-      /** setLocalDescription 직후 ICE가 뜨는데 session_id 는 RPC 이후에만 생기므로, 그 전 후보는 메모리에 쌓았다가 일괄 전송합니다. */
-      const iceCandidatesWaitingForSessionId: RTCIceCandidateInit[] = [];
+      /* 세션 ID 도착 전 ICE 큐 초기화 (ref 사용으로 함수 스코프 소실 방지) */
+      pendingIceCandidatesRef.current = [];
 
       pc.onicecandidate = ({ candidate }) => {
         if (!candidate) return;
         const candidatePayload = candidate.toJSON();
         if (!sessionIdRef.current) {
-          iceCandidatesWaitingForSessionId.push(candidatePayload);
+          /* 세션 ID 미도착 → ref 큐에 보관 (함수 종료 후에도 유지) */
+          pendingIceCandidatesRef.current.push(candidatePayload);
           return;
         }
         void supabase.rpc("add_device_ice_candidate", {
@@ -627,14 +632,16 @@ export function CameraBroadcastClient() {
         });
       }
 
-      for (const queuedCandidate of iceCandidatesWaitingForSessionId) {
+      /* ref 큐에 쌓인 ICE 캔디데이트 일괄 전송 */
+      const queued = [...pendingIceCandidatesRef.current];
+      pendingIceCandidatesRef.current = [];
+      for (const queuedCandidate of queued) {
         await supabase.rpc("add_device_ice_candidate", {
           input_device_token: deviceIdentity.deviceToken,
           input_session_id: sessionId,
           input_candidate: queuedCandidate,
         });
       }
-      iceCandidatesWaitingForSessionId.length = 0;
 
       const pollIntervalMs = 400;
       signalingPollIntervalRef.current = setInterval(() => {

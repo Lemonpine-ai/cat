@@ -108,6 +108,9 @@ export function CareStatusGrid({
 }: CareStatusGridProps) {
   const [mealCount, setMealCount] = useState(initialTodayMealCount);
   const [medicineCount, setMedicineCount] = useState(initialTodayMedicineCount);
+  /* FIX-4: 하이드레이션 불일치 방지 — 마운트 전까지 경과 시간 표시 안 함 */
+  const [isMounted, setIsMounted] = useState(false);
+  useEffect(() => { setIsMounted(true); }, []);
 
   useEffect(() => {
     setMealCount(initialTodayMealCount);
@@ -178,9 +181,9 @@ export function CareStatusGrid({
           <p className="font-[family-name:var(--font-display)] text-lg font-semibold text-[var(--color-primary-dark)]">
             {litterLabel}
           </p>
-          <p className="text-[0.72rem] text-[var(--color-text-muted)]">
+          <p className="text-[0.72rem] text-[var(--color-text-muted)]" suppressHydrationWarning>
             {lastLitterCleanAt
-              ? formatElapsedTimeLabel(lastLitterCleanAt)
+              ? (isMounted ? formatElapsedTimeLabel(lastLitterCleanAt) : "")
               : "청소 기록을 남겨 주세요"}
           </p>
         </button>
@@ -198,9 +201,9 @@ export function CareStatusGrid({
           <p className="font-[family-name:var(--font-display)] text-lg font-semibold text-[var(--color-primary-dark)]">
             {waterLabel}
           </p>
-          <p className="text-[0.72rem] text-[var(--color-text-muted)]">
+          <p className="text-[0.72rem] text-[var(--color-text-muted)]" suppressHydrationWarning>
             {lastWaterChangeAt
-              ? formatElapsedTimeLabel(lastWaterChangeAt)
+              ? (isMounted ? formatElapsedTimeLabel(lastWaterChangeAt) : "")
               : "교체 기록을 남겨 주세요"}
           </p>
         </button>
@@ -236,9 +239,9 @@ export function CareStatusGrid({
           <p className="font-[family-name:var(--font-display)] text-lg font-semibold text-[var(--color-primary-dark)]">
             {medicineLabel}
           </p>
-          <p className="text-[0.72rem] text-[var(--color-text-muted)]">
+          <p className="text-[0.72rem] text-[var(--color-text-muted)]" suppressHydrationWarning>
             {lastMedicineAt
-              ? formatElapsedTimeLabel(lastMedicineAt)
+              ? (isMounted ? formatElapsedTimeLabel(lastMedicineAt) : "")
               : "복용 기록을 남겨 주세요"}
           </p>
         </button>
