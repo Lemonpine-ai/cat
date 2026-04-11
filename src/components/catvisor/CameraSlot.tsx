@@ -31,6 +31,9 @@ type CameraSlotProps = {
   onPhaseChange?: (phase: SlotPhase) => void;
 };
 
+/* 코드 버전 확인 — 브라우저 캐시 문제 진단용 */
+const CAMERA_CODE_VERSION = "v2-rpc";
+
 export function CameraSlot({
   sessionId,
   offerSdp,
@@ -89,6 +92,7 @@ export function CameraSlot({
   /* ── WebRTC 연결 ── */
   const connect = useCallback(
     async (forceRelay = false) => {
+      console.log(`[CameraSlot] 코드 버전: ${CAMERA_CODE_VERSION}`);
       updatePhase("connecting");
       await cleanup();
 

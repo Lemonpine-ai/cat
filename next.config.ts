@@ -15,6 +15,21 @@ function supabaseHostFromEnv(): string | null {
 const supabaseHost = supabaseHostFromEnv();
 
 const nextConfig: NextConfig = {
+  /* 카메라 페이지 캐시 방지 — 브라우저가 구 JS 번들을 사용하는 문제 해결 */
+  headers: async () => [
+    {
+      source: "/camera/:path*",
+      headers: [
+        { key: "Cache-Control", value: "no-store, no-cache, must-revalidate" },
+      ],
+    },
+    {
+      source: "/",
+      headers: [
+        { key: "Cache-Control", value: "no-store, no-cache, must-revalidate" },
+      ],
+    },
+  ],
   images: {
     remotePatterns: [
       {

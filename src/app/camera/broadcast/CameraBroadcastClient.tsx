@@ -106,7 +106,11 @@ type DeviceIdentity = {
  * localStorage의 device_token으로 인증 → SECURITY DEFINER RPC 로 세션 생성 →
  * anon 은 SELECT RLS 로 행을 직접 읽지 못하므로 get_broadcaster_signaling_state 폴링으로 answer/ICE 수신.
  */
+/* 코드 버전 — 브라우저 캐시 문제 진단용 */
+const BROADCAST_CODE_VERSION = "v2-rpc-push";
+
 export function CameraBroadcastClient() {
+  console.log(`[broadcaster] 코드 버전: ${BROADCAST_CODE_VERSION}`);
   const supabase = createSupabaseBrowserClient();
 
   const [broadcastPhase, setBroadcastPhase] = useState<BroadcastPhase>("loading");
