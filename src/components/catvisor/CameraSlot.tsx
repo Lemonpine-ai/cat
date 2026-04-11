@@ -125,6 +125,7 @@ export function CameraSlot({
 
         pc.oniceconnectionstatechange = () => {
           const s = pc.iceConnectionState;
+          console.log("[CameraSlot] ICE 상태:", s);
           if (s === "connected" || s === "completed") { relayRetried.current = false; updatePhase("connected"); }
           if (s === "failed") reportFailure();
         };
@@ -149,14 +150,34 @@ export function CameraSlot({
           if (!candidate) return;
           void supabase
             .from("ice_candidates")
-            .insert({ session_id: sessionId, sender: "viewer", candidate: candidate.toJSON() });
+            .insert({ session_id: sessionId, sender: "viewer", candidate: candidate.toJSON() })
+            .then(({ error }) => {
+              if (error) console.error("[CameraSlot] viewer ICE INSERT 실패:", error.message);
+            });
         };
 
         /* ① offer 적용 */
+        console.log("[CameraSlot] ① offer 적용 시작", sessionId);
         const offerInit = decodeSdpFromDatabaseColumn(offerSdp, "offer");
         await pc.setRemoteDescription(new RTCSessionDescription(offerInit));
+        console.log("[CameraSlot] ① offer 적용 완료");
 
-        /* ② broadcaster ICE 실시간 구독 */
+        /* ② answer 먼저 생성 → DB 저장 (폰이 빨리 받을 수 있도록) */
+        console.log("[CameraSlot] ② answer 생성 시작");
+        const answer = await pc.createAnswer({ offerToReceiveVideo: true, offerToReceiveAudio: true });
+        await pc.setLocalDescription(answer);
+
+        const committed = pc.localDescription;
+        if (!committed?.sdp) throw new Error("answer SDP 확정 실패");
+
+        const { error: ansErr, count: ansCount } = await supabase
+          .from("camera_sessions")
+          .update({ answer_sdp: encodePlainSdpForDatabaseColumn(committed.sdp) })
+          .eq("id", sessionId);
+        if (ansErr) throw new Error(ansErr.message);
+        console.log("[CameraSlot] ② answer DB 저장 완료, 수정 행:", ansCount);
+
+        /* ③ broadcaster ICE 실시간 구독 (타임아웃 5초 — 실패해도 계속 진행) */
         const ch = supabase.channel(`slot-ice-${sessionId}`);
         ch.on(
           "postgres_changes",
@@ -167,38 +188,37 @@ export function CameraSlot({
             void applyIce(row.candidate);
           },
         );
-        await new Promise<void>((resolve, reject) => {
-          ch.subscribe((status) => {
-            if (status === "SUBSCRIBED") resolve();
-            if (status === "CHANNEL_ERROR") reject(new Error("ICE 채널 구독 실패"));
-          });
-        });
+        try {
+          await Promise.race([
+            new Promise<void>((resolve, reject) => {
+              ch.subscribe((status) => {
+                if (status === "SUBSCRIBED") resolve();
+                if (status === "CHANNEL_ERROR") reject(new Error("ICE 채널 구독 실패"));
+              });
+            }),
+            new Promise<void>((_, reject) =>
+              setTimeout(() => reject(new Error("ICE 채널 구독 5초 타임아웃")), 5000),
+            ),
+          ]);
+          console.log("[CameraSlot] ③ ICE 채널 구독 성공");
+        } catch (subErr) {
+          console.warn("[CameraSlot] ③ ICE 채널 구독 실패 (무시하고 진행):", subErr);
+        }
         iceChannelRef.current = ch;
 
-        /* ③ 기존 broadcaster ICE 일괄 적용 */
+        /* ④ 기존 broadcaster ICE 일괄 적용 */
         const { data: existingIce } = await supabase
           .from("ice_candidates")
           .select("candidate")
           .eq("session_id", sessionId)
           .eq("sender", "broadcaster")
           .order("created_at", { ascending: true });
+        console.log("[CameraSlot] ④ 기존 broadcaster ICE:", existingIce?.length ?? 0, "건");
         for (const row of existingIce ?? []) {
           await applyIce(row.candidate as RTCIceCandidateInit);
         }
-
-        /* ④ answer 생성 → DB 저장 */
-        const answer = await pc.createAnswer({ offerToReceiveVideo: true, offerToReceiveAudio: true });
-        await pc.setLocalDescription(answer);
-
-        const committed = pc.localDescription;
-        if (!committed?.sdp) throw new Error("answer SDP 확정 실패");
-
-        const { error: ansErr } = await supabase
-          .from("camera_sessions")
-          .update({ answer_sdp: encodePlainSdpForDatabaseColumn(committed.sdp) })
-          .eq("id", sessionId);
-        if (ansErr) throw new Error(ansErr.message);
-      } catch {
+      } catch (err) {
+        console.error("[CameraSlot] 연결 실패:", err);
         updatePhase("error");
         void cleanup();
       }
