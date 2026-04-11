@@ -130,18 +130,26 @@ export function CameraSlot({
           }
         };
 
+        /** 연결 성공 시 타임아웃 해제 헬퍼 */
+        function clearConnectTimeout() {
+          if (connectTimeoutRef.current) {
+            clearTimeout(connectTimeoutRef.current);
+            connectTimeoutRef.current = null;
+          }
+        }
+
         pc.oniceconnectionstatechange = () => {
           const s = pc.iceConnectionState;
           console.log("[CameraSlot] ICE 상태:", s);
-          if (s === "connected" || s === "completed") { relayRetried.current = false; updatePhase("connected"); }
-          if (s === "failed") reportFailure();
+          if (s === "connected" || s === "completed") { clearConnectTimeout(); relayRetried.current = false; updatePhase("connected"); }
+          if (s === "failed") { clearConnectTimeout(); reportFailure(); }
         };
 
         let graceTimer: ReturnType<typeof setTimeout> | null = null;
         pc.onconnectionstatechange = () => {
           const s = pc.connectionState;
-          if (s === "connected") { if (graceTimer) { clearTimeout(graceTimer); graceTimer = null; } updatePhase("connected"); }
-          if (s === "failed") { if (graceTimer) { clearTimeout(graceTimer); graceTimer = null; } reportFailure(); }
+          if (s === "connected") { clearConnectTimeout(); if (graceTimer) { clearTimeout(graceTimer); graceTimer = null; } updatePhase("connected"); }
+          if (s === "failed") { clearConnectTimeout(); if (graceTimer) { clearTimeout(graceTimer); graceTimer = null; } reportFailure(); }
           if (s === "disconnected" && !reported) {
             if (!graceTimer) {
               graceTimer = setTimeout(() => {
