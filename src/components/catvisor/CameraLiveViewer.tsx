@@ -371,6 +371,19 @@ export function CameraLiveViewer({
         logWebRtcDebug("viewer", "signaling.answer_persisted", {
           sessionId: session.id,
         });
+
+        /* broadcaster 에게 answer 도착 알림 (폴링 외 push 보완) */
+        const answerNotifyCh = supabase.channel(`answer_ready_${session.id}`);
+        answerNotifyCh.subscribe((status) => {
+          if (status === "SUBSCRIBED") {
+            void answerNotifyCh.send({
+              type: "broadcast",
+              event: "answer_ready",
+              payload: { session_id: session.id },
+            });
+            setTimeout(() => void supabase.removeChannel(answerNotifyCh), 2000);
+          }
+        });
       } catch (err) {
         const message =
           err instanceof Error ? err.message : "연결에 실패했어요.";

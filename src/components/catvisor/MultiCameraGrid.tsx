@@ -130,6 +130,12 @@ export function MultiCameraGrid({ homeId }: MultiCameraGridProps) {
     };
   }, [homeId, supabase]);
 
+  /* 폴링 내부에서 최신 state 참조용 ref (deps에서 제거하여 interval 재생성 방지) */
+  const sessionsRef = useRef(sessions);
+  sessionsRef.current = sessions;
+  const failedIdsRef = useRef(failedIds);
+  failedIdsRef.current = failedIds;
+
   /* SECURITY DEFINER RPC 로 생성된 세션은 Realtime 이벤트가 안 올 수 있으므로 폴링 보완 */
   useEffect(() => {
     if (!homeId) return;
@@ -146,8 +152,10 @@ export function MultiCameraGrid({ homeId }: MultiCameraGridProps) {
          * live 세션이 있는데 화면에 안 보이면 전체 재조회.
          * sessions 배열이 비어있거나, 전부 failedIds에 있어 visibleSessions가 0인 경우 모두 포함.
          */
-        const visibleCount = sessions.filter((s) => !failedIds.has(s.id)).length;
-        const hasNewLiveSession = data ? data.some((d: { id: string }) => !sessions.some((s) => s.id === d.id)) : false;
+        const curSessions = sessionsRef.current;
+        const curFailedIds = failedIdsRef.current;
+        const visibleCount = curSessions.filter((s) => !curFailedIds.has(s.id)).length;
+        const hasNewLiveSession = data ? data.some((d: { id: string }) => !curSessions.some((s) => s.id === d.id)) : false;
         if (data && data.length > 0 && (visibleCount === 0 || hasNewLiveSession)) {
           const { data: fresh } = await supabase
             .from("camera_sessions")
@@ -163,14 +171,13 @@ export function MultiCameraGrid({ homeId }: MultiCameraGridProps) {
               device_name: `카메라 ${idx + 1}`,
             }));
             setSessions(freshSessions);
-            /* 폴링으로 새 세션 발견 → 실패 기록 초기화 */
             setFailedIds(new Set());
           }
         }
       })();
     }, 3000);
     return () => clearInterval(fallback);
-  }, [homeId, supabase, sessions, failedIds]);
+  }, [homeId, supabase]);
 
   /* 스테일 세션이 에러 나면 그리드에서 제거하는 콜백 */
   const handleSlotPhase = useCallback((sessionId: string, phase: "connecting" | "connected" | "error") => {

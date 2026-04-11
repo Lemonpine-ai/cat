@@ -139,6 +139,8 @@ export function CameraBroadcastClient() {
   const appliedViewerIceKeysRef = useRef<Set<string>>(new Set());
   /** 세션 ID 도착 전 수집된 ICE 캔디데이트 큐 (함수 스코프 → ref 이동으로 소실 방지) */
   const pendingIceCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
+  /** viewer answer 알림 채널 ref — cleanup 시 정리 */
+  const answerReadyChRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const autostartBroadcastSequenceStartedRef = useRef(false);
   /** 카메라 켜기·autostart 가 동시에 getUserMedia 를 호출해 NotReadable 이 나는 것 방지 */
   const acquireCameraInFlightRef = useRef(false);
@@ -331,6 +333,12 @@ export function CameraBroadcastClient() {
         signalingPollIntervalRef.current = null;
       }
       appliedViewerIceKeysRef.current = new Set();
+
+      /* answer_ready 채널 정리 (구독 누수 방지) */
+      if (answerReadyChRef.current) {
+        void supabase.removeChannel(answerReadyChRef.current);
+        answerReadyChRef.current = null;
+      }
 
       if (peerConnectionRef.current) {
         peerConnectionRef.current.onconnectionstatechange = null;
@@ -644,7 +652,11 @@ export function CameraBroadcastClient() {
       }
 
       /* viewer 가 answer 저장 후 보내는 push 알림 구독 — 폴링보다 빠르게 반응 */
+      if (answerReadyChRef.current) {
+        void supabase.removeChannel(answerReadyChRef.current);
+      }
       const answerReadyCh = supabase.channel(`answer_ready_${sessionId}`);
+      answerReadyChRef.current = answerReadyCh;
       answerReadyCh.on("broadcast", { event: "answer_ready" }, () => {
         console.log("[broadcaster] answer_ready 알림 수신 → 즉시 폴링");
         /* 다음 폴링 주기를 기다리지 않고 즉시 signaling 확인 */
