@@ -51,6 +51,8 @@ export function CameraSlot({
   /** viewer 마이크 트랙 — enabled 토글로 PTT 구현 */
   const micTrackRef = useRef<MediaStreamTrack | null>(null);
   const relayRetried = useRef(false);
+  /** 연결 타임아웃 — stale 세션에서 무한 대기 방지 (20초) */
+  const connectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const updatePhase = useCallback(
     (next: SlotPhase) => { setPhase(next); onPhaseChange?.(next); },
@@ -59,6 +61,11 @@ export function CameraSlot({
 
   /* ── PeerConnection 정리 ── */
   const cleanup = useCallback(async () => {
+    /* 연결 타임아웃 해제 */
+    if (connectTimeoutRef.current) {
+      clearTimeout(connectTimeoutRef.current);
+      connectTimeoutRef.current = null;
+    }
     /* 마이크 트랙 해제 */
     if (micTrackRef.current) {
       micTrackRef.current.stop();
@@ -223,6 +230,14 @@ export function CameraSlot({
         for (const row of existingIce ?? []) {
           await applyIce(row.candidate as RTCIceCandidateInit);
         }
+        /* 20초 내 connected 안 되면 타임아웃 → 에러 처리 (stale 세션 대비) */
+        connectTimeoutRef.current = setTimeout(() => {
+          if (pcRef.current && pcRef.current.connectionState !== "connected") {
+            console.warn("[CameraSlot] 연결 타임아웃 (20초)", sessionId);
+            updatePhase("error");
+            void cleanup();
+          }
+        }, 20_000);
       } catch (err) {
         console.error("[CameraSlot] 연결 실패:", err);
         updatePhase("error");
