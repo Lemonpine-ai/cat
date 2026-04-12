@@ -54,7 +54,7 @@ export function HealthTagFilter({ posts }: HealthTagFilterProps) {
       {/* 필터된 글 목록 */}
       {filtered.length === 0 ? (
         <div className={styles.emptyMessage}>
-          {activeTag ? `${HEALTH_TAGS[activeTag].name} 관련 글이 아직 없어요 🐾` : "아직 글이 없어요 🐾"}
+          {activeTag ? `${HEALTH_TAGS[activeTag].name} 관련 글이 아직 없어요 🐾💭` : "아직 글이 없어요... 첫 글을 써볼까요? 🐱✨"}
         </div>
       ) : (
         <div className={styles.postList}>

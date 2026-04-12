@@ -205,7 +205,7 @@ export function LoginScreen() {
           <WelcomeCatIcon />
         </div>
 
-        {/* C1: 따뜻한 환영 인사 — 기술 용어 제거, 감성 톤 */}
+        {/* C1: 따뜻한 환영 인사 — 헬로키티급 귀여움 */}
         <h1 className={styles.welcome}>
           오늘도 우리 아이 곁에,
           <br />
@@ -247,7 +247,7 @@ export function LoginScreen() {
         <form onSubmit={handleSubmit} noValidate>
           <div className={styles.field}>
             <label className={styles.label} htmlFor="login-email">
-              이메일
+              ✉️ 이메일
             </label>
             <input
               id="login-email"
@@ -264,7 +264,7 @@ export function LoginScreen() {
           </div>
           <div className={styles.field}>
             <label className={styles.label} htmlFor="login-password">
-              비밀번호
+              🔒 비밀번호
             </label>
             <input
               id="login-password"
@@ -289,7 +289,7 @@ export function LoginScreen() {
         </form>
 
         <div className={styles.oauthBlock}>
-          <p className={styles.oauthCaption}>간편 로그인</p>
+          <p className={styles.oauthCaption}>✨ 간편 로그인</p>
           <div className={styles.oauthRow}>
             <button
               type="button"
@@ -320,7 +320,7 @@ export function LoginScreen() {
 
         {/* C1: 따뜻한 안내 문구 — 기술 용어 제거 */}
         <p className={styles.footerHint}>
-          가입하면 바로 사용할 수 있어요
+          가입하면 바로 사용할 수 있어요 🎀
         </p>
 
         {!supabaseUrlConfigured ? (
@@ -381,105 +381,48 @@ function KakaoSpeechBubbleMark({ className }: { className?: string }) {
 }
 
 /**
- * 카와이 스타일 고양이 아이콘 (v2)
- * D3(비주얼): 둥근 얼굴, 부드러운 귀, 볼터치, 반짝이 눈, 작은 입꼬리, 하트
- * P1(심리): 둥근 형태 = 안전감, 볼터치 = 친근감, 따뜻한 색감 = 온기
+ * 다보냥 캐릭터 (v6) — 카카오톡 이모티콘 스타일
+ * 원칙: 요소 15개 이하, 스트로크 2px 통일, 색상 3개
+ * 얼굴만. 단순하고 깔끔하고 귀여운 2D 선화.
  */
 function WelcomeCatIcon() {
+  /* v9: 코숏 고양이 이모티콘 스타일 — 두꺼운 아웃라인, 넓적 얼굴, 점눈 */
   return (
-    <svg width="88" height="88" viewBox="0 0 88 88" fill="none" aria-hidden>
-      {/* 몸통 — 부드러운 크림+민트 그라데이션 */}
-      <ellipse cx="44" cy="48" rx="26" ry="24" fill="url(#catBodyGrad)" />
+    <svg width="88" height="82" viewBox="0 0 88 82" fill="none" aria-hidden>
+      {/* 얼굴 — 넓적한 코숏 얼굴 */}
+      <ellipse cx="44" cy="48" rx="32" ry="26" fill="#fff" stroke="#333" strokeWidth="2.5" />
 
-      {/* 왼쪽 귀 — 부드러운 삼각형, 안쪽 핑크 */}
-      <path
-        d="M22 30 C20 16, 28 14, 32 26"
-        fill="#a8ece6"
-        stroke="#80ddd3"
-        strokeWidth="1"
-      />
-      <path
-        d="M24 27 C23 19, 28 18, 30 25"
-        fill="#fda4af"
-        opacity="0.5"
-      />
+      {/* 왼쪽 귀 — 꼿꼿한 삼각 */}
+      <path d="M18 30 L14 6 L34 24" fill="#fff" stroke="#333" strokeWidth="2.5" strokeLinejoin="round" />
+      <path d="M19 26 L17 11 L30 23" fill="#ffc0cb" opacity="0.4" />
 
-      {/* 오른쪽 귀 */}
-      <path
-        d="M66 30 C68 16, 60 14, 56 26"
-        fill="#a8ece6"
-        stroke="#80ddd3"
-        strokeWidth="1"
-      />
-      <path
-        d="M64 27 C65 19, 60 18, 58 25"
-        fill="#fda4af"
-        opacity="0.5"
-      />
+      {/* 오른쪽 귀 — 꼿꼿한 삼각 */}
+      <path d="M70 30 L74 6 L54 24" fill="#fff" stroke="#333" strokeWidth="2.5" strokeLinejoin="round" />
+      <path d="M69 26 L71 11 L58 23" fill="#ffc0cb" opacity="0.4" />
 
-      {/* 왼쪽 눈 — 큰 동그란 눈 + 하이라이트 */}
-      <ellipse cx="35" cy="44" rx="4" ry="4.5" fill="#1a3a36" />
-      <ellipse cx="36.5" cy="42.5" rx="1.8" ry="2" fill="#fff" />
-      <ellipse cx="34" cy="45.5" rx="0.8" ry="0.8" fill="#fff" opacity="0.6" />
+      {/* 왼쪽 눈 — 작은 점 */}
+      <circle cx="31" cy="45" r="2.5" fill="#333" />
 
-      {/* 오른쪽 눈 */}
-      <ellipse cx="53" cy="44" rx="4" ry="4.5" fill="#1a3a36" />
-      <ellipse cx="54.5" cy="42.5" rx="1.8" ry="2" fill="#fff" />
-      <ellipse cx="52" cy="45.5" rx="0.8" ry="0.8" fill="#fff" opacity="0.6" />
+      {/* 오른쪽 눈 — 작은 점 */}
+      <circle cx="57" cy="45" r="2.5" fill="#333" />
 
-      {/* 코 — 작은 삼각형 */}
-      <path
-        d="M42 50 L44 52 L46 50"
-        fill="#ffab91"
-        stroke="#ff8a65"
-        strokeWidth="0.5"
-        strokeLinejoin="round"
-      />
+      {/* 코 — 작은 역삼각 */}
+      <path d="M42 53 L44 55.5 L46 53Z" fill="#ffab91" stroke="#333" strokeWidth="1.2" strokeLinejoin="round" />
 
-      {/* 입 — 귀여운 w자 */}
-      <path
-        d="M40 53 Q42 55.5 44 53 Q46 55.5 48 53"
-        stroke="#2aa89b"
-        strokeWidth="1.2"
-        strokeLinecap="round"
-        fill="none"
-      />
+      {/* 입 — 작은 ω */}
+      <path d="M40 57 Q42 59.5, 44 57 Q46 59.5, 48 57" stroke="#333" strokeWidth="1.5" strokeLinecap="round" fill="none" />
 
-      {/* 왼쪽 볼터치 — 피치색 원 */}
-      <ellipse cx="28" cy="50" rx="4.5" ry="3" fill="#ffab91" opacity="0.35" />
+      {/* 볼터치 */}
+      <circle cx="22" cy="52" r="4.5" fill="#ffc0cb" opacity="0.35" />
+      <circle cx="66" cy="52" r="4.5" fill="#ffc0cb" opacity="0.35" />
 
-      {/* 오른쪽 볼터치 */}
-      <ellipse cx="60" cy="50" rx="4.5" ry="3" fill="#ffab91" opacity="0.35" />
-
-      {/* 수염 — 왼쪽 */}
-      <line x1="18" y1="47" x2="30" y2="49" stroke="#94b8b3" strokeWidth="0.8" strokeLinecap="round" />
-      <line x1="17" y1="51" x2="30" y2="51" stroke="#94b8b3" strokeWidth="0.8" strokeLinecap="round" />
-
-      {/* 수염 — 오른쪽 */}
-      <line x1="58" y1="49" x2="70" y2="47" stroke="#94b8b3" strokeWidth="0.8" strokeLinecap="round" />
-      <line x1="58" y1="51" x2="71" y2="51" stroke="#94b8b3" strokeWidth="0.8" strokeLinecap="round" />
-
-      {/* 작은 하트 — 오른쪽 위에 */}
-      <path
-        d="M66 22 C66 20, 68 18, 70 20 C72 18, 74 20, 74 22 C74 25, 70 27, 70 27 C70 27, 66 25, 66 22Z"
-        fill="#fda4af"
-        opacity="0.7"
-      />
-
-      {/* 반짝이 — 왼쪽 위 */}
-      <path
-        d="M18 18 L19.5 15 L21 18 L24 19.5 L21 21 L19.5 24 L18 21 L15 19.5Z"
-        fill="#4fd1c5"
-        opacity="0.5"
-      />
-
-      <defs>
-        <linearGradient id="catBodyGrad" x1="20" y1="24" x2="68" y2="72" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#f1fbf9" />
-          <stop offset="0.5" stopColor="#d6f5f1" />
-          <stop offset="1" stopColor="#a8ece6" />
-        </linearGradient>
-      </defs>
+      {/* 수염 — 3쌍 */}
+      <line x1="4" y1="44" x2="20" y2="47" stroke="#333" strokeWidth="1.5" strokeLinecap="round" />
+      <line x1="3" y1="50" x2="20" y2="51" stroke="#333" strokeWidth="1.5" strokeLinecap="round" />
+      <line x1="5" y1="56" x2="20" y2="55" stroke="#333" strokeWidth="1.5" strokeLinecap="round" />
+      <line x1="68" y1="47" x2="84" y2="44" stroke="#333" strokeWidth="1.5" strokeLinecap="round" />
+      <line x1="68" y1="51" x2="85" y2="50" stroke="#333" strokeWidth="1.5" strokeLinecap="round" />
+      <line x1="68" y1="55" x2="83" y2="56" stroke="#333" strokeWidth="1.5" strokeLinecap="round" />
     </svg>
   );
 }

@@ -15,8 +15,8 @@ export default function CommunityPage() {
   return (
     <div>
       <div className={styles.pageHeader}>
-        <h1 className={styles.pageTitle}>커뮤니티</h1>
-        <p className={styles.pageDesc}>고양이 집사들의 이야기 공간</p>
+        <h1 className={styles.pageTitle}>🐾 커뮤니티</h1>
+        <p className={styles.pageDesc}>고양이 집사들의 이야기 공간 😺💬</p>
       </div>
 
       <div className={styles.categoryGrid}>

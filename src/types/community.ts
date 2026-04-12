@@ -36,23 +36,23 @@ export type CommunityComment = {
  */
 export const COMMUNITY_CATEGORIES = {
   brag: {
-    name: "자랑하기",
-    description: "우리 아이 귀여운 순간 자랑해요",
+    name: "📸 자랑하기",
+    description: "우리 냥이 귀여운 순간, 같이 봐요! 🐱✨",
     icon: "Camera",
   },
   kitten: {
-    name: "아기냥 육아",
-    description: "새끼 고양이 키우기 꿀팁",
+    name: "🍼 아기냥 육아",
+    description: "작고 소중한 아기냥 키우기 🐾💕",
     icon: "Baby",
   },
   senior: {
-    name: "노령묘 케어",
-    description: "오래오래 건강하게, 노묘 돌봄",
+    name: "💗 노령묘 케어",
+    description: "오래오래 곁에, 따뜻한 돌봄 🌸",
     icon: "Heart",
   },
   health: {
-    name: "건강 상담",
-    description: "증상 공유하고 함께 고민해요",
+    name: "🩺 건강 상담",
+    description: "걱정되는 마음, 함께 나눠요 🫶",
     icon: "Stethoscope",
   },
 } as const;

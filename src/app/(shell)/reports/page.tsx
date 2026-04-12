@@ -57,7 +57,14 @@ export default async function ReportsPage() {
       .eq("home_id", homeId)
       .order("name", { ascending: true });
 
-    cats = (catRows ?? []) as DiaryCatProfile[];
+    /* 이름 기준 중복 제거 — 같은 이름 고양이가 여러 개면 첫 번째만 사용 */
+    const allCats = (catRows ?? []) as DiaryCatProfile[];
+    const seenNames = new Set<string>();
+    cats = allCats.filter((c) => {
+      if (seenNames.has(c.name)) return false;
+      seenNames.add(c.name);
+      return true;
+    });
 
     if (cats.length === 0) return <FallbackMessage text="등록된 고양이가 없어요 🐱" />;
 

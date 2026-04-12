@@ -1,8 +1,15 @@
 @import "tailwindcss";
 
+/* ─── 오뮤다예쁨체 — 사장님이 선택한 귀여운 손글씨 ─── */
+@font-face {
+  font-family: 'OmuDaye';
+  src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_2304-01@1.0/omyu_pretty.woff2') format('woff2');
+  font-weight: normal;
+  font-display: swap;
+}
+
 /* ================================================================
-   CATvisor — 피그마 하이엔드 민트 에어 × 라운드 카드
-   배경: #E0F7FA / 폰트: Inter + Noto Sans KR
+   CATvisor — 귀여운 고양이 케어 앱
 ================================================================ */
 
 /* ─── CSS 커스텀 프로퍼티 ─── */
@@ -32,11 +39,9 @@
   --color-text-sub:  #3d6b65;
   --color-text-muted: #94b8b3;
 
-  /* 폰트 — Inter(라틴/UI) + Noto(한글) */
-  --font-display: var(--font-inter), var(--font-noto), "Inter", "Noto Sans KR",
-    system-ui, sans-serif;
-  --font-body: var(--font-inter), var(--font-noto), "Inter", "Noto Sans KR",
-    system-ui, sans-serif;
+  /* 폰트 — 오뮤다예쁨체 (귀여운 손글씨 통일) */
+  --font-display: "OmuDaye", system-ui, sans-serif;
+  --font-body: "OmuDaye", system-ui, sans-serif;
 
   /* 레이아웃 — Reflectly 32px(2rem) 중심 */
   --radius-sm:  1rem;

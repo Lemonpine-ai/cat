@@ -1158,12 +1158,12 @@ export function CameraBroadcastClient() {
             onClick={() => void acquireCamera()}
           >
             <Camera size={18} strokeWidth={2} aria-hidden />
-            카메라 켜기
+            카메라 켜기 📷
           </button>
         ) : null}
 
         {broadcastPhase === "acquiring" ? (
-          <p className={styles.statusText}>카메라 권한을 요청 중이에요…</p>
+          <p className={styles.statusText}>카메라 권한을 요청 중이에요… 🐱</p>
         ) : null}
 
         {broadcastPhase === "ready" ? (
@@ -1188,7 +1188,7 @@ export function CameraBroadcastClient() {
             </p>
             <div className={styles.broadcastCareBar}>
               <div className={styles.broadcastCareHeader}>
-                <span className={styles.broadcastCareTitle}>빠른 케어 기록</span>
+                <span className={styles.broadcastCareTitle}>🐾 빠른 케어 기록</span>
                 <button
                   type="button"
                   onClick={toggleSoundEnabled}

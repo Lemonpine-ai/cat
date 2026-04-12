@@ -37,7 +37,7 @@ export function PostListItem({ post, category }: PostListItemProps) {
             {HEALTH_TAGS[post.health_tag as HealthTagKey].emoji} {HEALTH_TAGS[post.health_tag as HealthTagKey].name}
           </span>
         ) : null}
-        {" "}{post.title}
+        <span>{post.title}</span>
       </div>
       <div className={styles.postItemMeta}>
         <span>{post.author_name ?? "익명"}</span>

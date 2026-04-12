@@ -18,12 +18,12 @@ const ICON_MAP = {
   Stethoscope,
 } as const;
 
-/** 카테고리별 파스텔 배경색 + 아이콘 색상 */
+/** 카테고리별 파스텔 배경색 + 아이콘 색상 — v4 따뜻한 톤 */
 const CATEGORY_COLORS: Record<string, { bg: string; icon: string; border: string }> = {
-  brag:    { bg: "rgba(79,209,197,0.12)", icon: "#2aa89b", border: "rgba(79,209,197,0.25)" },
-  kitten:  { bg: "rgba(255,171,145,0.12)", icon: "#e65100", border: "rgba(255,171,145,0.25)" },
-  senior:  { bg: "rgba(196,181,253,0.12)", icon: "#7c3aed", border: "rgba(196,181,253,0.25)" },
-  health:  { bg: "rgba(56,189,248,0.12)", icon: "#0277bd", border: "rgba(56,189,248,0.25)" },
+  brag:    { bg: "rgba(255,218,185,0.3)", icon: "#e8804a", border: "rgba(255,183,166,0.2)" },
+  kitten:  { bg: "rgba(255,183,197,0.25)", icon: "#e05580", border: "rgba(255,183,197,0.2)" },
+  senior:  { bg: "rgba(196,181,253,0.25)", icon: "#7c3aed", border: "rgba(196,181,253,0.2)" },
+  health:  { bg: "rgba(167,223,250,0.25)", icon: "#2980b9", border: "rgba(167,223,250,0.2)" },
 };
 
 type CategoryCardProps = {
