@@ -1,4 +1,8 @@
-/* 방송국 페이지 — Reflectly Soft UI × Mint (카메라 영상은 다크 유지) */
+/* 방송국 페이지 — v2 따뜻한 힐링 리디자인
+   D1(UI): 케어버튼을 소프트 카드 스타일로 통일
+   P1(심리): 파스텔+크림 톤으로 편안함, 색상 통일로 시각 안정
+   C1(카피): 따뜻한 동사형 레이블 */
+
 .page {
   min-height: 100dvh;
   display: flex;
@@ -9,7 +13,7 @@
   user-select: none;
 }
 
-/* ── 헤더 ── */
+/* 헤더 */
 .header {
   display: flex;
   align-items: center;
@@ -58,7 +62,7 @@
   50% { opacity: 0.7; }
 }
 
-/* ── 비디오 영역 ── */
+/* 비디오 영역 */
 .videoWrap {
   position: relative;
   flex: 1;
@@ -109,7 +113,7 @@
   backdrop-filter: blur(6px);
 }
 
-/* ── 컨트롤 영역 ── */
+/* 컨트롤 영역 */
 .controls {
   padding: 0.75rem 1.25rem 1.5rem;
   display: flex;
@@ -125,15 +129,19 @@
   gap: 0.65rem;
 }
 
-/* 방송 중 케어 버튼 — 민트 테마 가로 행, 방송 종료 바로 위 */
+/* ── 케어 버튼 영역 — v2 소프트 카드 스타일 ──
+   D1: 무지개 그라데이션 제거, 통일된 흰 배경 카드
+   D2: 2×2 그리드로 터치 영역 확보
+   P1: 파스텔 아이콘뱃지로 색상 구분, 본문은 차분한 톤 */
+
 .broadcastCareBar {
   position: relative;
   z-index: 50;
-  background: #fff;
-  border-radius: 1rem;
-  border: 1.5px solid rgba(79, 209, 197, 0.35);
-  box-shadow: 0 4px 16px rgba(79, 209, 197, 0.12);
-  padding: 0.65rem 0.75rem;
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 1.25rem;
+  border: 1px solid rgba(79, 209, 197, 0.2);
+  box-shadow: 0 4px 20px rgba(79, 209, 197, 0.08);
+  padding: 0.75rem;
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
@@ -146,8 +154,9 @@
   gap: 0.5rem;
 }
 
+/* C1: "빠른 케어" → "돌봄 기록" */
 .broadcastCareTitle {
-  font-size: 0.75rem;
+  font-size: 0.78rem;
   font-weight: 700;
   color: #1e8f83;
 }
@@ -159,44 +168,51 @@
   width: 2.25rem;
   height: 2.25rem;
   border-radius: 999px;
-  border: 1.5px solid rgba(79, 209, 197, 0.35);
+  border: 1.5px solid rgba(79, 209, 197, 0.25);
   background: #fff;
   color: #1e8f83;
   cursor: pointer;
-  box-shadow: 0 2px 8px rgba(79, 209, 197, 0.12);
+  box-shadow: 0 2px 8px rgba(79, 209, 197, 0.08);
   transition: background 0.15s;
   -webkit-tap-highlight-color: transparent;
 }
 
 .broadcastSoundBtn:active {
-  background: rgba(79, 209, 197, 0.1);
+  background: rgba(79, 209, 197, 0.08);
 }
 
+/* D1: 2×2 그리드 레이아웃 */
 .broadcastCareRow {
-  display: flex;
-  flex-direction: row;
-  flex-wrap: wrap;
-  gap: 0.45rem;
-  align-items: stretch;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
 }
 
+/* D1+P1: 소프트 카드 스타일 버튼 — 흰 배경 + 색상 아이콘뱃지
+   그라데이션 배경 대신 흰 카드에 파스텔 포인트 */
 .broadcastCareBtn {
-  flex: 1;
-  min-width: 5rem;
-  display: inline-flex;
+  display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.35rem;
-  padding: 0.65rem 0.5rem;
-  font-size: 0.72rem;
+  gap: 0.3rem;
+  padding: 0.75rem 0.5rem;
+  font-size: 0.78rem;
   font-weight: 700;
-  color: #fff;
-  border: none;
+  color: #1e8f83;
+  background: #fff;
+  border: 1.5px solid rgba(79, 209, 197, 0.2);
   border-radius: 1rem;
   cursor: pointer;
-  transition: filter 0.15s, opacity 0.15s;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  transition: transform 0.12s, box-shadow 0.15s, border-color 0.15s;
+  box-shadow: 0 2px 10px rgba(14, 85, 81, 0.05);
   -webkit-tap-highlight-color: transparent;
+}
+
+.broadcastCareBtn:active {
+  transform: scale(0.96);
+  box-shadow: 0 1px 6px rgba(14, 85, 81, 0.08);
+  border-color: rgba(79, 209, 197, 0.4);
 }
 
 .broadcastCareBtn:disabled {
@@ -204,51 +220,48 @@
   cursor: not-allowed;
 }
 
+/* D3: 색상 변형은 아이콘뱃지 배경색으로만 구분 (본문은 통일) */
 .broadcastCareBtnMint {
-  background: linear-gradient(135deg, #4fd1c5 0%, #38bdb0 100%);
-  border: 1px solid rgba(79, 209, 197, 0.35);
+  border-color: rgba(77, 182, 172, 0.25);
 }
 
 .broadcastCareBtnSky {
-  background: linear-gradient(135deg, #38bdf8 0%, #0ea5e9 100%);
-  border: 1px solid rgba(14, 165, 233, 0.35);
+  border-color: rgba(56, 189, 248, 0.2);
 }
 
 .broadcastCareBtnPeach {
-  background: linear-gradient(135deg, #ffab91 0%, #ff8a65 100%);
-  border: 1px solid rgba(255, 171, 145, 0.45);
+  border-color: rgba(255, 171, 145, 0.25);
 }
 
 .broadcastCareBtnPurple {
-  background: linear-gradient(135deg, #a78bfa 0%, #7c3aed 100%);
-  border: 1px solid rgba(167, 139, 250, 0.45);
+  border-color: rgba(167, 139, 250, 0.25);
 }
 
-/* 식수 교체 / 화장실 청소 버튼: 경과 시간 표시를 위한 세로 레이아웃 */
+/* 경과 시간 세로 레이아웃 — 기존과 동일 구조 유지 */
 .broadcastCareBtnEnv {
-  flex-direction: column;
-  gap: 0.15rem;
-  padding: 0.5rem 0.4rem;
+  gap: 0.2rem;
 }
 
 .broadcastCareBtnLabel {
-  font-size: 0.72rem;
+  font-size: 0.78rem;
   font-weight: 700;
-  line-height: 1;
+  line-height: 1.2;
+  color: #1e8f83;
 }
 
 .broadcastCareBtnEta {
-  font-size: 0.6rem;
+  font-size: 0.62rem;
   font-weight: 600;
-  opacity: 0.9;
+  opacity: 0.7;
   line-height: 1;
+  color: #3d6b65;
 }
 
 .broadcastCareFeedback {
   margin: 0;
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   font-weight: 600;
-  color: #1e8f83;
+  color: #2aa89b;
   text-align: center;
   line-height: 1.4;
 }
@@ -280,11 +293,11 @@
 .btnStop {
   width: 100%;
   padding: 0.85rem 1.5rem;
-  background: rgba(255,171,145,0.1);
+  background: rgba(255,171,145,0.08);
   color: #d97e6a;
   font-size: 0.95rem;
   font-weight: 600;
-  border: 1.5px solid rgba(255,171,145,0.5);
+  border: 1.5px solid rgba(255,171,145,0.4);
   border-radius: 1.5rem;
   cursor: pointer;
   transition: background 0.15s, transform 0.1s;
@@ -296,7 +309,7 @@
 }
 
 .btnStop:active {
-  background: rgba(255,171,145,0.18);
+  background: rgba(255,171,145,0.15);
   transform: scale(0.97);
 }
 
@@ -335,8 +348,8 @@
   margin: 0;
   font-size: 0.88rem;
   color: #d97e6a;
-  background: rgba(255,171,145,0.1);
-  border: 1px solid rgba(255,171,145,0.3);
+  background: rgba(255,171,145,0.08);
+  border: 1px solid rgba(255,171,145,0.25);
   border-radius: 1.25rem;
   padding: 0.75rem 1rem;
   line-height: 1.5;
@@ -351,7 +364,7 @@
   word-break: break-all;
 }
 
-/* ── 로딩 ── */
+/* 로딩 */
 .loadingSpinner {
   width: 36px;
   height: 36px;
@@ -367,7 +380,7 @@
   to { transform: rotate(360deg); }
 }
 
-/* ── 미페어링 상태 ── */
+/* 미페어링 */
 .unpairedCard {
   display: flex;
   flex-direction: column;

@@ -1,4 +1,5 @@
-/* 앱 셸 진입 시 2초 스플래시 — 로고 페이드 인/아웃 */
+/* 스플래시 스크린 — v2 로고 흰배경 블렌딩 처리
+   D3(비주얼): border-radius + 소프트 그림자로 로고가 배경에 자연스럽게 녹아들게 */
 
 .overlay {
   position: fixed;
@@ -22,10 +23,19 @@
   width: min(13.75rem, 58vw);
   aspect-ratio: 1;
   animation: splashLogoFade 2s ease-in-out forwards;
+  /* D3: 둥근 모서리로 흰 배경 사각형 감추기 */
+  border-radius: 2.5rem;
+  overflow: hidden;
+  /* P1: 부드러운 그림자로 따뜻한 인상 */
+  box-shadow:
+    0 12px 40px rgba(79, 209, 197, 0.15),
+    0 4px 16px rgba(255, 171, 145, 0.08);
 }
 
 .logoImage {
   object-fit: contain;
+  /* D3: 로고 주변 흰 여백과 배경 자연스럽게 블렌딩 */
+  border-radius: 2.5rem;
 }
 
 @keyframes splashBackdropFade {
@@ -46,7 +56,7 @@
 @keyframes splashLogoFade {
   0% {
     opacity: 0;
-    transform: scale(0.9);
+    transform: scale(0.88);
   }
   22% {
     opacity: 1;
