@@ -146,6 +146,8 @@ export function CameraBroadcastClient() {
   /** viewer answer 알림 채널 ref — cleanup 시 정리 */
   const answerReadyChRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const autostartBroadcastSequenceStartedRef = useRef(false);
+  /** disconnected 상태 유예 타이머 — 모바일 네트워크 일시 끊김 대응 */
+  const disconnectedGraceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** 카메라 켜기·autostart 가 동시에 getUserMedia 를 호출해 NotReadable 이 나는 것 방지 */
   const acquireCameraInFlightRef = useRef(false);
 
@@ -337,6 +339,12 @@ export function CameraBroadcastClient() {
         signalingPollIntervalRef.current = null;
       }
       appliedViewerIceKeysRef.current = new Set();
+
+      /* disconnected 유예 타이머 정리 */
+      if (disconnectedGraceTimerRef.current) {
+        clearTimeout(disconnectedGraceTimerRef.current);
+        disconnectedGraceTimerRef.current = null;
+      }
 
       /* answer_ready 채널 정리 (구독 누수 방지) */
       if (answerReadyChRef.current) {
@@ -573,11 +581,29 @@ export function CameraBroadcastClient() {
         setPeerConnectionState(pc.connectionState);
         if (pc.connectionState === "connected") {
           broadcasterRelayRetryRef.current = false;
+          /* 연결 복구 시 유예 타이머 해제 */
+          if (disconnectedGraceTimerRef.current) {
+            clearTimeout(disconnectedGraceTimerRef.current);
+            disconnectedGraceTimerRef.current = null;
+          }
           /* 연결 완료 → signaling 폴링 종료 (불필요한 RPC 호출 방지) */
           if (signalingPollIntervalRef.current) {
             clearInterval(signalingPollIntervalRef.current);
             signalingPollIntervalRef.current = null;
           }
+        }
+        /* 모바일 네트워크 일시 끊김 — 10초 유예 후에도 복구 안 되면 에러 처리 */
+        if (pc.connectionState === "disconnected") {
+          if (disconnectedGraceTimerRef.current) {
+            clearTimeout(disconnectedGraceTimerRef.current);
+          }
+          disconnectedGraceTimerRef.current = setTimeout(() => {
+            disconnectedGraceTimerRef.current = null;
+            if (pc.connectionState === "disconnected") {
+              setErrorMessage("연결이 끊겼어요. 방송을 다시 시작해 주세요.");
+              setBroadcastPhase("error");
+            }
+          }, 10_000);
         }
         if (pc.connectionState === "failed") {
           /* relay-only 재시도: 첫 실패이고 TURN 설정 있으면 relay 강제로 1회 재시도 */
