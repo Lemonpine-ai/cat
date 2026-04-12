@@ -103,10 +103,23 @@ export function CameraLiveViewer({
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
   const signalingChannelRef = useRef<RealtimeChannel | null>(null);
   const sessionWatcherRef = useRef<RealtimeChannel | null>(null);
+  /** disconnected 유예 타이머 — cleanup 시 정리 가능하도록 ref 사용 */
+  const disconnectedGraceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** 연결 전체 타임아웃 — 죽은 세션 무한 대기 방지 */
+  const connectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const supabase = createSupabaseBrowserClient();
 
   const closePeerConnection = useCallback(async () => {
+    /* 타이머 정리 — 언마운트 후 상태 업데이트 방지 */
+    if (disconnectedGraceTimerRef.current) {
+      clearTimeout(disconnectedGraceTimerRef.current);
+      disconnectedGraceTimerRef.current = null;
+    }
+    if (connectTimeoutRef.current) {
+      clearTimeout(connectTimeoutRef.current);
+      connectTimeoutRef.current = null;
+    }
     if (peerConnectionRef.current) {
       peerConnectionRef.current.ontrack = null;
       peerConnectionRef.current.oniceconnectionstatechange = null;
@@ -133,6 +146,18 @@ export function CameraLiveViewer({
       setConnectionPhase("connecting");
 
       await closePeerConnection();
+
+      /* 20초 내 연결 안 되면 타임아웃 — 죽은 세션 무한 대기 방지 */
+      connectTimeoutRef.current = setTimeout(() => {
+        connectTimeoutRef.current = null;
+        if (peerConnectionRef.current?.connectionState !== "connected") {
+          logWebRtcDebug("viewer", "connect.timeout", { sessionId: session.id });
+          setErrorMessage("연결 시간이 초과됐어요. 다시 시도해 주세요.");
+          setConnectionPhase("watching_for_broadcast");
+          setLiveSession(null);
+          void closePeerConnection();
+        }
+      }, 20_000);
 
       const forceRelay = opts?.forceRelay ?? false;
 
@@ -211,34 +236,37 @@ export function CameraLiveViewer({
           }
         };
 
-        let disconnectedGraceTimer: ReturnType<typeof setTimeout> | null = null;
-
         pc.onconnectionstatechange = () => {
           const state = pc.connectionState;
           logWebRtcDebug("viewer", "peer.connection_state", {
             connectionState: state,
           });
           if (state === "connected") {
-            if (disconnectedGraceTimer) {
-              clearTimeout(disconnectedGraceTimer);
-              disconnectedGraceTimer = null;
+            if (disconnectedGraceTimerRef.current) {
+              clearTimeout(disconnectedGraceTimerRef.current);
+              disconnectedGraceTimerRef.current = null;
+            }
+            /* 연결 성공 → 연결 타임아웃 해제 */
+            if (connectTimeoutRef.current) {
+              clearTimeout(connectTimeoutRef.current);
+              connectTimeoutRef.current = null;
             }
             setConnectionPhase("connected");
           }
           if (state === "failed") {
-            if (disconnectedGraceTimer) {
-              clearTimeout(disconnectedGraceTimer);
-              disconnectedGraceTimer = null;
+            if (disconnectedGraceTimerRef.current) {
+              clearTimeout(disconnectedGraceTimerRef.current);
+              disconnectedGraceTimerRef.current = null;
             }
             reportWebRtcConnectionFailureToUser();
             return;
           }
           if (state === "disconnected") {
             if (hasReportedWebRtcConnectionFailure) return;
-            // disconnected 는 일시적일 수 있으므로 5초 유예 후 정리
-            if (!disconnectedGraceTimer) {
-              disconnectedGraceTimer = setTimeout(() => {
-                disconnectedGraceTimer = null;
+            /* disconnected 는 일시적일 수 있으므로 5초 유예 후 정리 */
+            if (!disconnectedGraceTimerRef.current) {
+              disconnectedGraceTimerRef.current = setTimeout(() => {
+                disconnectedGraceTimerRef.current = null;
                 if (pc.connectionState === "disconnected") {
                   logWebRtcDebug("viewer", "peer.disconnected_grace_expired", {});
                   setConnectionPhase("watching_for_broadcast");
@@ -249,9 +277,9 @@ export function CameraLiveViewer({
             }
           }
           if (state === "closed") {
-            if (disconnectedGraceTimer) {
-              clearTimeout(disconnectedGraceTimer);
-              disconnectedGraceTimer = null;
+            if (disconnectedGraceTimerRef.current) {
+              clearTimeout(disconnectedGraceTimerRef.current);
+              disconnectedGraceTimerRef.current = null;
             }
             if (hasReportedWebRtcConnectionFailure) return;
             setConnectionPhase("watching_for_broadcast");
@@ -308,14 +336,20 @@ export function CameraLiveViewer({
           },
         );
 
-        await new Promise<void>((resolve, reject) => {
-          channel.subscribe((status) => {
-            if (status === "SUBSCRIBED") resolve();
-            if (status === "CHANNEL_ERROR") {
-              reject(new Error("ICE 실시간 채널을 열 수 없어요."));
-            }
-          });
-        });
+        /* ICE 채널 구독 — 5초 타임아웃으로 무한 대기 방지 */
+        await Promise.race([
+          new Promise<void>((resolve, reject) => {
+            channel.subscribe((status) => {
+              if (status === "SUBSCRIBED") resolve();
+              if (status === "CHANNEL_ERROR") {
+                reject(new Error("ICE 실시간 채널을 열 수 없어요."));
+              }
+            });
+          }),
+          new Promise<void>((_, reject) =>
+            setTimeout(() => reject(new Error("ICE 채널 구독 5초 타임아웃")), 5000),
+          ),
+        ]);
 
         signalingChannelRef.current = channel;
         logWebRtcDebug("viewer", "signaling.ice_channel_subscribed", {
