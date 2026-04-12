@@ -611,7 +611,18 @@ export function CameraBroadcastClient() {
   const broadcasterRelayRetryRef = useRef(false);
 
   async function startBroadcast(opts?: { forceRelay?: boolean }) {
-    if (!localStreamRef.current || !deviceIdentity) return;
+    if (!deviceIdentity) return;
+
+    /* 카메라 트랙이 죽었으면 (OS 가 회수 등) 재획득 */
+    const hasLiveTrack = localStreamRef.current
+      ?.getTracks()
+      .some((t) => t.readyState === "live");
+    if (!localStreamRef.current || !hasLiveTrack) {
+      console.log("[broadcaster] 카메라 트랙 없음/만료 → 재획득");
+      await acquireCamera();
+      if (!localStreamRef.current) return;
+    }
+
     setBroadcastPhase("connecting");
     setErrorMessage(null);
 
@@ -625,27 +636,30 @@ export function CameraBroadcastClient() {
       const pc = new RTCPeerConnection(rtcConfig);
       peerConnectionRef.current = pc;
 
-      /** 자동 재연결 — 카메라를 끄지 않고 3초 후 방송 재시작 (최대 5회) */
+      /**
+       * 자동 재연결 — 카메라를 끄지 않고 방송 재시작.
+       * PeerConnection 만 정리하고 DB 세션은 건드리지 않는다.
+       * start_device_broadcast RPC 가 기존 live 세션을 자동으로 idle 전환하므로
+       * 클라이언트에서 stop 을 먼저 호출하면 오히려 뷰어가 세션 0건을 보는 갭이 생긴다.
+       * 3회까지 3초 간격, 이후 30초 간격으로 무한 재시도 (항상 켜진 카메라).
+       */
       function scheduleAutoReconnect() {
-        if (autoReconnectCountRef.current >= 5) {
-          console.log("[broadcaster] 자동 재연결 5회 초과 — 에러 전환");
-          setErrorMessage("연결을 복구할 수 없어요. 방송을 다시 시작해 주세요.");
-          setBroadcastPhase("error");
-          autoReconnectCountRef.current = 0;
-          return;
-        }
         autoReconnectCountRef.current += 1;
         const attempt = autoReconnectCountRef.current;
-        console.log(`[broadcaster] 자동 재연결 ${attempt}/5 — 3초 후 재시도`);
-        setErrorMessage(`연결 끊김 — 재연결 중... (${attempt}/5)`);
+        /* 처음 3회는 빠르게(3초), 이후는 느리게(30초) — 배터리/네트워크 절약 */
+        const delayMs = attempt <= 3 ? 3000 : 30_000;
+        const delaySec = Math.round(delayMs / 1000);
+        console.log(`[broadcaster] 자동 재연결 ${attempt}회 — ${delaySec}초 후 재시도`);
+        setErrorMessage(`연결 끊김 — 재연결 대기 중... (${delaySec}초)`);
         setBroadcastPhase("connecting");
         autoReconnectTimerRef.current = setTimeout(() => {
           autoReconnectTimerRef.current = null;
           void (async () => {
+            /* PeerConnection 만 정리 — DB 세션은 RPC 가 원자적으로 교체 */
             await cleanupPeerResourcesOnly(true);
             void startBroadcast();
           })();
-        }, 3000);
+        }, delayMs);
       }
 
       pc.onconnectionstatechange = () => {
@@ -808,23 +822,39 @@ export function CameraBroadcastClient() {
         const currentPc = peerConnectionRef.current;
         console.log("[broadcaster] answer_ready 수신, answer_sdp 포함:", !!payload?.answer_sdp);
 
-        /* payload 에 answer_sdp 가 있으면 DB 폴링 없이 직접 적용 */
-        if (payload?.answer_sdp && currentPc && currentPc.remoteDescription === null) {
-          void (async () => {
-            try {
-              const answerInit = decodeSdpFromDatabaseColumn(payload.answer_sdp!, "answer");
-              await currentPc.setRemoteDescription(new RTCSessionDescription(answerInit));
-              console.log("[broadcaster] answer 직접 적용 완료 (push 경로)");
-              setBroadcastPhase("live");
-            } catch (err) {
-              console.error("[broadcaster] answer 직접 적용 실패, 폴링으로 재시도", err);
-              void pollSignalingOnce();
-            }
-          })();
-        } else {
-          /* answer_sdp 없으면 기존 폴링으로 fallback */
+        if (!payload?.answer_sdp || !currentPc) {
           void pollSignalingOnce();
+          return;
         }
+
+        /*
+         * remoteDescription 이 이미 있고 연결이 끊긴 상태 = 이전 뷰어가 떠난 뒤 새 뷰어 접속.
+         * PeerConnection 을 재생성해서 새 세션으로 깨끗하게 연결한다.
+         * connected/connecting 상태면 정상 동작 중이므로 무시 (같은 answer 재수신).
+         */
+        if (currentPc.remoteDescription !== null) {
+          const pcState = currentPc.connectionState;
+          if (pcState === "disconnected" || pcState === "failed" || pcState === "closed") {
+            console.log("[broadcaster] 새 뷰어 감지 (push, PC:", pcState, ") → 재연결");
+            void (async () => {
+              await cleanupPeerResourcesOnly(true);
+              void startBroadcast();
+            })();
+          }
+          return;
+        }
+
+        void (async () => {
+          try {
+            const answerInit = decodeSdpFromDatabaseColumn(payload.answer_sdp!, "answer");
+            await currentPc.setRemoteDescription(new RTCSessionDescription(answerInit));
+            console.log("[broadcaster] answer 직접 적용 완료 (push 경로)");
+            setBroadcastPhase("live");
+          } catch (err) {
+            console.error("[broadcaster] answer 직접 적용 실패, 폴링으로 재시도", err);
+            void pollSignalingOnce();
+          }
+        })();
       }).subscribe();
 
       /** 단일 signaling 폴링 실행 (push 알림 + interval 공용) */
@@ -852,7 +882,20 @@ export function CameraBroadcastClient() {
           }
 
           const answerSdpRaw = normalizedPayload.answer_sdp;
-          if (answerSdpRaw && currentPc.remoteDescription === null) {
+          if (answerSdpRaw) {
+            if (currentPc.remoteDescription !== null) {
+              /*
+               * remoteDescription 이 이미 있고 연결이 끊긴 상태 = 새 뷰어.
+               * connected/connecting 이면 정상 동작 중 → 무시.
+               */
+              const pcState = currentPc.connectionState;
+              if (pcState === "disconnected" || pcState === "failed" || pcState === "closed") {
+                console.log("[broadcaster] 폴링: 새 뷰어 감지 (PC:", pcState, ") → 재연결");
+                await cleanupPeerResourcesOnly(true);
+                void startBroadcast();
+              }
+              return;
+            }
             try {
               const answerInit = decodeSdpFromDatabaseColumn(answerSdpRaw, "answer");
               await currentPc.setRemoteDescription(new RTCSessionDescription(answerInit));
@@ -1019,7 +1062,7 @@ export function CameraBroadcastClient() {
               {peerConnectionState === "connected"
                 ? `● ${deviceIdentity?.deviceName ?? "카메라"} 방송 중`
                 : autoReconnectCountRef.current > 0
-                  ? `🔄 재연결 중… (${autoReconnectCountRef.current}/5)`
+                  ? `🔄 재연결 중… (${autoReconnectCountRef.current}회)`
                   : `○ 시청자 기다리는 중… (${peerStatusLabel[peerConnectionState]})`}
             </p>
             <div className={styles.broadcastCareBar}>

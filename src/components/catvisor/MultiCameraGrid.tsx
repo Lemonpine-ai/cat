@@ -95,6 +95,19 @@ export function MultiCameraGrid({ homeId }: MultiCameraGridProps) {
     }
     void loadSessions();
 
+    /*
+     * 재로그인 대응 — 컴포넌트 mount 시점에 auth 세션이 아직 복원 안 됐으면
+     * loadSessions()가 user=null 로 스킵된다. SIGNED_IN 이벤트가 오면 재시도.
+     */
+    const { data: { subscription: authSub } } = supabase.auth.onAuthStateChange(
+      (event) => {
+        if (event === "SIGNED_IN") {
+          console.log("[MultiCameraGrid] SIGNED_IN 감지 → 세션 재조회");
+          void loadSessions();
+        }
+      },
+    );
+
     /* Realtime: 세션 추가/종료 감지 (postgres_changes) */
     const watcher = supabase
       .channel(`multi-cam-${homeId}`)
@@ -128,6 +141,7 @@ export function MultiCameraGrid({ homeId }: MultiCameraGridProps) {
       .subscribe();
 
     return () => {
+      authSub.unsubscribe();
       void supabase.removeChannel(watcher);
       void supabase.removeChannel(broadcastCh);
       watcherRef.current = null;
