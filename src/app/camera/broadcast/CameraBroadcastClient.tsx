@@ -148,6 +148,12 @@ export function CameraBroadcastClient() {
   const autostartBroadcastSequenceStartedRef = useRef(false);
   /** disconnected 상태 유예 타이머 — 모바일 네트워크 일시 끊김 대응 */
   const disconnectedGraceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** 자동 재연결 횟수 카운터 — 5회 초과 시 에러 전환 */
+  const autoReconnectCountRef = useRef(0);
+  /** 자동 재연결 타이머 ref — cleanup 시 정리 */
+  const autoReconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** 화면 꺼짐 방지 Wake Lock */
+  const wakeLockRef = useRef<WakeLockSentinel | null>(null);
   /** 카메라 켜기·autostart 가 동시에 getUserMedia 를 호출해 NotReadable 이 나는 것 방지 */
   const acquireCameraInFlightRef = useRef(false);
 
@@ -175,6 +181,43 @@ export function CameraBroadcastClient() {
       // storage 사용 불가
     }
   }, []);
+
+  /* 방송 중 화면 꺼짐 방지 (Wake Lock API) — 항상 켜진 카메라용 */
+  useEffect(() => {
+    if (broadcastPhase !== "live" && broadcastPhase !== "connecting") {
+      /* 방송 중이 아니면 Wake Lock 해제 */
+      if (wakeLockRef.current) {
+        void wakeLockRef.current.release();
+        wakeLockRef.current = null;
+      }
+      return;
+    }
+    async function requestWakeLock() {
+      try {
+        if ("wakeLock" in navigator) {
+          wakeLockRef.current = await navigator.wakeLock.request("screen");
+          console.log("[broadcaster] Wake Lock 활성화 — 화면 꺼짐 방지");
+        }
+      } catch {
+        /* Wake Lock 미지원 또는 권한 거부 — 무시 */
+      }
+    }
+    void requestWakeLock();
+    /* 탭 다시 활성화 시 Wake Lock 재요청 (브라우저가 자동 해제하므로) */
+    function handleVisibilityChange() {
+      if (document.visibilityState === "visible" && !wakeLockRef.current) {
+        void requestWakeLock();
+      }
+    }
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      if (wakeLockRef.current) {
+        void wakeLockRef.current.release();
+        wakeLockRef.current = null;
+      }
+    };
+  }, [broadcastPhase]);
 
   const toggleSoundEnabled = useCallback(() => {
     setIsSoundEnabled((prev) => {
@@ -344,6 +387,11 @@ export function CameraBroadcastClient() {
       if (disconnectedGraceTimerRef.current) {
         clearTimeout(disconnectedGraceTimerRef.current);
         disconnectedGraceTimerRef.current = null;
+      }
+      /* 자동 재연결 타이머 정리 */
+      if (autoReconnectTimerRef.current) {
+        clearTimeout(autoReconnectTimerRef.current);
+        autoReconnectTimerRef.current = null;
       }
 
       /* answer_ready 채널 정리 (구독 누수 방지) */
@@ -577,22 +625,48 @@ export function CameraBroadcastClient() {
       const pc = new RTCPeerConnection(rtcConfig);
       peerConnectionRef.current = pc;
 
+      /** 자동 재연결 — 카메라를 끄지 않고 3초 후 방송 재시작 (최대 5회) */
+      function scheduleAutoReconnect() {
+        if (autoReconnectCountRef.current >= 5) {
+          console.log("[broadcaster] 자동 재연결 5회 초과 — 에러 전환");
+          setErrorMessage("연결을 복구할 수 없어요. 방송을 다시 시작해 주세요.");
+          setBroadcastPhase("error");
+          autoReconnectCountRef.current = 0;
+          return;
+        }
+        autoReconnectCountRef.current += 1;
+        const attempt = autoReconnectCountRef.current;
+        console.log(`[broadcaster] 자동 재연결 ${attempt}/5 — 3초 후 재시도`);
+        setErrorMessage(`연결 끊김 — 재연결 중... (${attempt}/5)`);
+        setBroadcastPhase("connecting");
+        autoReconnectTimerRef.current = setTimeout(() => {
+          autoReconnectTimerRef.current = null;
+          void (async () => {
+            await cleanupPeerResourcesOnly(true);
+            void startBroadcast();
+          })();
+        }, 3000);
+      }
+
       pc.onconnectionstatechange = () => {
         setPeerConnectionState(pc.connectionState);
         if (pc.connectionState === "connected") {
           broadcasterRelayRetryRef.current = false;
+          /* 연결 성공 시 재연결 카운터 초기화 */
+          autoReconnectCountRef.current = 0;
           /* 연결 복구 시 유예 타이머 해제 */
           if (disconnectedGraceTimerRef.current) {
             clearTimeout(disconnectedGraceTimerRef.current);
             disconnectedGraceTimerRef.current = null;
           }
+          setErrorMessage(null);
           /* 연결 완료 → signaling 폴링 종료 (불필요한 RPC 호출 방지) */
           if (signalingPollIntervalRef.current) {
             clearInterval(signalingPollIntervalRef.current);
             signalingPollIntervalRef.current = null;
           }
         }
-        /* 모바일 네트워크 일시 끊김 — 10초 유예 후에도 복구 안 되면 에러 처리 */
+        /* 모바일 네트워크 일시 끊김 — 10초 유예 후 자동 재연결 */
         if (pc.connectionState === "disconnected") {
           if (disconnectedGraceTimerRef.current) {
             clearTimeout(disconnectedGraceTimerRef.current);
@@ -600,8 +674,7 @@ export function CameraBroadcastClient() {
           disconnectedGraceTimerRef.current = setTimeout(() => {
             disconnectedGraceTimerRef.current = null;
             if (pc.connectionState === "disconnected") {
-              setErrorMessage("연결이 끊겼어요. 방송을 다시 시작해 주세요.");
-              setBroadcastPhase("error");
+              scheduleAutoReconnect();
             }
           }, 10_000);
         }
@@ -616,15 +689,15 @@ export function CameraBroadcastClient() {
             })();
             return;
           }
-          setErrorMessage(
-            buildWebRtcNetworkFailureUserMessage({ turnRelayConfigured }),
-          );
-          setBroadcastPhase("error");
+          /* relay 재시도도 실패 → 자동 재연결 */
+          scheduleAutoReconnect();
           return;
         }
         if (pc.connectionState === "closed") {
-          setErrorMessage("연결이 끊겼어요. 방송을 다시 시작해 주세요.");
-          setBroadcastPhase("error");
+          /* 의도적 종료(사용자가 멈춤 버튼 누름)가 아니면 자동 재연결 */
+          if (!isCleaningUpRef.current) {
+            scheduleAutoReconnect();
+          }
         }
       };
 
@@ -945,7 +1018,9 @@ export function CameraBroadcastClient() {
             <p className={styles.statusText}>
               {peerConnectionState === "connected"
                 ? `● ${deviceIdentity?.deviceName ?? "카메라"} 방송 중`
-                : `○ 시청자 기다리는 중… (${peerStatusLabel[peerConnectionState]})`}
+                : autoReconnectCountRef.current > 0
+                  ? `🔄 재연결 중… (${autoReconnectCountRef.current}/5)`
+                  : `○ 시청자 기다리는 중… (${peerStatusLabel[peerConnectionState]})`}
             </p>
             <div className={styles.broadcastCareBar}>
               <div className={styles.broadcastCareHeader}>
@@ -1047,6 +1122,7 @@ export function CameraBroadcastClient() {
             className={styles.btnPrimary}
             onClick={() => {
               setErrorMessage(null);
+              autoReconnectCountRef.current = 0;
               void cleanupPeerResourcesOnly(true).then(() => {
                 setBroadcastPhase(localStreamRef.current ? "ready" : "idle");
               });
