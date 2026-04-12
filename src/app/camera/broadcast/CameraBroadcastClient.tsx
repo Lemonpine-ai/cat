@@ -609,9 +609,9 @@ export function CameraBroadcastClient() {
           /* relay-only 재시도: 첫 실패이고 TURN 설정 있으면 relay 강제로 1회 재시도 */
           if (!forceRelay && turnRelayConfigured && !broadcasterRelayRetryRef.current) {
             broadcasterRelayRetryRef.current = true;
-            /* cleanup 완료를 await 한 뒤 재시도 (race condition 방지) */
+            /* PeerConnection 만 정리하고 DB 세션은 유지 — 뷰어 끊김 방지 */
             void (async () => {
-              await cleanupSessionAndStopOnServer(true);
+              await cleanupPeerResourcesOnly(true);
               void startBroadcast({ forceRelay: true });
             })();
             return;
