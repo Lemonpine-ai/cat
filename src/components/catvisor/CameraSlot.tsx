@@ -32,7 +32,7 @@ type CameraSlotProps = {
 };
 
 /* 코드 버전 확인 — 브라우저 캐시 문제 진단용 */
-const CAMERA_CODE_VERSION = "v2-rpc";
+const CAMERA_CODE_VERSION = "v3-rpc";
 
 export function CameraSlot({
   sessionId,

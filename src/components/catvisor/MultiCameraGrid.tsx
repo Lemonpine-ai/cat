@@ -140,10 +140,31 @@ export function MultiCameraGrid({ homeId }: MultiCameraGridProps) {
       })
       .subscribe();
 
+    /*
+     * session_refreshed: 방송기가 자동 재연결 후 새 세션 정보(session_id + offer_sdp)를
+     * 직접 보내줌. DB 재조회 없이 즉시 CameraSlot 을 마운트할 수 있다.
+     */
+    const refreshCh = supabase
+      .channel(`cam_session_refresh_${homeId}`)
+      .on("broadcast", { event: "session_refreshed" }, (event) => {
+        const payload = event.payload as { session_id?: string; offer_sdp?: string } | undefined;
+        if (!payload?.session_id || !payload?.offer_sdp) return;
+        console.log("[MultiCameraGrid] session_refreshed 수신 →", payload.session_id);
+        setSessions([{
+          id: payload.session_id,
+          offer_sdp: payload.offer_sdp,
+          device_name: "카메라 1",
+        }]);
+        setFailedIds(new Set());
+        setExpandedId(null);
+      })
+      .subscribe();
+
     return () => {
       authSub.unsubscribe();
       void supabase.removeChannel(watcher);
       void supabase.removeChannel(broadcastCh);
+      void supabase.removeChannel(refreshCh);
       watcherRef.current = null;
     };
   }, [homeId, supabase]);

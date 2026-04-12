@@ -107,7 +107,7 @@ type DeviceIdentity = {
  * anon 은 SELECT RLS 로 행을 직접 읽지 못하므로 get_broadcaster_signaling_state 폴링으로 answer/ICE 수신.
  */
 /* 코드 버전 — 브라우저 캐시 문제 진단용 */
-const BROADCAST_CODE_VERSION = "v2-rpc-push";
+const BROADCAST_CODE_VERSION = "v3-signaling-timeout";
 
 export function CameraBroadcastClient() {
   console.log(`[broadcaster] 코드 버전: ${BROADCAST_CODE_VERSION}`);
@@ -156,6 +156,8 @@ export function CameraBroadcastClient() {
   const wakeLockRef = useRef<WakeLockSentinel | null>(null);
   /** 카메라 켜기·autostart 가 동시에 getUserMedia 를 호출해 NotReadable 이 나는 것 방지 */
   const acquireCameraInFlightRef = useRef(false);
+  /** answer 미수신 시 세션 재생성 타이머 — 폴링 실패 대비 안전망 */
+  const signalingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     const { token: storedToken, name: storedName } =
@@ -392,6 +394,11 @@ export function CameraBroadcastClient() {
       if (autoReconnectTimerRef.current) {
         clearTimeout(autoReconnectTimerRef.current);
         autoReconnectTimerRef.current = null;
+      }
+      /* signaling 타임아웃 정리 */
+      if (signalingTimeoutRef.current) {
+        clearTimeout(signalingTimeoutRef.current);
+        signalingTimeoutRef.current = null;
       }
 
       /* answer_ready 채널 정리 (구독 누수 방지) */
@@ -674,10 +681,14 @@ export function CameraBroadcastClient() {
             disconnectedGraceTimerRef.current = null;
           }
           setErrorMessage(null);
-          /* 연결 완료 → signaling 폴링 종료 (불필요한 RPC 호출 방지) */
+          /* 연결 완료 → signaling 폴링·타임아웃 종료 */
           if (signalingPollIntervalRef.current) {
             clearInterval(signalingPollIntervalRef.current);
             signalingPollIntervalRef.current = null;
+          }
+          if (signalingTimeoutRef.current) {
+            clearTimeout(signalingTimeoutRef.current);
+            signalingTimeoutRef.current = null;
           }
         }
         /* 모바일 네트워크 일시 끊김 — 10초 유예 후 자동 재연결 */
@@ -872,12 +883,14 @@ export function CameraBroadcastClient() {
           );
 
           if (signalingError) {
+            console.warn("[broadcaster] 폴링 RPC 오류:", signalingError.message);
             return;
           }
 
           const normalizedPayload =
             normalizeBroadcasterSignalingRpcPayload(signalingPayload);
           if (!normalizedPayload || normalizedPayload.error) {
+            console.warn("[broadcaster] 폴링 payload 오류:", normalizedPayload?.error ?? "null payload");
             return;
           }
 
@@ -926,6 +939,45 @@ export function CameraBroadcastClient() {
       signalingPollIntervalRef.current = setInterval(() => {
         void pollSignalingOnce();
       }, pollIntervalMs);
+
+      /*
+       * signaling 타임아웃 — 15초 이내에 answer 미수신 시 세션 재생성.
+       * 뷰어↔방송기 사이 레이스 컨디션으로 answer 가 유실된 경우 안전망 역할.
+       * 연결 성공 시 onconnectionstatechange 에서 해제된다.
+       */
+      if (signalingTimeoutRef.current) clearTimeout(signalingTimeoutRef.current);
+      signalingTimeoutRef.current = setTimeout(() => {
+        signalingTimeoutRef.current = null;
+        const pc = peerConnectionRef.current;
+        if (pc && pc.connectionState !== "connected") {
+          console.log("[broadcaster] signaling 타임아웃 15초 — 세션 재생성");
+          void (async () => {
+            await cleanupPeerResourcesOnly(true);
+            void startBroadcast();
+          })();
+        }
+      }, 15_000);
+
+      /*
+       * 뷰어에게 새 세션 정보를 즉시 전달 — DB 폴링 대기 없이 바로 연결 가능.
+       * session_started 와 별도로 offer_sdp 를 포함해 보낸다.
+       */
+      if (effectiveHomeId) {
+        const refreshCh = supabase.channel(`cam_session_refresh_${effectiveHomeId}`);
+        refreshCh.subscribe((status) => {
+          if (status === "SUBSCRIBED") {
+            void refreshCh.send({
+              type: "broadcast",
+              event: "session_refreshed",
+              payload: {
+                session_id: sessionId,
+                offer_sdp: encodePlainSdpForDatabaseColumn(committedLocalDescription.sdp),
+              },
+            });
+            setTimeout(() => void supabase.removeChannel(refreshCh), 3000);
+          }
+        });
+      }
 
       setBroadcastPhase("live");
     } catch (err) {
