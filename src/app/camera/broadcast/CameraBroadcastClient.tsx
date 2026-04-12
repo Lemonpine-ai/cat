@@ -11,6 +11,7 @@ import {
   Radio,
   Sparkles,
   Square,
+  SwitchCamera,
   Trash2,
   Volume2,
   VolumeX,
@@ -122,6 +123,8 @@ export function CameraBroadcastClient() {
   const [isSoundEnabled, setIsSoundEnabled] = useState(true);
   const [careLogPending, setCareLogPending] = useState(false);
   const [careLogMessage, setCareLogMessage] = useState<string | null>(null);
+  /* 전면/후면 카메라 전환 — 후면(environment)이 기본값 (화소·광각 우위) */
+  const [facingMode, setFacingMode] = useState<"environment" | "user">("environment");
 
   // 환경 관리 경과 시간 추적 — 초기값은 RPC 조회 후 설정
   const [lastWaterChangeAt, setLastWaterChangeAt] = useState<string | null>(null);
@@ -553,16 +556,17 @@ export function CameraBroadcastClient() {
     stopLocalPreviewTracksAndClearVideo();
     await delayMs(120);
 
-    const minimalConstraints: MediaStreamConstraints = {
-      video: true,
-      audio: true,
-    };
+    /* 후면 카메라 우선 — 화소·광각이 더 좋음 */
     const preferredConstraints: MediaStreamConstraints = {
       video: {
-        facingMode: { ideal: "environment" },
+        facingMode: { ideal: facingMode },
         width: { ideal: 1280 },
         height: { ideal: 720 },
       },
+      audio: true,
+    };
+    const minimalConstraints: MediaStreamConstraints = {
+      video: true,
       audio: true,
     };
 
@@ -590,10 +594,11 @@ export function CameraBroadcastClient() {
 
     try {
       let stream: MediaStream | null = null;
+      /* 후면 카메라(preferred)를 먼저 시도, 실패 시 최소 제약으로 fallback */
       try {
-        stream = await getUserMediaWithNotReadableRetry(minimalConstraints);
-      } catch (minimalErr) {
         stream = await getUserMediaWithNotReadableRetry(preferredConstraints);
+      } catch (preferredErr) {
+        stream = await getUserMediaWithNotReadableRetry(minimalConstraints);
       }
 
       if (!stream) {
@@ -611,6 +616,59 @@ export function CameraBroadcastClient() {
       setBroadcastPhase("error");
     } finally {
       acquireCameraInFlightRef.current = false;
+    }
+  }
+
+  /**
+   * 전면/후면 카메라 전환.
+   * 현재 스트림을 정리하고 반대쪽 카메라로 재획득.
+   * 방송 중이면 PeerConnection 트랙도 교체 (재연결 없이 핫스왑).
+   */
+  async function switchCamera() {
+    const nextFacing = facingMode === "environment" ? "user" : "environment";
+
+    /* 새 카메라를 먼저 획득 — 실패 시 기존 영상 유지 */
+    try {
+      const newStream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: { ideal: nextFacing },
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+        },
+        audio: false, /* 비디오만 교체, 오디오는 기존 트랙 유지 */
+      });
+
+      const newVideoTrack = newStream.getVideoTracks()[0];
+      if (!newVideoTrack) return;
+
+      /* 새 카메라 성공 → 기존 비디오 트랙 정리 */
+      if (localStreamRef.current) {
+        for (const oldTrack of localStreamRef.current.getVideoTracks()) {
+          oldTrack.stop();
+          localStreamRef.current.removeTrack(oldTrack);
+        }
+        localStreamRef.current.addTrack(newVideoTrack);
+      }
+
+      /* PeerConnection이 있으면 트랙 핫스왑 (재연결 불필요) */
+      const pc = peerConnectionRef.current;
+      if (pc) {
+        const sender = pc.getSenders().find((s) => s.track?.kind === "video");
+        if (sender) {
+          await sender.replaceTrack(newVideoTrack);
+        }
+      }
+
+      /* 미리보기 비디오 업데이트 */
+      if (localVideoRef.current && localStreamRef.current) {
+        localVideoRef.current.srcObject = localStreamRef.current;
+      }
+
+      setFacingMode(nextFacing);
+      console.log(`[broadcaster] 카메라 전환: ${nextFacing}`);
+    } catch (err) {
+      console.warn("[broadcaster] 카메라 전환 실패, 기존 카메라 유지:", err);
+      /* 실패해도 기존 영상은 그대로 유지됨 (아직 stop() 안 했으니까) */
     }
   }
 
@@ -1074,6 +1132,17 @@ export function CameraBroadcastClient() {
           <div className={styles.viewerBadge} aria-live="polite">
             <Eye size={14} strokeWidth={2} aria-hidden /> 시청 중
           </div>
+        )}
+        {/* 전면/후면 카메라 전환 버튼 — 카메라 켜져있을 때만 표시 */}
+        {(broadcastPhase === "ready" || broadcastPhase === "connecting" || broadcastPhase === "live") && (
+          <button
+            type="button"
+            className={styles.switchCameraBtn}
+            onClick={() => void switchCamera()}
+            aria-label={facingMode === "environment" ? "전면 카메라로 전환" : "후면 카메라로 전환"}
+          >
+            <SwitchCamera size={20} strokeWidth={2} aria-hidden />
+          </button>
         )}
       </div>
 
