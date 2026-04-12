@@ -1,0 +1,442 @@
+/* 방송국 페이지 — v2 따뜻한 힐링 리디자인
+   D1(UI): 케어버튼을 소프트 카드 스타일로 통일
+   P1(심리): 파스텔+크림 톤으로 편안함, 색상 통일로 시각 안정
+   C1(카피): 따뜻한 동사형 레이블 */
+
+.page {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: #f1fbf9;
+  color: #0d2b28;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  user-select: none;
+}
+
+/* 헤더 */
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.25rem 0.75rem;
+  flex-shrink: 0;
+  background: rgba(255,255,255,0.92);
+  backdrop-filter: blur(16px);
+  border-bottom: 1px solid rgba(79,209,197,0.14);
+  border-radius: 0 0 1.5rem 1.5rem;
+  box-shadow: 0 4px 16px rgba(79,209,197,0.1);
+}
+
+.headerLeft {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.appName {
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #1e8f83;
+}
+
+.broadcasterLabel {
+  font-size: 0.78rem;
+  color: #94b8b3;
+}
+
+.liveBadge {
+  background: linear-gradient(135deg, #ffab91 0%, #ff8a65 100%);
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  padding: 0.28rem 0.75rem;
+  border-radius: 999px;
+  box-shadow: 0 4px 12px rgba(255,171,145,0.4);
+  animation: pulseLive 1.5s ease-in-out infinite;
+}
+
+@keyframes pulseLive {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+/* 비디오 영역 */
+.videoWrap {
+  position: relative;
+  flex: 1;
+  background: #0d1a18;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  min-height: 0;
+  margin: 0.75rem;
+  border-radius: 2rem;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+}
+
+.localVideo {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  border-radius: 2rem;
+}
+
+.videoPlaceholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #0d1a18;
+  pointer-events: none;
+  border-radius: 2rem;
+}
+
+.placeholderIcon {
+  opacity: 0.3;
+}
+
+.viewerBadge {
+  position: absolute;
+  bottom: 1rem;
+  right: 1rem;
+  background: rgba(79, 209, 197, 0.9);
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 0.3rem 0.8rem;
+  border-radius: 999px;
+  backdrop-filter: blur(6px);
+}
+
+/* 컨트롤 영역 */
+.controls {
+  padding: 0.75rem 1.25rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.65rem;
+  flex-shrink: 0;
+}
+
+.liveControls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+/* ── 케어 버튼 영역 — v2 소프트 카드 스타일 ──
+   D1: 무지개 그라데이션 제거, 통일된 흰 배경 카드
+   D2: 2×2 그리드로 터치 영역 확보
+   P1: 파스텔 아이콘뱃지로 색상 구분, 본문은 차분한 톤 */
+
+.broadcastCareBar {
+  position: relative;
+  z-index: 50;
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 1.25rem;
+  border: 1px solid rgba(79, 209, 197, 0.2);
+  box-shadow: 0 4px 20px rgba(79, 209, 197, 0.08);
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.broadcastCareHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+/* C1: "빠른 케어" → "돌봄 기록" */
+.broadcastCareTitle {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #1e8f83;
+}
+
+.broadcastSoundBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 999px;
+  border: 1.5px solid rgba(79, 209, 197, 0.25);
+  background: #fff;
+  color: #1e8f83;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(79, 209, 197, 0.08);
+  transition: background 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.broadcastSoundBtn:active {
+  background: rgba(79, 209, 197, 0.08);
+}
+
+/* D1: 2×2 그리드 레이아웃 */
+.broadcastCareRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+
+/* D1+P1: 소프트 카드 스타일 버튼 — 흰 배경 + 색상 아이콘뱃지
+   그라데이션 배경 대신 흰 카드에 파스텔 포인트 */
+.broadcastCareBtn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  padding: 0.75rem 0.5rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #1e8f83;
+  background: #fff;
+  border: 1.5px solid rgba(79, 209, 197, 0.2);
+  border-radius: 1rem;
+  cursor: pointer;
+  transition: transform 0.12s, box-shadow 0.15s, border-color 0.15s;
+  box-shadow: 0 2px 10px rgba(14, 85, 81, 0.05);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.broadcastCareBtn:active {
+  transform: scale(0.96);
+  box-shadow: 0 1px 6px rgba(14, 85, 81, 0.08);
+  border-color: rgba(79, 209, 197, 0.4);
+}
+
+.broadcastCareBtn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* D3: 색상 변형은 아이콘뱃지 배경색으로만 구분 (본문은 통일) */
+.broadcastCareBtnMint {
+  border-color: rgba(77, 182, 172, 0.25);
+}
+
+.broadcastCareBtnSky {
+  border-color: rgba(56, 189, 248, 0.2);
+}
+
+.broadcastCareBtnPeach {
+  border-color: rgba(255, 171, 145, 0.25);
+}
+
+.broadcastCareBtnPurple {
+  border-color: rgba(167, 139, 250, 0.25);
+}
+
+/* 경과 시간 세로 레이아웃 — 기존과 동일 구조 유지 */
+.broadcastCareBtnEnv {
+  gap: 0.2rem;
+}
+
+.broadcastCareBtnLabel {
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1.2;
+  color: #1e8f83;
+}
+
+.broadcastCareBtnEta {
+  font-size: 0.62rem;
+  font-weight: 600;
+  opacity: 0.7;
+  line-height: 1;
+  color: #3d6b65;
+}
+
+.broadcastCareFeedback {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #2aa89b;
+  text-align: center;
+  line-height: 1.4;
+}
+
+.btnPrimary {
+  width: 100%;
+  padding: 0.95rem 1.5rem;
+  background: linear-gradient(135deg, #4fd1c5 0%, #38bdb0 100%);
+  color: #fff;
+  font-size: 1rem;
+  font-weight: 700;
+  border: none;
+  border-radius: 1.5rem;
+  cursor: pointer;
+  transition: filter 0.15s, transform 0.1s;
+  box-shadow: 0 6px 20px rgba(79,209,197,0.35);
+  -webkit-tap-highlight-color: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.btnPrimary:active {
+  filter: brightness(0.95);
+  transform: scale(0.97);
+}
+
+.btnStop {
+  width: 100%;
+  padding: 0.85rem 1.5rem;
+  background: rgba(255,171,145,0.08);
+  color: #d97e6a;
+  font-size: 0.95rem;
+  font-weight: 600;
+  border: 1.5px solid rgba(255,171,145,0.4);
+  border-radius: 1.5rem;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+  -webkit-tap-highlight-color: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.btnStop:active {
+  background: rgba(255,171,145,0.15);
+  transform: scale(0.97);
+}
+
+.statusText {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #3d6b65;
+  text-align: center;
+  line-height: 1.5;
+}
+
+.statusBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  align-items: stretch;
+}
+
+.statusHint {
+  margin: 0;
+  font-size: 0.72rem;
+  line-height: 1.45;
+  color: #6b908a;
+  text-align: center;
+}
+
+.statusCode {
+  font-size: 0.65rem;
+  background: rgba(79, 209, 197, 0.14);
+  padding: 0.12rem 0.35rem;
+  border-radius: 0.35rem;
+  word-break: break-all;
+}
+
+.errorText {
+  margin: 0;
+  font-size: 0.88rem;
+  color: #d97e6a;
+  background: rgba(255,171,145,0.08);
+  border: 1px solid rgba(255,171,145,0.25);
+  border-radius: 1.25rem;
+  padding: 0.75rem 1rem;
+  line-height: 1.5;
+}
+
+.sessionHint {
+  text-align: center;
+  font-size: 0.7rem;
+  color: #94b8b3;
+  margin: 0 0 0.5rem;
+  padding: 0 1rem;
+  word-break: break-all;
+}
+
+/* 로딩 */
+.loadingSpinner {
+  width: 36px;
+  height: 36px;
+  border: 3px solid rgba(79,209,197,0.2);
+  border-top-color: #4fd1c5;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  align-self: center;
+  margin: auto;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* 미페어링 */
+.unpairedCard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  padding: 2.5rem 2rem;
+  margin: auto;
+  max-width: 320px;
+  text-align: center;
+  background: #fff;
+  border-radius: 2rem;
+  box-shadow: 0 8px 32px rgba(79,209,197,0.14);
+  border: 1.5px solid rgba(79,209,197,0.2);
+}
+
+.unpairedIcon {
+  width: 4.5rem;
+  height: 4.5rem;
+  border-radius: 1.5rem;
+  background: linear-gradient(135deg, #d6f5f1 0%, #a8ece6 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.unpairedTitle {
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: #0d2b28;
+}
+
+.unpairedDesc {
+  margin: 0;
+  font-size: 0.88rem;
+  color: #3d6b65;
+  line-height: 1.6;
+}
+
+.btnPairLink {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.95rem 1.5rem;
+  background: linear-gradient(135deg, #4fd1c5 0%, #38bdb0 100%);
+  color: #fff;
+  font-size: 0.95rem;
+  font-weight: 700;
+  border-radius: 1.5rem;
+  text-decoration: none;
+  transition: filter 0.15s;
+  box-shadow: 0 6px 20px rgba(79,209,197,0.3);
+}
+
+.btnPairLink:active {
+  filter: brightness(0.95);
+}

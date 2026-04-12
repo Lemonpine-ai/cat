@@ -28,26 +28,29 @@ export type CommunityComment = {
   author_avatar: string | null;
 };
 
-/** 커뮤니티 카테고리 정의 */
+/**
+ * 커뮤니티 카테고리 정의 — v2
+ * C1(카피): 따뜻한 톤 설명 문구, 돌봄 앱 감성
+ */
 export const COMMUNITY_CATEGORIES = {
   brag: {
     name: "자랑하기",
-    description: "귀여운 순간 사진/영상 공유",
+    description: "우리 아이 귀여운 순간 자랑해요",
     icon: "Camera",
   },
   kitten: {
-    name: "아기냥",
-    description: "새끼 고양이 육아 정보",
+    name: "아기냥 육아",
+    description: "새끼 고양이 키우기 꿀팁",
     icon: "Baby",
   },
   senior: {
-    name: "노령묘",
-    description: "노묘 케어 노하우",
+    name: "노령묘 케어",
+    description: "오래오래 건강하게, 노묘 돌봄",
     icon: "Heart",
   },
   health: {
-    name: "건강/질병",
-    description: "증상 공유, 병원 추천",
+    name: "건강 상담",
+    description: "증상 공유하고 함께 고민해요",
     icon: "Stethoscope",
   },
 } as const;

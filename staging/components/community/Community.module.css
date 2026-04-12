@@ -1,33 +1,37 @@
-/* ─── 커뮤니티 카테고리 그리드 ─── */
+/* ─── v2 커뮤니티 카테고리 그리드 ───
+   D2(UX): 카드 간격·패딩 넉넉하게, 터치 영역 확보
+   P1(심리): 여백이 넉넉할수록 편안함을 느낌 */
 .categoryGrid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 0.75rem;
-  padding: 1rem;
+  gap: 0.85rem;
+  padding: 1rem 1.1rem;
   max-width: 56rem;
   margin: 0 auto;
 }
 
-/* ─── 카테고리 카드 ─── */
+/* ─── v2 카테고리 카드 ───
+   D1(UI): 흰 배경 + 파스텔 아이콘뱃지 + 소프트 그림자
+   D3(비주얼): 카드 내 아이콘뱃지가 시각적 앵커 역할 */
 .categoryCard {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.5rem;
-  padding: 1.5rem 1rem;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-card);
+  gap: 0.55rem;
+  padding: 1.4rem 1rem 1.25rem;
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(79, 209, 197, 0.18);
+  border-radius: 1.5rem;
+  box-shadow: 0 4px 20px rgba(14, 85, 81, 0.05), 0 1px 6px rgba(0, 0, 0, 0.03);
   text-decoration: none;
   color: var(--color-text);
-  transition: box-shadow 0.18s ease, transform 0.14s ease,
-    border-color 0.18s ease;
+  transition: box-shadow 0.2s ease, transform 0.15s ease,
+    border-color 0.2s ease;
 }
 
 .categoryCard:hover {
-  box-shadow: var(--shadow-card-hover);
-  border-color: var(--color-border-hover);
+  box-shadow: 0 8px 28px rgba(14, 85, 81, 0.09), 0 2px 10px rgba(0, 0, 0, 0.04);
+  border-color: rgba(79, 209, 197, 0.35);
   transform: translateY(-2px);
 }
 
@@ -35,20 +39,32 @@
   transform: scale(0.97);
 }
 
+/* D3: 파스텔 원형 아이콘뱃지 — 색상은 JS에서 inline으로 제어 */
+.categoryIconBadge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 999px;
+  margin-bottom: 0.15rem;
+}
+
 .categoryCardIcon {
   color: var(--mint-500);
 }
 
 .categoryCardName {
-  font-size: 1rem;
+  font-size: 0.95rem;
   font-weight: 700;
-  color: var(--color-text);
+  color: var(--color-primary-dark);
 }
 
 .categoryCardDesc {
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   color: var(--color-text-sub);
   text-align: center;
+  line-height: 1.4;
 }
 
 /* ─── 글 목록 ─── */

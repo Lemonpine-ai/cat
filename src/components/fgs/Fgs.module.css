@@ -1,0 +1,326 @@
+/* ================================================================
+   FGS (통증 감지) 컴포넌트 스타일
+   파스텔 민트 톤에 맞춤 — 기존 Diary.module.css와 동일 톤
+================================================================ */
+
+/* ─── FGS 경고 배너 ─── */
+.alertBanner {
+  background: linear-gradient(135deg, #FFF3E0, #FFCCBC);
+  border: 2px solid #FF8A65;
+  border-radius: var(--radius-lg);
+  padding: 1rem 1.25rem;
+  margin-top: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  animation: fadeInUp 0.4s ease both;
+}
+
+.alertIcon {
+  font-size: 1.5rem;
+  flex-shrink: 0;
+}
+
+.alertText {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #BF360C;
+  line-height: 1.4;
+}
+
+/* ─── FGS 점수 인디케이터 (원형 배지) ─── */
+.scoreIndicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.75rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #fff;
+}
+
+.scoreLabel {
+  font-size: 0.7rem;
+  font-weight: 600;
+  opacity: 0.9;
+}
+
+/* ─── FGS 일일 요약 카드 ─── */
+.summaryCard {
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  padding: 1.25rem;
+  margin-top: 1rem;
+  animation: fadeInUp 0.4s ease both;
+}
+
+.summaryHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+}
+
+.summaryTitle {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.summaryBody {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.summaryPhoto {
+  width: 4rem;
+  height: 4rem;
+  border-radius: var(--radius-md);
+  object-fit: cover;
+  background: var(--mint-100);
+}
+
+.summaryPhotoEmpty {
+  width: 4rem;
+  height: 4rem;
+  border-radius: var(--radius-md);
+  background: var(--mint-100);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+}
+
+.summaryInfo {
+  flex: 1;
+}
+
+.summaryMent {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--color-text);
+  margin-bottom: 0.25rem;
+}
+
+.summaryStats {
+  font-size: 0.75rem;
+  color: var(--color-text-sub);
+}
+
+/* ─── FGS 트렌드 차트 ─── */
+.trendCard {
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  padding: 1.25rem;
+  margin-top: 1rem;
+  animation: fadeInUp 0.4s ease both;
+}
+
+.trendTitle {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--color-text);
+  margin-bottom: 0.5rem;
+}
+
+.trendEmpty {
+  text-align: center;
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+  padding: 2rem 0;
+}
+
+.trendWrapper {
+  margin-top: 0.5rem;
+}
+
+/* ─── "지금 표정 체크" 버튼 ─── */
+.manualCheckBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.5rem 1rem;
+  border: 2px solid var(--mint-500);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--mint-700);
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.1s ease;
+}
+.manualCheckBtn:hover {
+  background: var(--mint-50);
+}
+.manualCheckBtn:active {
+  transform: scale(0.95);
+}
+.manualCheckBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ─── 피드백 모달 ─── */
+.feedbackOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 300;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn 0.2s ease;
+}
+
+.feedbackModal {
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  padding: 1.5rem;
+  width: min(90vw, 22rem);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+}
+
+.feedbackTitle {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--color-text);
+  text-align: center;
+  margin-bottom: 0.5rem;
+}
+
+.feedbackPhoto {
+  width: 6rem;
+  height: 6rem;
+  border-radius: var(--radius-md);
+  object-fit: cover;
+  display: block;
+  margin: 0.75rem auto;
+}
+
+.feedbackQuestion {
+  font-size: 0.85rem;
+  color: var(--color-text-sub);
+  text-align: center;
+  margin-bottom: 1rem;
+}
+
+.feedbackButtons {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.feedbackBtn {
+  padding: 0.5rem 1rem;
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.feedbackBtn:hover {
+  border-color: var(--mint-500);
+  background: var(--mint-50);
+}
+.feedbackBtn.selected {
+  border-color: var(--mint-500);
+  background: var(--mint-100);
+  color: var(--mint-700);
+}
+
+.feedbackSubmit {
+  display: block;
+  width: 100%;
+  margin-top: 1rem;
+  padding: 0.6rem;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(135deg, var(--mint-500), var(--mint-700));
+  color: #fff;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.feedbackSubmit:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ─── 동의 모달 ─── */
+.consentOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 300;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.consentModal {
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  padding: 1.5rem;
+  width: min(90vw, 24rem);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+}
+
+.consentTitle {
+  font-size: 1.1rem;
+  font-weight: 700;
+  text-align: center;
+  margin-bottom: 1rem;
+}
+
+.consentBody {
+  font-size: 0.85rem;
+  color: var(--color-text-sub);
+  line-height: 1.6;
+  margin-bottom: 1.25rem;
+}
+
+.consentActions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.consentAgree {
+  flex: 1;
+  padding: 0.6rem;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(135deg, var(--mint-500), var(--mint-700));
+  color: #fff;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.consentDecline {
+  flex: 1;
+  padding: 0.6rem;
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-sub);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* ─── 애니메이션 ─── */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
