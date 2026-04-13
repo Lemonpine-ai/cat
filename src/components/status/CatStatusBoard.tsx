@@ -38,13 +38,12 @@ function getStatusMessage(status: CatStatus, catName: string | null): string {
 
   switch (status.kind) {
     case "in_zone": {
-      const config = ZONE_TYPE_CONFIG[status.zoneType];
       const messages: Record<ZoneType, string> = {
-        food_bowl: `${prefix}밥 먹는 중 ${config.icon}`,
-        water_bowl: `${prefix}물 마시는 중 ${config.icon}`,
-        litter_box: `${prefix}화장실 가는 중 ${config.icon}`,
-        cat_tower: `${prefix}캣타워에서 쉬는 중 ${config.icon}`,
-        custom: `${prefix}${status.zoneName}에 있는 중 ${config.icon}`,
+        food_bowl: `${prefix}밥 먹는 중`,
+        water_bowl: `${prefix}물 마시는 중`,
+        litter_box: `${prefix}화장실 가는 중`,
+        cat_tower: `${prefix}캣타워에서 쉬는 중`,
+        custom: `${prefix}${status.zoneName}에 있는 중`,
       };
       return messages[status.zoneType];
     }

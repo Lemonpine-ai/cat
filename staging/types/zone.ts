@@ -32,57 +32,67 @@ export type CameraZone = {
   created_at: string;
 };
 
-/** zone 타입별 설정 — 체류 시간, care_kind 매핑, 색상 */
+/**
+ * zone 타입별 설정 — 체류 시간, care_kind 매핑, 색상.
+ * lucideIcon: lucide-react 컴포넌트명 (카카오톡 스타일 깔끔한 아이콘)
+ */
 export const ZONE_TYPE_CONFIG: Record<
   ZoneType,
   {
     label: string;
-    icon: string;
-    dwellSeconds: number;       // 이 시간 이상 머물면 활동으로 인식
+    lucideIcon: string;          // lucide-react 아이콘명
+    dwellSeconds: number;        // 이 시간 이상 머물면 활동으로 인식
     eventMergeSeconds: number;   // 이 시간 내 재방문은 같은 1회로 합침
     careKind: "meal" | "water_change" | "litter_clean" | null;
     defaultColor: string;
+    /** 디자이너 확정 — 타입별 테마 색상 (Tailwind 호환) */
+    themeColor: string;
   }
 > = {
   food_bowl: {
     label: "밥그릇",
-    icon: "🍚",
+    lucideIcon: "UtensilsCrossed",
     dwellSeconds: 10,
     eventMergeSeconds: 300,      // 5분
     careKind: "meal",
-    defaultColor: "rgba(77,182,172,0.4)",
+    defaultColor: "rgba(245,101,101,0.4)",
+    themeColor: "#F56565",
   },
   water_bowl: {
     label: "물그릇",
-    icon: "💧",
+    lucideIcon: "Droplets",
     dwellSeconds: 5,
     eventMergeSeconds: 300,
     careKind: "water_change",
-    defaultColor: "rgba(3,169,244,0.4)",
+    defaultColor: "rgba(66,153,225,0.4)",
+    themeColor: "#4299E1",
   },
   litter_box: {
     label: "화장실",
-    icon: "🚽",
+    lucideIcon: "Sparkles",
     dwellSeconds: 15,
-    eventMergeSeconds: 0,        // 합치기 없음
+    eventMergeSeconds: 0,
     careKind: "litter_clean",
-    defaultColor: "rgba(255,171,145,0.4)",
+    defaultColor: "rgba(159,122,234,0.4)",
+    themeColor: "#9F7AEA",
   },
   cat_tower: {
     label: "캣타워",
-    icon: "🏰",
+    lucideIcon: "Castle",
     dwellSeconds: 30,
     eventMergeSeconds: 0,
-    careKind: null,             // care_logs에 안 넣음
-    defaultColor: "rgba(179,136,255,0.4)",
+    careKind: null,
+    defaultColor: "rgba(72,187,120,0.4)",
+    themeColor: "#48BB78",
   },
   custom: {
     label: "기타",
-    icon: "📍",
+    lucideIcon: "PenLine",
     dwellSeconds: 10,
     eventMergeSeconds: 0,
     careKind: null,
-    defaultColor: "rgba(158,158,158,0.4)",
+    defaultColor: "rgba(160,174,192,0.4)",
+    themeColor: "#A0AEC0",
   },
 };
 
