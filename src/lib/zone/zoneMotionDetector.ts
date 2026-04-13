@@ -37,7 +37,10 @@ export type ZoneActivityEvent = {
 export class ZoneMotionDetector {
   private canvas: OffscreenCanvas;
   private ctx: OffscreenCanvasRenderingContext2D;
+  /** zone 분석용 이전 프레임 */
   private prevFrame: ImageData | null = null;
+  /** 전체 화면 분석용 이전 프레임 (모드 전환 시 오탐 방지) */
+  private prevFullFrame: ImageData | null = null;
   private zoneStates: Map<string, ZoneState> = new Map();
   private zones: CameraZone[] = [];
 
@@ -167,6 +170,7 @@ export class ZoneMotionDetector {
   /** 리소스 정리 */
   destroy() {
     this.prevFrame = null;
+    this.prevFullFrame = null;
     this.zoneStates.clear();
     this.zones = [];
   }

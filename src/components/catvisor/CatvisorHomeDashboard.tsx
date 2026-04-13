@@ -3,8 +3,11 @@
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { CameraDeviceManager } from "@/components/catvisor/CameraDeviceManager";
 import { MultiCameraGrid } from "@/components/catvisor/MultiCameraGrid";
+import type { CameraAggregateStatus } from "@/components/catvisor/MultiCameraGrid";
 import { RecentCatActivityLog } from "@/components/catvisor/RecentCatActivityLog";
 import { CareStatusGrid } from "@/components/home/CareStatusGrid";
+import { CatStatusBoard } from "@/components/status/CatStatusBoard";
+import type { CatStatus } from "@/components/status/CatStatusBoard";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { ActivityLogListItem } from "@/types/catLog";
 import styles from "./CatvisorHomeDashboard.module.css";
@@ -31,6 +34,8 @@ type CatvisorHomeDashboardProps = {
   initialLastLitterCleanAt: string | null;
   /** 가장 최근 약 복용 ISO 타임스탬프 (없으면 null) */
   initialLastMedicineAt: string | null;
+  /** 고양이 이름 (1마리일 때만 전달, 2마리+면 null) */
+  catName: string | null;
 };
 
 /**
@@ -47,6 +52,7 @@ export function CatvisorHomeDashboard({
   initialLastWaterChangeAt,
   initialLastLitterCleanAt,
   initialLastMedicineAt,
+  catName,
 }: CatvisorHomeDashboardProps) {
   const [lastWaterChangeAt, setLastWaterChangeAt] = useState<string | null>(initialLastWaterChangeAt);
   const [lastLitterCleanAt, setLastLitterCleanAt] = useState<string | null>(initialLastLitterCleanAt);
@@ -54,7 +60,24 @@ export function CatvisorHomeDashboard({
 
   // 1분마다 경과 시간 레이블 강제 갱신 (setInterval tick 전용 카운터)
   const [elapsedTick, setElapsedTick] = useState(0);
+  /* envSaving — ref로 중복 호출 방지 (클로저 안정성), useState는 UI 표시용 */
+  const envSavingRef = useRef<CareKind | null>(null);
   const [envSaving, setEnvSaving] = useState<CareKind | null>(null);
+
+  /* 카메라 상태 (CatStatusBoard용) */
+  const [cameraStatus, setCameraStatus] = useState<CameraAggregateStatus>({
+    connectedCount: 0,
+    hasMotion: false,
+  });
+
+  /** 카메라 상태 → CatStatus 변환 */
+  // TODO: in_zone 상태는 zone UI 구현 시 활성화 예정
+  const catStatus: CatStatus =
+    cameraStatus.connectedCount === 0
+      ? { kind: "offline" }
+      : cameraStatus.hasMotion
+        ? { kind: "moving" }
+        : { kind: "resting" };
 
   /** 하단 토스트 메시지. 빈 문자열이면 숨김. */
   const [toastMessage, setToastMessage] = useState("");
@@ -133,6 +156,9 @@ export function CatvisorHomeDashboard({
             setLastWaterChangeAt(payload.recorded_at);
           } else if (payload.care_kind === "litter_clean") {
             setLastLitterCleanAt(payload.recorded_at);
+          } else if (payload.care_kind === "medicine") {
+            /* 약 복용 broadcast 수신 — lastMedicineAt 반영 */
+            setLastMedicineAt(payload.recorded_at);
           }
         },
       )
@@ -145,7 +171,8 @@ export function CatvisorHomeDashboard({
   /** 클릭 즉시 DB에 돌봄 기록 저장 — 모달 없이 바로 처리 */
   const handleClickEnvCare = useCallback(
     async (careKind: CareKind) => {
-      if (!homeId || envSaving) return;
+      if (!homeId || envSavingRef.current) return;
+      envSavingRef.current = careKind;
       setEnvSaving(careKind);
       try {
         const nowIso = new Date().toISOString();
@@ -180,10 +207,11 @@ export function CatvisorHomeDashboard({
           unknownError instanceof Error ? unknownError.message : "저장에 실패했습니다.";
         showToast(`저장 중 오류가 발생했어요: ${message}`);
       } finally {
+        envSavingRef.current = null;
         setEnvSaving(null);
       }
     },
-    [homeId, envSaving],
+    [homeId],
   );
 
   return (
@@ -214,8 +242,17 @@ export function CatvisorHomeDashboard({
         <section className={styles.cameraSection} aria-label="카메라 뷰">
           {homeId ? <CameraDeviceManager homeId={homeId} /> : null}
 
-          <MultiCameraGrid homeId={homeId} />
+          <MultiCameraGrid homeId={homeId} onCameraStatusChange={setCameraStatus} />
         </section>
+
+        {/* 고양이 상태 보드 — 카메라 섹션 아래 (homeId 없으면 숨김) */}
+        {homeId ? (
+          <CatStatusBoard
+            status={catStatus}
+            catName={catName}
+            cameraCount={cameraStatus.connectedCount}
+          />
+        ) : null}
 
         <RecentCatActivityLog
           initialLogs={initialActivityLogs}

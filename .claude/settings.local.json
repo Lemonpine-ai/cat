@@ -93,7 +93,14 @@
       "Bash(python:*)",
       "Bash(git commit:*)",
       "Bash(NEXT_LINT_IGNORE=1 npx next build)",
-      "Skill(design-review)"
+      "Skill(design-review)",
+      "Bash(cp staging/components/auth/LoginScreen.tsx src/components/auth/LoginScreen.tsx)",
+      "Bash(cp staging/components/auth/LoginScreen.module.css src/components/auth/LoginScreen.module.css)",
+      "Bash(cp staging/components/shell/ShellSplashGate.module.css src/components/shell/ShellSplashGate.module.css)",
+      "Bash(cp staging/components/broadcast/CameraBroadcastClient.module.css src/app/camera/broadcast/CameraBroadcastClient.module.css)",
+      "Bash(cp staging/components/home/CareStatusGrid.tsx src/components/home/CareStatusGrid.tsx)",
+      "Bash(explorer.exe C:\\\\Users\\\\PC\\\\Desktop\\\\projects\\\\cat\\\\src\\\\components\\\\auth:*)",
+      "WebFetch(domain:fonts.google.com)"
     ]
   }
 }

@@ -24,22 +24,38 @@ type LiveSession = {
   device_name: string;
 };
 
-type MultiCameraGridProps = {
-  homeId: string | null;
+/** 카메라 전체 상태 — CatStatusBoard에 전달용 */
+export type CameraAggregateStatus = {
+  /** 연결된 카메라 수 */
+  connectedCount: number;
+  /** 하나라도 움직임 감지 중인지 */
+  hasMotion: boolean;
 };
 
-export function MultiCameraGrid({ homeId }: MultiCameraGridProps) {
+type MultiCameraGridProps = {
+  homeId: string | null;
+  /** 카메라 상태 변경 시 호출 */
+  onCameraStatusChange?: (status: CameraAggregateStatus) => void;
+};
+
+export function MultiCameraGrid({ homeId, onCameraStatusChange }: MultiCameraGridProps) {
   const supabase = createSupabaseBrowserClient();
   const [sessions, setSessions] = useState<LiveSession[]>([]);
   const watcherRef = useRef<RealtimeChannel | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [failedIds, setFailedIds] = useState<Set<string>>(new Set());
 
+  /* 카메라별 연결/모션 상태 추적 (CatStatusBoard용) */
+  const connectedIdsRef = useRef<Set<string>>(new Set());
+  const motionMapRef = useRef<Map<string, boolean>>(new Map());
+
   /* ICE config 캐시 — 전체 카메라가 공유 (중복 fetch 방지) */
-  const [iceConfig, setIceConfig] = useState<RTCConfiguration | null>(null);
+  const [iceConfig, setIceConfig] = useState<{ rtcConfiguration: RTCConfiguration; turnRelayConfigured: boolean } | null>(null);
   useEffect(() => {
     resolveWebRtcPeerConnectionConfiguration()
-      .then(({ rtcConfiguration }) => setIceConfig(rtcConfiguration))
+      .then(({ rtcConfiguration, turnRelayConfigured }) =>
+        setIceConfig({ rtcConfiguration, turnRelayConfigured }),
+      )
       .catch(() => { /* 실패 시 각 슬롯이 직접 fetch */ });
   }, []);
 
@@ -49,6 +65,12 @@ export function MultiCameraGrid({ homeId }: MultiCameraGridProps) {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => { void loadFn(); }, 300);
   }
+  /* debounceRef 언마운트 시 정리 — stale 타이머 방지 */
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, []);
 
   /* ── live 세션 초기 로드 + Realtime 감시 ── */
   useEffect(() => {
@@ -149,6 +171,11 @@ export function MultiCameraGrid({ homeId }: MultiCameraGridProps) {
      * session_refreshed: 카메라 전환 시 offer가 바뀔 때 사용.
      * 기존 세션 목록을 1개로 덮어쓰지 않고, 해당 세션만 업데이트.
      * (이전에는 setSessions([1개])로 덮어써서 다른 카메라 연결이 끊어짐)
+     *
+     * ⚠ 알려진 제한: 같은 sessionId에서 offer_sdp만 교체되는 경우,
+     * CameraSlot의 useWebRtcSlotConnection useEffect는 sessionId dep만
+     * 감시하므로 자동 재연결이 일어나지 않음. 현재는 session_refreshed 시
+     * 새 sessionId가 발급되므로 문제없으나, 추후 같은 ID 재사용 시 대응 필요.
      */
     const refreshCh = supabase
       .channel(`cam_session_refresh_${homeId}`)
@@ -220,7 +247,22 @@ export function MultiCameraGrid({ homeId }: MultiCameraGridProps) {
               offer_sdp: row.offer_sdp!,
               device_name: `카메라 ${idx + 1}`,
             }));
-            setSessions(freshSessions);
+            /*
+             * ★ prevMap 병합 패턴 — loadSessions와 동일.
+             * 기존 세션 객체를 재사용하여 offer_sdp 참조 변경에 의한
+             * CameraSlot useEffect 재실행(WebRTC 재연결)을 방지한다.
+             */
+            setSessions((prev) => {
+              const prevMap = new Map(prev.map((s) => [s.id, s]));
+              const merged = freshSessions.map((s) => {
+                const existing = prevMap.get(s.id);
+                if (existing && existing.offer_sdp === s.offer_sdp) {
+                  return existing; /* 기존 참조 유지 → useEffect 재실행 안 됨 */
+                }
+                return s;
+              });
+              return merged;
+            });
             setFailedIds(new Set());
           }
         }
@@ -229,11 +271,49 @@ export function MultiCameraGrid({ homeId }: MultiCameraGridProps) {
     return () => clearInterval(fallback);
   }, [homeId, supabase]);
 
+  /** 카메라 상태 집계 → 상위 컴포넌트에 전달 */
+  const reportAggregateStatus = useCallback(() => {
+    const connectedCount = connectedIdsRef.current.size;
+    let hasMotion = false;
+    motionMapRef.current.forEach((v) => { if (v) hasMotion = true; });
+    onCameraStatusChange?.({ connectedCount, hasMotion });
+  }, [onCameraStatusChange]);
+
   const handleSlotPhase = useCallback((sessionId: string, phase: "connecting" | "connected" | "error") => {
     if (phase === "error") {
+      /* 에러 — 실패 목록에 추가하고 연결/모션 상태 제거 */
       setFailedIds((prev) => new Set(prev).add(sessionId));
+      connectedIdsRef.current.delete(sessionId);
+      motionMapRef.current.delete(sessionId);
+    } else if (phase === "connected") {
+      /* 연결 완료 — 연결 목록에 추가 */
+      connectedIdsRef.current.add(sessionId);
+    } else {
+      /* 연결 중 — 아직 미확정이므로 기존 상태 초기화 */
+      connectedIdsRef.current.delete(sessionId);
+      motionMapRef.current.delete(sessionId);
     }
-  }, []);
+    reportAggregateStatus();
+  }, [reportAggregateStatus]);
+
+  /** 카메라별 모션 변경 핸들러 */
+  const handleSlotMotion = useCallback((sessionId: string, hasMotion: boolean) => {
+    motionMapRef.current.set(sessionId, hasMotion);
+    reportAggregateStatus();
+  }, [reportAggregateStatus]);
+
+  /* 세션 목록 변경 시 사라진 세션의 상태 정리 */
+  useEffect(() => {
+    const currentIds = new Set(sessions.map((s) => s.id));
+    let changed = false;
+    connectedIdsRef.current.forEach((id) => {
+      if (!currentIds.has(id)) { connectedIdsRef.current.delete(id); changed = true; }
+    });
+    motionMapRef.current.forEach((_, id) => {
+      if (!currentIds.has(id)) { motionMapRef.current.delete(id); changed = true; }
+    });
+    if (changed) reportAggregateStatus();
+  }, [sessions, reportAggregateStatus]);
 
   const visibleSessions = sessions.filter((s) => !failedIds.has(s.id));
 
@@ -260,7 +340,10 @@ export function MultiCameraGrid({ homeId }: MultiCameraGridProps) {
           offerSdp={target.offer_sdp}
           deviceName={target.device_name}
           homeId={homeId}
-          rtcConfiguration={iceConfig}
+          rtcConfiguration={iceConfig?.rtcConfiguration ?? null}
+          turnRelayConfigured={iceConfig?.turnRelayConfigured}
+          onPhaseChange={(phase) => handleSlotPhase(target.id, phase)}
+          onMotionChange={(m) => handleSlotMotion(target.id, m)}
         />
       </section>
     );
@@ -319,10 +402,12 @@ export function MultiCameraGrid({ homeId }: MultiCameraGridProps) {
             offerSdp={s.offer_sdp}
             deviceName={s.device_name}
             homeId={homeId}
-            rtcConfiguration={iceConfig}
+            rtcConfiguration={iceConfig?.rtcConfiguration ?? null}
+            turnRelayConfigured={iceConfig?.turnRelayConfigured}
             delayMs={idx * STAGGER_DELAY_MS}
             onExpand={() => setExpandedId(s.id)}
             onPhaseChange={(phase) => handleSlotPhase(s.id, phase)}
+            onMotionChange={(m) => handleSlotMotion(s.id, m)}
           />
         ))}
       </div>

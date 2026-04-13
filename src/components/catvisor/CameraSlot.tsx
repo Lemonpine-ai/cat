@@ -6,10 +6,11 @@
  * 이 컴포넌트는 UI(비디오, 오디오 버튼, 상태 표시)만 담당.
  */
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Loader2, AlertTriangle, Maximize2, Volume2, VolumeX, Mic, MicOff } from "lucide-react";
 import { useWebRtcSlotConnection } from "@/hooks/useWebRtcSlotConnection";
 import { useZoneDetection } from "@/hooks/useZoneDetection";
+import { useGlobalMotion } from "@/hooks/useGlobalMotion";
 import { ZoneDisplayOverlay } from "@/components/zone/ZoneDisplayOverlay";
 import type { SlotPhase } from "@/hooks/useWebRtcSlotConnection";
 
@@ -20,10 +21,14 @@ type CameraSlotProps = {
   homeId?: string | null;
   /** 외부 ICE config — MultiCameraGrid에서 1번만 로드해서 공유 */
   rtcConfiguration?: RTCConfiguration | null;
+  /** TURN relay 설정 여부 — MultiCameraGrid에서 전달 */
+  turnRelayConfigured?: boolean;
   /** 연결 지연 (ms) — 2대 동시 연결 시 stagger용 */
   delayMs?: number;
   onExpand?: () => void;
   onPhaseChange?: (phase: SlotPhase) => void;
+  /** 모션 상태 변경 콜백 (대시보드 상태 보드용) */
+  onMotionChange?: (hasMotion: boolean) => void;
 };
 
 export function CameraSlot({
@@ -32,15 +37,18 @@ export function CameraSlot({
   deviceName,
   homeId = null,
   rtcConfiguration = null,
+  turnRelayConfigured,
   delayMs = 0,
   onExpand,
   onPhaseChange,
+  onMotionChange,
 }: CameraSlotProps) {
   /* WebRTC 연결 훅 — ICE config 공유 + stagger 지연 */
   const { videoRef, phase, pcRef, reconnect } = useWebRtcSlotConnection({
     sessionId,
     offerSdp,
     rtcConfiguration,
+    turnRelayConfigured,
     delayMs,
     onPhaseChange,
   });
@@ -52,10 +60,35 @@ export function CameraSlot({
     isConnected: phase === "connected",
   });
 
+  /* 글로벌 모션 감지 — zone 없을 때만 활성화 (zone 있으면 zone 감지가 담당) */
+  const hasMotion = useGlobalMotion({
+    videoRef,
+    isConnected: phase === "connected" && zones.length === 0,
+  });
+
+  /* 모션 콜백을 ref로 보관 — 인라인 화살표 함수로 인한 불필요한 effect 재실행 방지 */
+  const onMotionRef = useRef(onMotionChange);
+  onMotionRef.current = onMotionChange;
+
+  /* 모션 상태 변경 시 상위 컴포넌트에 알림 — connected 상태에서만 전달 */
+  useEffect(() => {
+    if (phase === "connected") {
+      onMotionRef.current?.(hasMotion);
+    }
+  }, [hasMotion, phase]);
+
   /* 오디오 상태 */
   const [isMuted, setIsMuted] = useState(true);
   const [isMicOn, setIsMicOn] = useState(false);
   const micTrackRef = useRef<MediaStreamTrack | null>(null);
+
+  /* 마이크 트랙 정리 — 언마운트 시 미디어 리소스 해제 */
+  useEffect(() => {
+    return () => {
+      micTrackRef.current?.stop();
+      micTrackRef.current = null;
+    };
+  }, []);
 
   /* 스피커 토글 */
   const toggleMute = useCallback(() => {
@@ -66,7 +99,8 @@ export function CameraSlot({
     }
   }, [videoRef]);
 
-  /* 마이크 토글 (PTT 인터컴) */
+  /* 마이크 토글 (PTT 인터컴)
+   * PTT(Push-to-Talk) — enabled 토글로 무음 처리, track.stop()은 하지 않음 (재획득 비용 방지) */
   const toggleMic = useCallback(async () => {
     if (micTrackRef.current) {
       const next = !micTrackRef.current.enabled;

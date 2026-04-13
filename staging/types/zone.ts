@@ -96,6 +96,28 @@ export const ZONE_TYPE_CONFIG: Record<
   },
 };
 
+/**
+ * 전체 화면 움직임 감지 상태 (zone 미설정 시 사용).
+ *
+ * 상태 조합표:
+ * | isActive | currentState   | initialized | 의미                          |
+ * |----------|----------------|-------------|-------------------------------|
+ * | false    | "resting"      | false       | 아직 분석 전 (초기 상태)       |
+ * | true     | "active"       | true        | 현재 움직임 감지 중            |
+ * | false    | "active"       | true        | 직전 프레임 정지, 5분 미경과   |
+ * | false    | "resting"      | true        | 5분+ 비활동 (휴식 중)          |
+ */
+export type GlobalMotionState = {
+  /** 현재 프레임에서 움직임이 감지되었는지 여부 */
+  isActive: boolean;
+  /** 마지막 활동 감지 시각 (null이면 아직 감지 없음) */
+  lastActivityAt: number | null;
+  /** 종합 판정: active(5분 내 활동) | resting(5분+ 비활동) */
+  currentState: "active" | "resting";
+  /** 최초 분석 완료 여부 — false면 아직 한 번도 분석하지 않은 상태 */
+  initialized: boolean;
+};
+
 /** 카메라당 최대 zone 개수 */
 export const MAX_ZONES_PER_DEVICE = 12;
 

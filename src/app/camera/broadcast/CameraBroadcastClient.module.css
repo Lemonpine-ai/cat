@@ -468,3 +468,51 @@
 .btnPairLink:active {
   filter: brightness(0.95);
 }
+
+/* ── 화면 딤 오버레이 — 배터리·발열 절약용 ──
+   방송 중 30초 무터치 시 화면을 어둡게 전환.
+   카메라·WebRTC는 계속 동작, 시각적 오버레이만 제어. */
+
+.dimOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(0, 0, 0, 1.0);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.5rem;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  will-change: opacity;
+  pointer-events: none;
+  animation: dimFadeIn 0.5s ease-out forwards;
+}
+
+@keyframes dimFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; pointer-events: auto; }
+}
+
+/* 방송 중 펄스 인디케이터 — 사용자에게 방송 진행 중임을 알림 */
+.dimPulseIndicator {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #4fd1c5;
+  box-shadow: 0 0 12px rgba(79, 209, 197, 0.6);
+  animation: dimPulse 2s ease-in-out infinite;
+}
+
+@keyframes dimPulse {
+  0%, 100% { opacity: 0.4; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.3); }
+}
+
+.dimHintText {
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.3);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}

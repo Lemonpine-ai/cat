@@ -29,6 +29,7 @@ import {
 } from "@/lib/webrtc/broadcasterSignalingRpcPayload";
 import { resolveWebRtcPeerConnectionConfiguration } from "@/lib/webrtc/getWebRtcIceServersForPeerConnection";
 import { buildWebRtcNetworkFailureUserMessage } from "@/lib/webrtc/buildWebRtcNetworkFailureUserMessage";
+import { useScreenDimmer } from "@/hooks/useScreenDimmer";
 import styles from "./CameraBroadcastClient.module.css";
 
 /**
@@ -134,6 +135,10 @@ export function CameraBroadcastClient() {
   const [broadcastHomeId, setBroadcastHomeId] = useState<string | null>(null);
   // 구독 완료된 Broadcast 채널 ref — send() 호출 시 재사용
   const envBroadcastChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+
+  /* 방송 중 화면 딤 — 배터리·발열 절약 (30초 무터치 시 어둡게) */
+  const isBroadcasting = broadcastPhase === "live" || broadcastPhase === "connecting";
+  const { isDimmed, wakeUp } = useScreenDimmer(isBroadcasting);
 
   const localVideoRef = useRef<HTMLVideoElement>(null);
   /** viewer 로부터 수신한 오디오를 재생하는 숨겨진 audio 엘리먼트 */
@@ -1126,6 +1131,20 @@ export function CameraBroadcastClient() {
 
   return (
     <div className={styles.page}>
+      {/* 화면 딤 오버레이 — 터치하면 30초간 UI 표시 */}
+      {isDimmed && (
+        <div
+          className={styles.dimOverlay}
+          onClick={wakeUp}
+          onTouchStart={(e) => { e.preventDefault(); wakeUp(); }}
+          role="button"
+          aria-label="화면 터치하여 깨우기"
+        >
+          <div className={styles.dimPulseIndicator} />
+          <span className={styles.dimHintText}>터치하면 화면이 켜져요</span>
+        </div>
+      )}
+
       <header className={styles.header}>
         <div className={styles.headerLeft}>
           <span className={styles.appName}>다보냥 · 방송국</span>

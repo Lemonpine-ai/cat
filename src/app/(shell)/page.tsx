@@ -155,6 +155,7 @@ export default async function HomePage() {
       initialLastWaterChangeAt={lastWaterChangeAt}
       initialLastLitterCleanAt={lastLitterCleanAt}
       initialLastMedicineAt={lastMedicineAt}
+      catName={cats.length === 1 ? cats[0].name : null}
     >
       <HomeProfileRow cats={cats} fetchErrorMessage={catsFetchError} />
       {cats.length > 0 ? (

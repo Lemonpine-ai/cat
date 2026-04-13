@@ -33,6 +33,8 @@ type UseWebRtcSlotConnectionOptions = {
   offerSdp: string;
   /** 외부에서 전달받은 ICE config — MultiCameraGrid에서 1번만 로드 */
   rtcConfiguration?: RTCConfiguration | null;
+  /** TURN relay 설정 여부 — 외부에서 전달 (하드코딩 true 제거) */
+  turnRelayConfigured?: boolean;
   /** 연결 지연 (ms) — 2대 동시 연결 시 stagger용 */
   delayMs?: number;
   onPhaseChange?: (phase: SlotPhase) => void;
@@ -42,10 +44,15 @@ export function useWebRtcSlotConnection({
   sessionId,
   offerSdp,
   rtcConfiguration: externalRtcConfig = null,
+  turnRelayConfigured: externalTurnRelay,
   delayMs = 0,
   onPhaseChange,
 }: UseWebRtcSlotConnectionOptions) {
   const supabase = createSupabaseBrowserClient();
+
+  /* externalRtcConfig를 ref로 보관 — connect 클로저 안에서 항상 최신값 참조 */
+  const externalRtcConfigRef = useRef(externalRtcConfig);
+  externalRtcConfigRef.current = externalRtcConfig;
 
   const [phase, setPhase] = useState<SlotPhase>("connecting");
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -53,6 +60,8 @@ export function useWebRtcSlotConnection({
   const iceChannelRef = useRef<RealtimeChannel | null>(null);
   const relayRetried = useRef(false);
   const connectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** grace timer — disconnected 상태 유예 타이머 (useRef로 cleanup 보장) */
+  const graceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   /* 상태 갱신 + 외부 콜백 */
   const updatePhase = useCallback(
@@ -65,6 +74,11 @@ export function useWebRtcSlotConnection({
     if (connectTimeoutRef.current) {
       clearTimeout(connectTimeoutRef.current);
       connectTimeoutRef.current = null;
+    }
+    /* graceTimer 정리 — 언마운트 시 stale 타이머 방지 */
+    if (graceTimerRef.current) {
+      clearTimeout(graceTimerRef.current);
+      graceTimerRef.current = null;
     }
     if (pcRef.current) {
       pcRef.current.ontrack = null;
@@ -104,9 +118,11 @@ export function useWebRtcSlotConnection({
         /* ICE config: 외부에서 받았으면 재사용, 없으면 직접 fetch */
         let rtcConfiguration: RTCConfiguration;
         let turnRelayConfigured: boolean;
-        if (externalRtcConfig && !forceRelay) {
-          rtcConfiguration = externalRtcConfig;
-          turnRelayConfigured = true;
+        const currentRtcConfig = externalRtcConfigRef.current;
+        if (currentRtcConfig && !forceRelay) {
+          rtcConfiguration = currentRtcConfig;
+          /* 외부에서 전달된 turnRelayConfigured 사용 (하드코딩 true 제거) */
+          turnRelayConfigured = externalTurnRelay ?? false;
         } else {
           const resolved = await resolveWebRtcPeerConnectionConfiguration({ forceRelay });
           rtcConfiguration = resolved.rtcConfiguration;
@@ -176,30 +192,29 @@ export function useWebRtcSlotConnection({
           }
         };
 
-        /* connection 상태 변화 */
-        let graceTimer: ReturnType<typeof setTimeout> | null = null;
+        /* connection 상태 변화 — graceTimerRef 사용 (cleanup 시 정리 보장) */
         pc.onconnectionstatechange = () => {
           const s = pc.connectionState;
           if (s === "connected") {
             clearConnectTimeout();
-            if (graceTimer) { clearTimeout(graceTimer); graceTimer = null; }
+            if (graceTimerRef.current) { clearTimeout(graceTimerRef.current); graceTimerRef.current = null; }
             updatePhase("connected");
           }
           if (s === "failed") {
             clearConnectTimeout();
-            if (graceTimer) { clearTimeout(graceTimer); graceTimer = null; }
+            if (graceTimerRef.current) { clearTimeout(graceTimerRef.current); graceTimerRef.current = null; }
             reportFailure();
           }
           if (s === "disconnected" && !reported) {
-            if (!graceTimer) {
-              graceTimer = setTimeout(() => {
-                graceTimer = null;
+            if (!graceTimerRef.current) {
+              graceTimerRef.current = setTimeout(() => {
+                graceTimerRef.current = null;
                 if (pc.connectionState === "disconnected") { reportFailure(); }
               }, 10000);
             }
           }
           if (s === "closed") {
-            if (graceTimer) { clearTimeout(graceTimer); graceTimer = null; }
+            if (graceTimerRef.current) { clearTimeout(graceTimerRef.current); graceTimerRef.current = null; }
             if (!reported) { updatePhase("error"); void cleanup(); }
           }
         };
@@ -309,7 +324,14 @@ export function useWebRtcSlotConnection({
     [sessionId, offerSdp, supabase, cleanup, updatePhase],
   );
 
-  /* 마운트 시 연결 — sessionId가 바뀔 때만 (offerSdp 제거: 참조 변경으로 재연결 방지) */
+  /*
+   * 마운트 시 연결 — sessionId가 바뀔 때만 (offerSdp 제거: 참조 변경으로 재연결 방지)
+   *
+   * ⚠ 알려진 제한: session_refreshed로 offerSdp만 바뀌는 경우
+   * sessionId dep만 있으므로 이 useEffect가 재실행되지 않음.
+   * 현재는 session_refreshed 시 sessionId도 함께 바뀌므로 문제없으나,
+   * 같은 sessionId에서 offer만 갱신하는 시나리오가 생기면 별도 처리 필요.
+   */
   useEffect(() => {
     const timer = setTimeout(() => { void connect(); }, delayMs);
     return () => { clearTimeout(timer); void cleanup(); };

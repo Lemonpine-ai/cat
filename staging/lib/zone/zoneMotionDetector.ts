@@ -11,10 +11,7 @@
 
 import type { CameraZone, ZoneRect } from "../../types/zone";
 import { ZONE_TYPE_CONFIG } from "../../types/zone";
-
-/** 분석용 프레임 크기 (작을수록 CPU 절약) */
-const FRAME_WIDTH = 320;
-const FRAME_HEIGHT = 240;
+import { createAnalysisCanvas, FRAME_WIDTH, FRAME_HEIGHT } from "./createAnalysisCanvas";
 /** 변화 감지 임계값 (RGB 합계 차이) */
 const PIXEL_DIFF_THRESHOLD = 50;
 /** 변화율 임계값 (15%) */
@@ -35,26 +32,39 @@ export type ZoneActivityEvent = {
 };
 
 export class ZoneMotionDetector {
-  private canvas: OffscreenCanvas;
-  private ctx: OffscreenCanvasRenderingContext2D;
+  private canvas: OffscreenCanvas | HTMLCanvasElement;
+  private ctx: OffscreenCanvasRenderingContext2D | CanvasRenderingContext2D;
+  /** zone 분석용 이전 프레임 */
   private prevFrame: ImageData | null = null;
+  /** 전체 화면 분석용 이전 프레임 (모드 전환 시 오탐 방지) */
+  private prevFullFrame: ImageData | null = null;
   private zoneStates: Map<string, ZoneState> = new Map();
   private zones: CameraZone[] = [];
 
   constructor() {
-    this.canvas = new OffscreenCanvas(FRAME_WIDTH, FRAME_HEIGHT);
-    this.ctx = this.canvas.getContext("2d")!;
+    /* OffscreenCanvas 미지원 환경 fallback 포함 */
+    const { canvas, ctx } = createAnalysisCanvas();
+    this.canvas = canvas;
+    this.ctx = ctx;
   }
 
   /** zone 목록 업데이트 */
   setZones(zones: CameraZone[]) {
     this.zones = zones;
+    /* 삭제된 zone의 state 정리 */
+    const newIds = new Set(zones.map((z) => z.id));
+    for (const id of this.zoneStates.keys()) {
+      if (!newIds.has(id)) this.zoneStates.delete(id);
+    }
     /* 새 zone은 상태 초기화 */
     for (const zone of zones) {
       if (!this.zoneStates.has(zone.id)) {
         this.zoneStates.set(zone.id, { activeStartAt: null, lastLoggedAt: 0 });
       }
     }
+    /* BUG-6: 모드 전환 시 이전 프레임 모두 무효화 (오탐 방지) */
+    this.prevFrame = null;
+    this.prevFullFrame = null;
   }
 
   /**
@@ -125,6 +135,33 @@ export class ZoneMotionDetector {
     return events;
   }
 
+  /**
+   * 전체 화면 움직임 감지 — zone 없이 화면 전체 pixel diff.
+   * 변화율이 임계값 이상이면 true 반환.
+   */
+  analyzeFullScreen(video: HTMLVideoElement): boolean {
+    if (video.readyState < 2) return false; /* 영상 로딩 안 됨 */
+
+    /* 프레임 캡처 (320x240 축소) */
+    this.ctx.drawImage(video, 0, 0, FRAME_WIDTH, FRAME_HEIGHT);
+    const currentFrame = this.ctx.getImageData(0, 0, FRAME_WIDTH, FRAME_HEIGHT);
+
+    if (!this.prevFullFrame) {
+      this.prevFullFrame = currentFrame;
+      return false;
+    }
+
+    /* 전체 프레임 변화율 계산 (rect = 전체 화면) */
+    const changeRatio = this.calcZoneChangeRatio(
+      this.prevFullFrame,
+      currentFrame,
+      { x: 0, y: 0, width: 1, height: 1 },
+    );
+
+    this.prevFullFrame = currentFrame;
+    return changeRatio >= CHANGE_RATIO_THRESHOLD;
+  }
+
   /** 현재 활성 zone ID 목록 (UI 하이라이트용) */
   getActiveZoneIds(): Set<string> {
     const active = new Set<string>();
@@ -167,6 +204,7 @@ export class ZoneMotionDetector {
   /** 리소스 정리 */
   destroy() {
     this.prevFrame = null;
+    this.prevFullFrame = null;
     this.zoneStates.clear();
     this.zones = [];
   }
