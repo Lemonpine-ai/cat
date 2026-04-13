@@ -85,6 +85,16 @@ export function useWebRtcSlotConnection({
   const connect = useCallback(
     async (forceRelay = false) => {
       console.log(`[CameraSlot] 코드 버전: ${CODE_VERSION}`);
+
+      /* ★ 이미 연결된 상태면 재연결 안 함 (세션 재조회 시 불필요한 재연결 방지) */
+      if (pcRef.current && (
+        pcRef.current.connectionState === "connected" ||
+        pcRef.current.connectionState === "connecting"
+      )) {
+        console.log("[CameraSlot] 이미 연결 중/완료 — 재연결 스킵");
+        return;
+      }
+
       updatePhase("connecting");
       await cleanup();
       /* auth.getUser() 제거 — MultiCameraGrid에서 이미 호출했으므로
