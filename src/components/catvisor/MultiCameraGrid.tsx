@@ -84,14 +84,27 @@ export function MultiCameraGrid({ homeId }: MultiCameraGridProps) {
       }));
 
       setSessions((prev) => {
-        const prevIds = new Set(prev.map((s) => s.id));
+        /*
+         * ★ 기존 세션 객체 재사용 — offer_sdp 참조가 바뀌면
+         * CameraSlot의 useEffect가 재실행되어 WebRTC 재연결 발생.
+         * ID와 offer_sdp 내용이 같으면 기존 객체를 그대로 유지한다.
+         */
+        const prevMap = new Map(prev.map((s) => [s.id, s]));
+        const merged = next.map((s) => {
+          const existing = prevMap.get(s.id);
+          if (existing && existing.offer_sdp === s.offer_sdp) {
+            return existing; /* 기존 참조 유지 → useEffect 재실행 안 됨 */
+          }
+          return s;
+        });
+
         const nextIds = new Set(next.map((s) => s.id));
         const hasNewSession = next.some((s) => !prevIds.has(s.id));
         const hasRemovedSession = prev.some((s) => !nextIds.has(s.id));
         if (hasNewSession || hasRemovedSession) {
           setFailedIds(new Set());
         }
-        return next;
+        return merged;
       });
       setExpandedId((prev) => (prev && !next.some((s) => s.id === prev) ? null : prev));
     }
