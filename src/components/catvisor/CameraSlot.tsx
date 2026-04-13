@@ -87,10 +87,10 @@ export function CameraSlot({
       className="relative aspect-video w-full overflow-hidden rounded-2xl bg-[#0d1a18] shadow-lg cursor-pointer"
       onClick={onExpand}
     >
-      {/* 비디오 — object-contain으로 좌표 정렬 보장 (zone overlay 호환) */}
+      {/* 비디오 */}
       <video
         ref={videoRef}
-        className="size-full object-contain"
+        className="size-full object-cover"
         autoPlay
         playsInline
         muted

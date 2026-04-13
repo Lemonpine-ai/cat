@@ -37,39 +37,33 @@ export function useZoneDetection({
   const detectorRef = useRef<ZoneMotionDetector | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  /* zone 목록 Supabase에서 로드 (home_id 기준 — 전체 카메라의 zone) */
+  /* zone 목록 Supabase에서 로드 (home_id 기준) */
   const loadZones = useCallback(async () => {
     if (!homeId) return;
-    const { data, error } = await supabase
-      .from("camera_zones")
-      .select("*")
-      .eq("home_id", homeId)
-      .order("created_at", { ascending: true });
+    try {
+      const { data, error } = await supabase
+        .from("camera_zones")
+        .select("*")
+        .eq("home_id", homeId)
+        .order("created_at", { ascending: true });
 
-    if (!error && data) {
-      setZones(data as CameraZone[]);
+      if (!error && data) {
+        setZones(data as CameraZone[]);
+      }
+    } catch {
+      /* 네트워크 에러 시 무시 — zone 없이도 카메라는 작동해야 함 */
     }
   }, [supabase, homeId]);
 
-  /* zone 로드 (마운트 시 + deviceId 변경 시) */
-  useEffect(() => {
-    void loadZones();
-  }, [loadZones]);
-
-  /* zone Realtime 구독 — zone 변경 시 자동 갱신 */
+  /* zone 로드 — 마운트 후 3초 딜레이 (Auth Lock 경합 방지) */
   useEffect(() => {
     if (!homeId) return;
-    const channel = supabase
-      .channel(`zones-${homeId}`)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "camera_zones", filter: `home_id=eq.${homeId}` },
-        () => { void loadZones(); },
-      )
-      .subscribe();
+    const timer = setTimeout(() => { void loadZones(); }, 3000);
+    return () => clearTimeout(timer);
+  }, [loadZones, homeId]);
 
-    return () => { void supabase.removeChannel(channel); };
-  }, [supabase, homeId, loadZones]);
+  /* zone Realtime 구독 — zone이 있을 때만 (불필요한 채널 방지) */
+  /* 현재는 zone 설정 UI가 없으므로 Realtime 구독 생략 */
 
   /* 활동 감지 시 care_logs에 자동 기록 */
   const handleActivityEvent = useCallback(
