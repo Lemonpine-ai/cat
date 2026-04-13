@@ -99,7 +99,7 @@ export function MultiCameraGrid({ homeId }: MultiCameraGridProps) {
         });
 
         const nextIds = new Set(next.map((s) => s.id));
-        const hasNewSession = next.some((s) => !prevIds.has(s.id));
+        const hasNewSession = next.some((s) => !prevMap.has(s.id));
         const hasRemovedSession = prev.some((s) => !nextIds.has(s.id));
         if (hasNewSession || hasRemovedSession) {
           setFailedIds(new Set());
