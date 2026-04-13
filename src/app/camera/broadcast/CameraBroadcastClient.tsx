@@ -849,26 +849,6 @@ export function CameraBroadcastClient() {
       }
       const effectiveHomeId = rpcHomeId ?? broadcastHomeId;
 
-      /*
-       * 대시보드에 세션 생성 알림 — SECURITY DEFINER RPC 는
-       * postgres_changes Realtime 이벤트를 트리거하지 않으므로
-       * broadcast 채널로 직접 알려준다.
-       */
-      if (effectiveHomeId) {
-        const notifyCh = supabase.channel(`cam_session_broadcast_${effectiveHomeId}`);
-        notifyCh.subscribe((status) => {
-          if (status === "SUBSCRIBED") {
-            void notifyCh.send({
-              type: "broadcast",
-              event: "session_started",
-              payload: { session_id: sessionId },
-            });
-            /* 알림 전송 후 채널 정리 (일회성) */
-            setTimeout(() => void supabase.removeChannel(notifyCh), 2000);
-          }
-        });
-      }
-
       /* ref 큐에 쌓인 ICE 캔디데이트 일괄 전송 */
       const queued = [...pendingIceCandidatesRef.current];
       pendingIceCandidatesRef.current = [];
@@ -880,7 +860,15 @@ export function CameraBroadcastClient() {
         });
       }
 
-      /* viewer 가 answer SDP 를 직접 보내는 broadcast 채널 구독 (DB 폴링 실패 대비) */
+      /*
+       * ★ 레이스 컨디션 수정 ★
+       * answer_ready 채널을 먼저 구독 완료한 뒤 session_started 알림을 보낸다.
+       * 이전에는 session_started → answer_ready 순서라서 뷰어가 answer 를
+       * 보내는 시점에 broadcaster 가 아직 answer_ready 를 구독 안 한 경우
+       * push 를 놓쳤다.
+       */
+
+      /* ① viewer 가 answer SDP 를 직접 보내는 broadcast 채널 먼저 구독 */
       if (answerReadyChRef.current) {
         void supabase.removeChannel(answerReadyChRef.current);
       }
@@ -924,7 +912,34 @@ export function CameraBroadcastClient() {
             void pollSignalingOnce();
           }
         })();
-      }).subscribe();
+      });
+
+      /* answer_ready 구독 완료를 기다린 뒤 session_started 전송 (최대 3초 대기) */
+      await Promise.race([
+        new Promise<void>((resolve) => {
+          answerReadyCh.subscribe((status) => {
+            if (status === "SUBSCRIBED") resolve();
+          });
+        }),
+        new Promise<void>((resolve) => setTimeout(resolve, 3000)),
+      ]);
+      console.log("[broadcaster] answer_ready 채널 구독 완료 → session_started 전송");
+
+      /* ② 대시보드에 세션 생성 알림 — answer_ready 구독 후 전송하므로 push 유실 방지 */
+      if (effectiveHomeId) {
+        const notifyCh = supabase.channel(`cam_session_broadcast_${effectiveHomeId}`);
+        notifyCh.subscribe((status) => {
+          if (status === "SUBSCRIBED") {
+            void notifyCh.send({
+              type: "broadcast",
+              event: "session_started",
+              payload: { session_id: sessionId },
+            });
+            /* 알림 전송 후 채널 정리 (일회성) */
+            setTimeout(() => void supabase.removeChannel(notifyCh), 2000);
+          }
+        });
+      }
 
       /** 단일 signaling 폴링 실행 (push 알림 + interval 공용) */
       async function pollSignalingOnce() {
