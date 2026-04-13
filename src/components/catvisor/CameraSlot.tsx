@@ -1,27 +1,15 @@
 "use client";
 
 /**
- * CameraSlot — 단일 WebRTC 수신 슬롯 + 양방향 오디오.
- * 기존 CameraLiveViewer 의 connectToLiveSession 로직을 독립 추출.
- *
- * 오디오 기능:
- * - 듣기: 스피커 버튼으로 broadcaster 오디오 음소거/해제
- * - 말하기: 마이크 버튼(PTT)으로 viewer → broadcaster 인터컴
- *   answer 생성 전에 mic track 을 추가하여 재협상 없이 양방향 확보.
+ * CameraSlot — 단일 카메라 뷰어 UI.
+ * WebRTC 연결은 useWebRtcSlotConnection 훅에 위임.
+ * 이 컴포넌트는 UI(비디오, 오디오 버튼, 상태 표시)만 담당.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { createSupabaseBrowserClient } from "@/lib/supabase/client";
-import {
-  decodeSdpFromDatabaseColumn,
-  encodePlainSdpForDatabaseColumn,
-} from "@/lib/webrtc/sessionDescriptionPayload";
-import { resolveWebRtcPeerConnectionConfiguration } from "@/lib/webrtc/getWebRtcIceServersForPeerConnection";
-import type { RealtimeChannel } from "@supabase/supabase-js";
+import { useCallback, useRef, useState } from "react";
 import { Loader2, AlertTriangle, Maximize2, Volume2, VolumeX, Mic, MicOff } from "lucide-react";
-
-/* ── 연결 상태 ── */
-type SlotPhase = "connecting" | "connected" | "error";
+import { useWebRtcSlotConnection } from "@/hooks/useWebRtcSlotConnection";
+import type { SlotPhase } from "@/hooks/useWebRtcSlotConnection";
 
 type CameraSlotProps = {
   sessionId: string;
@@ -31,9 +19,6 @@ type CameraSlotProps = {
   onPhaseChange?: (phase: SlotPhase) => void;
 };
 
-/* 코드 버전 확인 — 브라우저 캐시 문제 진단용 */
-const CAMERA_CODE_VERSION = "v3-rpc";
-
 export function CameraSlot({
   sessionId,
   offerSdp,
@@ -41,274 +26,35 @@ export function CameraSlot({
   onExpand,
   onPhaseChange,
 }: CameraSlotProps) {
-  const supabase = createSupabaseBrowserClient();
+  /* WebRTC 연결 훅 — 연결/정리/재시도 로직 전부 위임 */
+  const { videoRef, phase, pcRef, reconnect } = useWebRtcSlotConnection({
+    sessionId,
+    offerSdp,
+    onPhaseChange,
+  });
 
-  const [phase, setPhase] = useState<SlotPhase>("connecting");
   /* 오디오 상태 */
   const [isMuted, setIsMuted] = useState(true);
   const [isMicOn, setIsMicOn] = useState(false);
-
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const pcRef = useRef<RTCPeerConnection | null>(null);
-  const iceChannelRef = useRef<RealtimeChannel | null>(null);
-  /** viewer 마이크 트랙 — enabled 토글로 PTT 구현 */
   const micTrackRef = useRef<MediaStreamTrack | null>(null);
-  const relayRetried = useRef(false);
-  /** 연결 타임아웃 — stale 세션에서 무한 대기 방지 (20초) */
-  const connectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const updatePhase = useCallback(
-    (next: SlotPhase) => { setPhase(next); onPhaseChange?.(next); },
-    [onPhaseChange],
-  );
-
-  /* ── PeerConnection 정리 ── */
-  const cleanup = useCallback(async () => {
-    /* 연결 타임아웃 해제 */
-    if (connectTimeoutRef.current) {
-      clearTimeout(connectTimeoutRef.current);
-      connectTimeoutRef.current = null;
-    }
-    /* 마이크 트랙 해제 */
-    if (micTrackRef.current) {
-      micTrackRef.current.stop();
-      micTrackRef.current = null;
-    }
-    if (pcRef.current) {
-      pcRef.current.ontrack = null;
-      pcRef.current.oniceconnectionstatechange = null;
-      pcRef.current.onconnectionstatechange = null;
-      pcRef.current.onicecandidate = null;
-      pcRef.current.close();
-      pcRef.current = null;
-    }
-    if (iceChannelRef.current) {
-      await supabase.removeChannel(iceChannelRef.current);
-      iceChannelRef.current = null;
-    }
-    if (videoRef.current) videoRef.current.srcObject = null;
-  }, [supabase]);
-
-  /* ── WebRTC 연결 ── */
-  const connect = useCallback(
-    async (forceRelay = false) => {
-      console.log(`[CameraSlot] 코드 버전: ${CAMERA_CODE_VERSION}`);
-      updatePhase("connecting");
-      await cleanup();
-
-      /* auth 세션 복원 보장 — RLS 로 보호된 테이블 접근 전 필수 */
-      await supabase.auth.getUser();
-
-      try {
-        const { rtcConfiguration, turnRelayConfigured } =
-          await resolveWebRtcPeerConnectionConfiguration({ forceRelay });
-        const pc = new RTCPeerConnection(rtcConfiguration);
-        pcRef.current = pc;
-
-        let reported = false;
-        function reportFailure() {
-          if (reported) return;
-          reported = true;
-          if (!forceRelay && turnRelayConfigured && !relayRetried.current) {
-            relayRetried.current = true;
-            void cleanup().then(() => void connect(true));
-            return;
-          }
-          updatePhase("error");
-          void cleanup();
-        }
-
-        const appliedIceKeys = new Set<string>();
-        async function applyIce(raw: RTCIceCandidateInit) {
-          const key = JSON.stringify(raw);
-          if (appliedIceKeys.has(key)) return;
-          if (!pc.remoteDescription) return;
-          appliedIceKeys.add(key);
-          try { await pc.addIceCandidate(new RTCIceCandidate(raw)); } catch { /* 무시 */ }
-        }
-
-        /* 미디어 수신 → video 바인드 */
-        pc.ontrack = ({ streams }) => {
-          if (videoRef.current && streams[0]) {
-            videoRef.current.srcObject = streams[0];
-          }
-        };
-
-        /** 연결 성공 시 타임아웃 해제 헬퍼 */
-        function clearConnectTimeout() {
-          if (connectTimeoutRef.current) {
-            clearTimeout(connectTimeoutRef.current);
-            connectTimeoutRef.current = null;
-          }
-        }
-
-        pc.oniceconnectionstatechange = () => {
-          const s = pc.iceConnectionState;
-          console.log("[CameraSlot] ICE 상태:", s);
-          if (s === "connected" || s === "completed") { clearConnectTimeout(); relayRetried.current = false; updatePhase("connected"); }
-          /* disconnected/failed 모두 relay 재시도 대상 (STUN-only 환경 대응) */
-          if (s === "failed" || s === "disconnected") {
-            if (!forceRelay && turnRelayConfigured && !relayRetried.current) {
-              clearConnectTimeout();
-              relayRetried.current = true;
-              console.log("[CameraSlot] ICE", s, "→ relay 재시도");
-              void cleanup().then(() => void connect(true));
-              return;
-            }
-            if (s === "failed") { clearConnectTimeout(); reportFailure(); }
-          }
-        };
-
-        let graceTimer: ReturnType<typeof setTimeout> | null = null;
-        pc.onconnectionstatechange = () => {
-          const s = pc.connectionState;
-          if (s === "connected") { clearConnectTimeout(); if (graceTimer) { clearTimeout(graceTimer); graceTimer = null; } updatePhase("connected"); }
-          if (s === "failed") { clearConnectTimeout(); if (graceTimer) { clearTimeout(graceTimer); graceTimer = null; } reportFailure(); }
-          if (s === "disconnected" && !reported) {
-            if (!graceTimer) {
-              graceTimer = setTimeout(() => {
-                graceTimer = null;
-                if (pc.connectionState === "disconnected") { reportFailure(); }
-              }, 10000);
-            }
-          }
-          if (s === "closed") { if (graceTimer) { clearTimeout(graceTimer); graceTimer = null; } if (!reported) { updatePhase("error"); void cleanup(); } }
-        };
-
-        /* viewer ICE 후보 → RPC 로 삽입 (직접 INSERT 는 RLS 차단됨) */
-        pc.onicecandidate = ({ candidate }) => {
-          if (!candidate) return;
-          void supabase.rpc("viewer_add_ice_candidate", {
-            p_session_id: sessionId,
-            p_candidate: candidate.toJSON(),
-          }).then(({ error }) => {
-            if (error) console.error("[CameraSlot] viewer ICE RPC 실패:", error.message);
-          });
-        };
-
-        /* ① offer 적용 */
-        console.log("[CameraSlot] ① offer 적용 시작", sessionId);
-        const offerInit = decodeSdpFromDatabaseColumn(offerSdp, "offer");
-        await pc.setRemoteDescription(new RTCSessionDescription(offerInit));
-        console.log("[CameraSlot] ① offer 적용 완료");
-
-        /* ② answer 먼저 생성 → DB 저장 (폰이 빨리 받을 수 있도록) */
-        console.log("[CameraSlot] ② answer 생성 시작");
-        const answer = await pc.createAnswer({ offerToReceiveVideo: true, offerToReceiveAudio: true });
-        await pc.setLocalDescription(answer);
-
-        const committed = pc.localDescription;
-        if (!committed?.sdp) throw new Error("answer SDP 확정 실패");
-
-        /* answer SDP → RPC 로 저장 (직접 UPDATE 는 RLS 차단될 수 있음) */
-        const { data: ansData, error: ansErr } = await supabase.rpc(
-          "viewer_update_answer_sdp",
-          {
-            p_session_id: sessionId,
-            p_answer_sdp: encodePlainSdpForDatabaseColumn(committed.sdp),
-          },
-        );
-        if (ansErr) throw new Error(ansErr.message);
-        const ansResult = ansData as { success?: boolean; error?: string } | null;
-        if (ansResult?.error) throw new Error(ansResult.error);
-        console.log("[CameraSlot] ② answer DB 저장 완료 (RPC)");
-
-        /* broadcaster 에게 answer SDP 를 직접 전달 (DB 폴링 실패 대비) */
-        const answerSdpForBroadcast = encodePlainSdpForDatabaseColumn(committed.sdp);
-        const answerNotifyCh = supabase.channel(`answer_ready_${sessionId}`);
-        answerNotifyCh.subscribe((status) => {
-          if (status === "SUBSCRIBED") {
-            void answerNotifyCh.send({
-              type: "broadcast",
-              event: "answer_ready",
-              payload: { session_id: sessionId, answer_sdp: answerSdpForBroadcast },
-            });
-            /* broadcaster 구독 대기 여유 — 느린 네트워크 대비 10초 유지 */
-            setTimeout(() => void supabase.removeChannel(answerNotifyCh), 10000);
-          }
-        });
-
-        /* ③ broadcaster ICE 실시간 구독 (타임아웃 5초 — 실패해도 계속 진행) */
-        const ch = supabase.channel(`slot-ice-${sessionId}`);
-        ch.on(
-          "postgres_changes",
-          { event: "INSERT", schema: "public", table: "ice_candidates", filter: `session_id=eq.${sessionId}` },
-          (payload) => {
-            const row = payload.new as { sender: string; candidate: RTCIceCandidateInit };
-            if (row.sender !== "broadcaster") return;
-            void applyIce(row.candidate);
-          },
-        );
-        try {
-          await Promise.race([
-            new Promise<void>((resolve, reject) => {
-              ch.subscribe((status) => {
-                if (status === "SUBSCRIBED") resolve();
-                if (status === "CHANNEL_ERROR") reject(new Error("ICE 채널 구독 실패"));
-              });
-            }),
-            new Promise<void>((_, reject) =>
-              setTimeout(() => reject(new Error("ICE 채널 구독 5초 타임아웃")), 5000),
-            ),
-          ]);
-          console.log("[CameraSlot] ③ ICE 채널 구독 성공");
-        } catch (subErr) {
-          console.warn("[CameraSlot] ③ ICE 채널 구독 실패 (무시하고 진행):", subErr);
-        }
-        iceChannelRef.current = ch;
-
-        /* ④ 기존 broadcaster ICE 일괄 적용 (정렬 제거 — PostgREST 캐시 문제 방지) */
-        const { data: existingIce } = await supabase
-          .from("ice_candidates")
-          .select("candidate")
-          .eq("session_id", sessionId)
-          .eq("sender", "broadcaster");
-        console.log("[CameraSlot] ④ 기존 broadcaster ICE:", existingIce?.length ?? 0, "건");
-        for (const row of existingIce ?? []) {
-          await applyIce(row.candidate as RTCIceCandidateInit);
-        }
-        /* 20초 내 connected 안 되면 타임아웃 → 에러 처리 (stale 세션 대비) */
-        connectTimeoutRef.current = setTimeout(() => {
-          if (pcRef.current && pcRef.current.connectionState !== "connected") {
-            console.warn("[CameraSlot] 연결 타임아웃 (20초)", sessionId);
-            updatePhase("error");
-            void cleanup();
-          }
-        }, 20_000);
-      } catch (err) {
-        console.error("[CameraSlot] 연결 실패:", err);
-        updatePhase("error");
-        void cleanup();
-      }
-    },
-    [sessionId, offerSdp, supabase, cleanup, updatePhase],
-  );
-
-  useEffect(() => {
-    void connect();
-    return () => { void cleanup(); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionId, offerSdp]);
-
-  /* ── 스피커 토글 (broadcaster 오디오 듣기) ── */
+  /* 스피커 토글 */
   const toggleMute = useCallback(() => {
     if (videoRef.current) {
       const next = !videoRef.current.muted;
       videoRef.current.muted = next;
       setIsMuted(next);
     }
-  }, []);
+  }, [videoRef]);
 
-  /* ── 마이크 토글 (viewer → broadcaster 인터컴) ── */
+  /* 마이크 토글 (PTT 인터컴) */
   const toggleMic = useCallback(async () => {
-    /* 이미 마이크 있으면 enabled 토글 */
     if (micTrackRef.current) {
       const next = !micTrackRef.current.enabled;
       micTrackRef.current.enabled = next;
       setIsMicOn(next);
       return;
     }
-    /* 최초: 마이크 권한 획득 → addTrack */
     const pc = pcRef.current;
     if (!pc) return;
     try {
@@ -319,12 +65,9 @@ export function CameraSlot({
       micTrackRef.current = micTrack;
       setIsMicOn(true);
       pc.addTrack(micTrack, micStream);
-    } catch {
-      /* 마이크 권한 거부 — 무시 */
-    }
-  }, []);
+    } catch { /* 마이크 권한 거부 */ }
+  }, [pcRef]);
 
-  /* 버튼 공통 스타일 */
   const ctrlBtn = "pointer-events-auto flex size-8 items-center justify-center rounded-full bg-white/20 text-white backdrop-blur-sm transition hover:bg-white/30";
 
   return (
@@ -332,9 +75,10 @@ export function CameraSlot({
       className="relative aspect-video w-full overflow-hidden rounded-2xl bg-[#0d1a18] shadow-lg cursor-pointer"
       onClick={onExpand}
     >
+      {/* 비디오 — object-contain으로 좌표 정렬 보장 (zone overlay 호환) */}
       <video
         ref={videoRef}
-        className="size-full object-cover"
+        className="size-full object-contain"
         autoPlay
         playsInline
         muted
@@ -355,7 +99,7 @@ export function CameraSlot({
               <span className="text-xs text-slate-300">연결 실패</span>
               <button
                 type="button"
-                onClick={(e) => { e.stopPropagation(); relayRetried.current = false; void connect(); }}
+                onClick={(e) => { e.stopPropagation(); reconnect(); }}
                 className="mt-1 rounded-full border border-[#4FD1C5]/50 bg-[#1e8f83]/40 px-3 py-1 text-xs font-semibold text-[#4FD1C5]"
               >
                 다시 시도
@@ -365,7 +109,7 @@ export function CameraSlot({
         </div>
       )}
 
-      {/* 하단 오버레이: 카메라 이름 + 오디오 컨트롤 */}
+      {/* 하단 오버레이 */}
       <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[2] flex items-end justify-between bg-gradient-to-t from-black/65 via-black/20 to-transparent px-3 pb-2 pt-10">
         <div className="flex items-center gap-1.5">
           {phase === "connected" && (
@@ -379,10 +123,8 @@ export function CameraSlot({
           )}
         </div>
 
-        {/* 오디오 컨트롤 버튼 */}
         {phase === "connected" && (
           <div className="pointer-events-auto flex gap-1.5">
-            {/* 스피커 (듣기) */}
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); toggleMute(); }}
@@ -391,7 +133,6 @@ export function CameraSlot({
             >
               {isMuted ? <VolumeX size={15} strokeWidth={2} /> : <Volume2 size={15} strokeWidth={2} />}
             </button>
-            {/* 마이크 (말하기 — 최초 클릭 시 권한 요청) */}
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); void toggleMic(); }}
