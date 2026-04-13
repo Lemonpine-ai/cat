@@ -7,7 +7,7 @@
  * 로직/기능 변경 없음, 문구와 UI 텍스트만 업데이트
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { CameraSlot } from "@/components/catvisor/CameraSlot";
 import { resolveWebRtcPeerConnectionConfiguration } from "@/lib/webrtc/getWebRtcIceServersForPeerConnection";
@@ -39,7 +39,8 @@ type MultiCameraGridProps = {
 };
 
 export function MultiCameraGrid({ homeId, onCameraStatusChange }: MultiCameraGridProps) {
-  const supabase = createSupabaseBrowserClient();
+  /* supabase 클라이언트를 useMemo로 안정화 — 매 렌더마다 새 인스턴스 생성 방지 */
+  const supabase = useMemo(() => createSupabaseBrowserClient(), []);
   const [sessions, setSessions] = useState<LiveSession[]>([]);
   const watcherRef = useRef<RealtimeChannel | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);

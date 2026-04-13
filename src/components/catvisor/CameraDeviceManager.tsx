@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import styles from "./CameraDeviceManager.module.css";
 
@@ -27,7 +27,8 @@ const MAX_DEVICES_PER_HOME = 6;
  * 페어링 코드 생성 → 기기 목록 표시 → 연결 상태 확인.
  */
 export function CameraDeviceManager({ homeId }: { homeId: string }) {
-  const supabase = createSupabaseBrowserClient();
+  /* supabase 클라이언트를 useMemo로 안정화 — 매 렌더마다 새 인스턴스 생성 방지 */
+  const supabase = useMemo(() => createSupabaseBrowserClient(), []);
 
   const [cameraDevices, setCameraDevices] = useState<CameraDevice[]>([]);
   const [pairingModal, setPairingModal] = useState<PairingModalState>({

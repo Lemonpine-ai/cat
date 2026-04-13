@@ -101,6 +101,8 @@ export function RecentCatActivityLog({
             storage_path: string | null;
             status: string | null;
           };
+          /* 클라이언트 가드 — catsLookup에 없는 cat_id는 무시 (다른 home 데이터 필터링) */
+          if (catByIdRef.current.size > 0 && !catByIdRef.current.has(row.cat_id)) return;
           const cat = catByIdRef.current.get(row.cat_id);
           const next: ActivityLogListItem = {
             id: row.id,

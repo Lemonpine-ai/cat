@@ -7,7 +7,7 @@ import {
   RefreshCw,
   Sparkles,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { formatElapsedTimeLabel } from "@/lib/time/formatElapsedTimeLabel";
 
@@ -106,6 +106,9 @@ export function CareStatusGrid({
   envSavingMeal,
   envSavingMedicine,
 }: CareStatusGridProps) {
+  /* supabase 클라이언트를 useMemo로 안정화 — useEffect 내부 생성 제거 */
+  const supabase = useMemo(() => createSupabaseBrowserClient(), []);
+
   const [mealCount, setMealCount] = useState(initialTodayMealCount);
   const [medicineCount, setMedicineCount] = useState(initialTodayMedicineCount);
   const [isMounted, setIsMounted] = useState(false);
@@ -122,7 +125,6 @@ export function CareStatusGrid({
   /* Realtime 구독 — 돌봄 기록 INSERT 감시 */
   useEffect(() => {
     if (!homeId) return;
-    const supabase = createSupabaseBrowserClient();
     const channel = supabase
       .channel(`care_status_grid_${homeId}`)
       .on(
@@ -149,7 +151,7 @@ export function CareStatusGrid({
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [homeId]);
+  }, [homeId, supabase]);
 
   /* C1: 따뜻한 상태 레이블 + 귀여운 이모티콘 */
   const waterLabel = lastWaterChangeAt ? "깨끗한 물 OK! 💧" : "아직 기록 없어요 🐾";

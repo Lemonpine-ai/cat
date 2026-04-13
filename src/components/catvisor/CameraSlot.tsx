@@ -90,6 +90,13 @@ export function CameraSlot({
     };
   }, []);
 
+  /* sessionId 변경 시 마이크 트랙 초기화 — 이전 세션의 트랙이 남지 않도록 */
+  useEffect(() => {
+    micTrackRef.current?.stop();
+    micTrackRef.current = null;
+    setIsMicOn(false);
+  }, [sessionId]);
+
   /* 스피커 토글 */
   const toggleMute = useCallback(() => {
     if (videoRef.current) {
@@ -125,7 +132,7 @@ export function CameraSlot({
 
   return (
     <div
-      className="relative aspect-video w-full overflow-hidden rounded-2xl bg-[#0d1a18] shadow-lg cursor-pointer"
+      className={`relative aspect-video w-full overflow-hidden rounded-2xl bg-[#0d1a18] shadow-lg ${onExpand ? "cursor-pointer" : ""}`}
       onClick={onExpand}
     >
       {/* 비디오 */}
