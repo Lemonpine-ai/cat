@@ -9,12 +9,16 @@
 import { useCallback, useRef, useState } from "react";
 import { Loader2, AlertTriangle, Maximize2, Volume2, VolumeX, Mic, MicOff } from "lucide-react";
 import { useWebRtcSlotConnection } from "@/hooks/useWebRtcSlotConnection";
+import { useZoneDetection } from "@/hooks/useZoneDetection";
+import { ZoneDisplayOverlay } from "@/components/zone/ZoneDisplayOverlay";
 import type { SlotPhase } from "@/hooks/useWebRtcSlotConnection";
 
 type CameraSlotProps = {
   sessionId: string;
   offerSdp: string;
   deviceName: string;
+  /** home_id — zone 조회 + care_logs 자동 기록에 필요 */
+  homeId?: string | null;
   onExpand?: () => void;
   onPhaseChange?: (phase: SlotPhase) => void;
 };
@@ -23,6 +27,7 @@ export function CameraSlot({
   sessionId,
   offerSdp,
   deviceName,
+  homeId = null,
   onExpand,
   onPhaseChange,
 }: CameraSlotProps) {
@@ -31,6 +36,13 @@ export function CameraSlot({
     sessionId,
     offerSdp,
     onPhaseChange,
+  });
+
+  /* Zone 감지 훅 — zone 로드 + 움직임 감지 + care_logs 자동 기록 */
+  const { zones, activeZoneIds } = useZoneDetection({
+    homeId,
+    videoRef,
+    isConnected: phase === "connected",
   });
 
   /* 오디오 상태 */
@@ -84,6 +96,11 @@ export function CameraSlot({
         muted
         controls={false}
       />
+
+      {/* zone 영역 표시 (연결 중일 때만) */}
+      {phase === "connected" && zones.length > 0 && (
+        <ZoneDisplayOverlay zones={zones} activeZoneIds={activeZoneIds} />
+      )}
 
       {/* 상태 오버레이 */}
       {phase !== "connected" && (

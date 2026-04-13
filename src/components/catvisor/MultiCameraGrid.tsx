@@ -212,6 +212,7 @@ export function MultiCameraGrid({ homeId }: MultiCameraGridProps) {
           sessionId={target.id}
           offerSdp={target.offer_sdp}
           deviceName={target.device_name}
+          homeId={homeId}
         />
       </section>
     );
@@ -269,6 +270,7 @@ export function MultiCameraGrid({ homeId }: MultiCameraGridProps) {
             sessionId={s.id}
             offerSdp={s.offer_sdp}
             deviceName={s.device_name}
+            homeId={homeId}
             onExpand={() => setExpandedId(s.id)}
             onPhaseChange={(phase) => handleSlotPhase(s.id, phase)}
           />
