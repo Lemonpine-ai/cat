@@ -13,7 +13,7 @@
  * - pcRef: PeerConnection 참조 (마이크 addTrack용)
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   decodeSdpFromDatabaseColumn,
@@ -48,11 +48,16 @@ export function useWebRtcSlotConnection({
   delayMs = 0,
   onPhaseChange,
 }: UseWebRtcSlotConnectionOptions) {
-  const supabase = createSupabaseBrowserClient();
+  /* supabase 클라이언트를 useMemo로 안정화 — 매 렌더마다 새 인스턴스 생성 방지 */
+  const supabase = useMemo(() => createSupabaseBrowserClient(), []);
 
   /* externalRtcConfig를 ref로 보관 — connect 클로저 안에서 항상 최신값 참조 */
   const externalRtcConfigRef = useRef(externalRtcConfig);
   externalRtcConfigRef.current = externalRtcConfig;
+
+  /* externalTurnRelay를 ref로 보관 — connect 클로저 안에서 stale 값 참조 방지 */
+  const externalTurnRelayRef = useRef(externalTurnRelay);
+  externalTurnRelayRef.current = externalTurnRelay;
 
   const [phase, setPhase] = useState<SlotPhase>("connecting");
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -62,6 +67,10 @@ export function useWebRtcSlotConnection({
   const connectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** grace timer — disconnected 상태 유예 타이머 (useRef로 cleanup 보장) */
   const graceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** answerNotifyCh 타이머 — cleanup 시 정리 보장 */
+  const answerNotifyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** answerNotifyCh 채널 ref — cleanup 시 채널도 함께 제거 (누수 방지) */
+  const answerNotifyChRef = useRef<RealtimeChannel | null>(null);
 
   /* 상태 갱신 + 외부 콜백 */
   const updatePhase = useCallback(
@@ -79,6 +88,15 @@ export function useWebRtcSlotConnection({
     if (graceTimerRef.current) {
       clearTimeout(graceTimerRef.current);
       graceTimerRef.current = null;
+    }
+    /* answerNotify 타이머 + 채널 정리 — 언마운트 시 누수 방지 */
+    if (answerNotifyTimerRef.current) {
+      clearTimeout(answerNotifyTimerRef.current);
+      answerNotifyTimerRef.current = null;
+    }
+    if (answerNotifyChRef.current) {
+      void supabase.removeChannel(answerNotifyChRef.current);
+      answerNotifyChRef.current = null;
     }
     if (pcRef.current) {
       pcRef.current.ontrack = null;
@@ -121,8 +139,8 @@ export function useWebRtcSlotConnection({
         const currentRtcConfig = externalRtcConfigRef.current;
         if (currentRtcConfig && !forceRelay) {
           rtcConfiguration = currentRtcConfig;
-          /* 외부에서 전달된 turnRelayConfigured 사용 (하드코딩 true 제거) */
-          turnRelayConfigured = externalTurnRelay ?? false;
+          /* 외부에서 전달된 turnRelayConfigured 사용 (ref로 최신값 참조) */
+          turnRelayConfigured = externalTurnRelayRef.current ?? false;
         } else {
           const resolved = await resolveWebRtcPeerConnectionConfiguration({ forceRelay });
           rtcConfiguration = resolved.rtcConfiguration;
@@ -255,7 +273,17 @@ export function useWebRtcSlotConnection({
 
         /* broadcaster에게 answer 직접 전달 (push) */
         const answerSdpForBroadcast = encodePlainSdpForDatabaseColumn(committed.sdp);
+        /* 이전 채널 + 타이머 정리 (재연결 시 누수 + race condition 방지) */
+        if (answerNotifyTimerRef.current) {
+          clearTimeout(answerNotifyTimerRef.current);
+          answerNotifyTimerRef.current = null;
+        }
+        if (answerNotifyChRef.current) {
+          void supabase.removeChannel(answerNotifyChRef.current);
+          answerNotifyChRef.current = null;
+        }
         const answerNotifyCh = supabase.channel(`answer_ready_${sessionId}`);
+        answerNotifyChRef.current = answerNotifyCh;
         answerNotifyCh.subscribe((status) => {
           if (status === "SUBSCRIBED") {
             void answerNotifyCh.send({
@@ -263,7 +291,11 @@ export function useWebRtcSlotConnection({
               event: "answer_ready",
               payload: { session_id: sessionId, answer_sdp: answerSdpForBroadcast },
             });
-            setTimeout(() => void supabase.removeChannel(answerNotifyCh), 10000);
+            answerNotifyTimerRef.current = setTimeout(() => {
+              answerNotifyTimerRef.current = null;
+              answerNotifyChRef.current = null;
+              void supabase.removeChannel(answerNotifyCh);
+            }, 10000);
           }
         });
 

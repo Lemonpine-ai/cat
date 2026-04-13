@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CameraDeviceManager } from "@/components/catvisor/CameraDeviceManager";
 import { MultiCameraGrid } from "@/components/catvisor/MultiCameraGrid";
 import type { CameraAggregateStatus } from "@/components/catvisor/MultiCameraGrid";
@@ -59,6 +59,9 @@ export function CatvisorHomeDashboard({
   const [lastMedicineAt, setLastMedicineAt] = useState<string | null>(initialLastMedicineAt);
 
   // 1분마다 경과 시간 레이블 강제 갱신 (setInterval tick 전용 카운터)
+  /* supabase 클라이언트 — useMemo로 안정화 (매 렌더 재생성 방지) */
+  const supabase = useMemo(() => createSupabaseBrowserClient(), []);
+
   const [elapsedTick, setElapsedTick] = useState(0);
   /* envSaving — ref로 중복 호출 방지 (클로저 안정성), useState는 UI 표시용 */
   const envSavingRef = useRef<CareKind | null>(null);
@@ -113,7 +116,6 @@ export function CatvisorHomeDashboard({
   // 환경 관리 Realtime 구독 (water_change, litter_clean) — 홈 화면 직접 클릭 시 사용
   useEffect(() => {
     if (!homeId) return;
-    const supabase = createSupabaseBrowserClient();
     const channel = supabase
       .channel(`env_care_realtime_${homeId}`)
       .on(
@@ -144,7 +146,6 @@ export function CatvisorHomeDashboard({
   // 방송 기기 Broadcast 구독 — SECURITY DEFINER RPC 삽입 시 postgres_changes 미도달 문제 보완
   useEffect(() => {
     if (!homeId) return;
-    const supabase = createSupabaseBrowserClient();
     const broadcastChannel = supabase
       .channel(`env_care_broadcast_${homeId}`)
       .on(
@@ -176,7 +177,6 @@ export function CatvisorHomeDashboard({
       setEnvSaving(careKind);
       try {
         const nowIso = new Date().toISOString();
-        const supabase = createSupabaseBrowserClient();
         const { error: insertError } = await supabase
           .from("cat_care_logs")
           .insert({ home_id: homeId, care_kind: careKind });

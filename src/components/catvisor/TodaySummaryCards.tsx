@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { CatDailySummaryItem } from "@/types/catDailySummary";
 import styles from "./CatvisorHomeDashboard.module.css";
@@ -58,6 +58,9 @@ export function TodaySummaryCards({
   initialTodayMedicineCount,
   initialTodayMealCount,
 }: TodaySummaryCardsProps) {
+  /* supabase 클라이언트 — useMemo로 안정화 */
+  const supabase = useMemo(() => createSupabaseBrowserClient(), []);
+
   const [aiVisionSummary, setAiVisionSummary] =
     useState<CatDailySummaryItem[]>(initialSummary);
   const [todayMealCount, setTodayMealCount] = useState(initialTodayMealCount);
@@ -85,7 +88,7 @@ export function TodaySummaryCards({
       setHomeId(homeIdProp);
       return;
     }
-    const supabase = createSupabaseBrowserClient();
+
     async function fetchFallbackHomeId() {
       const {
         data: { user },
@@ -113,7 +116,7 @@ export function TodaySummaryCards({
 
   // cat_logs(AI 비전) 실시간 구독 — per-cat 카드 갱신
   useEffect(() => {
-    const supabase = createSupabaseBrowserClient();
+
     const channel = supabase
       .channel("cat_logs_ai_vision_summary")
       .on(
@@ -145,7 +148,7 @@ export function TodaySummaryCards({
   // cat_care_logs(수동 버튼 클릭) 실시간 구독 — meal + medicine 상단 카드 즉시 +1
   useEffect(() => {
     if (!homeId) return;
-    const supabase = createSupabaseBrowserClient();
+
     const channel = supabase
       .channel(`care_logs_summary_${homeId}`)
       .on(
