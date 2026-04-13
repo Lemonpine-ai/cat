@@ -145,19 +145,34 @@ export function MultiCameraGrid({ homeId }: MultiCameraGridProps) {
       })
       .subscribe();
 
+    /*
+     * session_refreshed: 카메라 전환 시 offer가 바뀔 때 사용.
+     * 기존 세션 목록을 1개로 덮어쓰지 않고, 해당 세션만 업데이트.
+     * (이전에는 setSessions([1개])로 덮어써서 다른 카메라 연결이 끊어짐)
+     */
     const refreshCh = supabase
       .channel(`cam_session_refresh_${homeId}`)
       .on("broadcast", { event: "session_refreshed" }, (event) => {
         const payload = event.payload as { session_id?: string; offer_sdp?: string } | undefined;
         if (!payload?.session_id || !payload?.offer_sdp) return;
         console.log("[MultiCameraGrid] session_refreshed 수신 →", payload.session_id);
-        setSessions([{
-          id: payload.session_id,
-          offer_sdp: payload.offer_sdp,
-          device_name: "카메라 1",
-        }]);
-        setFailedIds(new Set());
-        setExpandedId(null);
+        /* 기존 세션 목록에서 해당 세션만 교체 (다른 세션은 유지) */
+        setSessions((prev) => {
+          const exists = prev.some((s) => s.id === payload.session_id);
+          if (exists) {
+            return prev.map((s) =>
+              s.id === payload.session_id
+                ? { ...s, offer_sdp: payload.offer_sdp! }
+                : s
+            );
+          }
+          /* 새 세션이면 추가 */
+          return [...prev, {
+            id: payload.session_id!,
+            offer_sdp: payload.offer_sdp!,
+            device_name: `카메라 ${prev.length + 1}`,
+          }];
+        });
       })
       .subscribe();
 
