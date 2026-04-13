@@ -44,20 +44,28 @@ QA Agent:   Dev가 작성한 코드를 처음 보는 눈으로 검토.
 QA REJECT 시 팀장이 자동으로 수정→재검토 루프를 돌린다. 사장님 개입 없이 자동 진행.
 
 ```
-① QA Agent → REJECT (구체적 수정안 포함)
-② 팀장 Agent → REJECT 내용을 Dev Agent에 전달
-③ Dev Agent → 수정 코드 작성 (새 Agent로 실행)
-④ 팀장 Agent → 수정된 코드를 QA Agent에 전달
-⑤ QA Agent → 재검토 (새 Agent로 실행, 처음 보는 눈)
-⑥ PASS 후에도 새 QA Agent로 재검토 (다른 관점)
-⑦ **최소 9회 이상** 독립 QA Agent가 연속 PASS할 때까지 자동 반복
-⑧ 9회 연속 PASS 달성 → 최종 승인 → 사장님 보고
+매 라운드 = Arch → Dev → QA (각각 독립 Agent)
+
+① Arch Agent → QA REJECT 분석 + 수정 설계서 작성
+② Dev Agent → Arch 설계 기반으로 수정 코드 작성
+③ QA Agent → 수정된 코드를 처음 보는 눈으로 검토
+④ REJECT이면 → ①로 돌아가서 반복
+⑤ PASS여도 → 새 Arch/Dev/QA Agent로 다시 ①부터
+⑥ 최소 9회 이상 연속 PASS할 때까지 자동 반복
+⑦ 9회 연속 PASS 달성 → 최종 승인 → 사장님 보고
+
+1회차: Arch(설계) → Dev(구현) → QA(검토) → REJECT
+2회차: Arch(재설계) → Dev(재구현) → QA(재검토) → PASS
+3회차: Arch(확인) → Dev(확인) → QA(검토) → PASS
+...
+9회차: Arch → Dev → QA → PASS → 최종 승인!
 ```
 
 **핵심:**
-- 매번 새 Agent를 띄운다. 이전 검토 맥락을 모르는 상태에서 순수하게 코드만 보고 판단.
+- **Arch → Dev → QA 순서를 매번 지킨다.** Dev가 혼자 수정하지 않는다. Arch가 먼저 설계.
+- 매번 새 Agent를 띄운다. 이전 검토 맥락을 모르는 상태에서 순수하게 판단.
 - QA는 깐깐하게. "이 정도면 됐지" 금지. REJECT 사유가 있으면 반드시 REJECT.
-- **최소 9회 이상 연속 PASS가 기준.** 1번 PASS로 끝내지 않는다. 9명의 독립 QA가 모두 못 찾을 때까지.
+- **최소 9회 이상 연속 PASS가 기준.** Arch/Dev/QA 9팀이 모두 못 찾을 때까지.
 
 | R | 관점 | 질문 |
 |---|------|------|
