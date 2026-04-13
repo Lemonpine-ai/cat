@@ -889,8 +889,13 @@ export function CameraBroadcastClient() {
          * PeerConnection 을 재생성해서 새 세션으로 깨끗하게 연결한다.
          * connected/connecting 상태면 정상 동작 중이므로 무시 (같은 answer 재수신).
          */
+        /* 이미 answer가 적용된 상태 → 중복 무시 (stable 에러 방지) */
         if (currentPc.remoteDescription !== null) {
           const pcState = currentPc.connectionState;
+          if (pcState === "connected" || pcState === "connecting") {
+            console.log("[broadcaster] 이미 연결됨, 중복 answer 무시 (PC:", pcState, ")");
+            return;
+          }
           if (pcState === "disconnected" || pcState === "failed" || pcState === "closed") {
             console.log("[broadcaster] 새 뷰어 감지 (push, PC:", pcState, ") → 재연결");
             void (async () => {
@@ -901,6 +906,12 @@ export function CameraBroadcastClient() {
           return;
         }
 
+        /* signalingState가 stable이 아닌 경우에만 answer 적용 */
+        if (currentPc.signalingState !== "have-local-offer") {
+          console.log("[broadcaster] signalingState:", currentPc.signalingState, "→ answer 적용 불가, 무시");
+          return;
+        }
+
         void (async () => {
           try {
             const answerInit = decodeSdpFromDatabaseColumn(payload.answer_sdp!, "answer");
@@ -908,8 +919,8 @@ export function CameraBroadcastClient() {
             console.log("[broadcaster] answer 직접 적용 완료 (push 경로)");
             setBroadcastPhase("live");
           } catch (err) {
-            console.error("[broadcaster] answer 직접 적용 실패, 폴링으로 재시도", err);
-            void pollSignalingOnce();
+            console.error("[broadcaster] answer 직접 적용 실패:", err);
+            /* 폴링으로 재시도하지 않음 — 무한 루프 방지 */
           }
         })();
       });
@@ -969,12 +980,12 @@ export function CameraBroadcastClient() {
 
           const answerSdpRaw = normalizedPayload.answer_sdp;
           if (answerSdpRaw) {
+            /* 이미 answer 적용됨 → 중복 무시 */
             if (currentPc.remoteDescription !== null) {
-              /*
-               * remoteDescription 이 이미 있고 연결이 끊긴 상태 = 새 뷰어.
-               * connected/connecting 이면 정상 동작 중 → 무시.
-               */
               const pcState = currentPc.connectionState;
+              if (pcState === "connected" || pcState === "connecting") {
+                return; /* 정상 동작 중 — 무시 */
+              }
               if (pcState === "disconnected" || pcState === "failed" || pcState === "closed") {
                 console.log("[broadcaster] 폴링: 새 뷰어 감지 (PC:", pcState, ") → 재연결");
                 await cleanupPeerResourcesOnly(true);
@@ -982,12 +993,18 @@ export function CameraBroadcastClient() {
               }
               return;
             }
+            /* signalingState 확인 — have-local-offer 상태에서만 answer 적용 */
+            if (currentPc.signalingState !== "have-local-offer") {
+              return;
+            }
             try {
+              console.log("[broadcaster] 폴링에서 answer 발견 → 적용 시작");
               const answerInit = decodeSdpFromDatabaseColumn(answerSdpRaw, "answer");
               await currentPc.setRemoteDescription(new RTCSessionDescription(answerInit));
               setBroadcastPhase("live");
             } catch (answerErr) {
               console.error("[broadcaster] setRemoteDescription 오류", answerErr);
+              /* 재시도 안 함 — 무한 루프 방지 */
             }
           }
 
