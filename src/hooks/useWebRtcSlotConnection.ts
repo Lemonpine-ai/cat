@@ -299,12 +299,12 @@ export function useWebRtcSlotConnection({
     [sessionId, offerSdp, supabase, cleanup, updatePhase],
   );
 
-  /* 마운트 시 연결 — delayMs로 stagger (2대 동시 연결 경합 방지) */
+  /* 마운트 시 연결 — sessionId가 바뀔 때만 (offerSdp 제거: 참조 변경으로 재연결 방지) */
   useEffect(() => {
     const timer = setTimeout(() => { void connect(); }, delayMs);
     return () => { clearTimeout(timer); void cleanup(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionId, offerSdp]);
+  }, [sessionId]);
 
   /* 수동 재연결 함수 */
   const reconnect = useCallback(() => {
