@@ -20,19 +20,25 @@
 
 ## 독립 Agent 규칙 (필수)
 
-**1번 Arch, 2번 Dev, 3번 QA는 반드시 각각 독립된 Agent(subagent)로 실행한다.**
-같은 Agent 안에서 1인 3역 금지. 자기가 쓴 코드를 자기가 검토하면 봐주기 쉬움.
+**팀장 포함 모든 팀원은 반드시 각각 독립된 Agent(subagent)로 실행한다.**
+같은 Agent 안에서 여러 역할 연기 금지. 자기가 쓴 코드를 자기가 검토하면 봐주기 쉬움.
 
 ```
-금지: Agent 1개 안에서 Arch+Dev+QA 연기 (1인 3역)
-필수: Agent A (Arch 설계) → Agent B (Dev 구현) → Agent C (QA 검토)
-     각 Agent는 이전 Agent의 결과물만 보고 독립적으로 판단
+금지: Agent 1개 안에서 여러 역할 연기 (1인 다역)
+필수: 각 역할 = 각 Agent. 이전 Agent의 결과물만 보고 독립 판단.
+
+팀장 Agent: 사장님 요구사항 정리, 팀원 Agent 조율, 최종 결과 통합
+Arch Agent: 설계만 출력. 코드 안 씀.
+Dev Agent:  Arch 설계를 받아서 코드 작성.
+QA Agent:   Dev가 작성한 코드를 처음 보는 눈으로 검토.
 ```
 
-- **Arch Agent**: 설계만 출력. 코드 안 씀.
+- **팀장 Agent**: 사장님과 소통. Arch/Dev/QA Agent를 순차 또는 병렬로 띄움.
+- **Arch Agent**: 설계서만 출력. 코드 안 씀. 파일 구조, 데이터 흐름, API 스펙 확정.
 - **Dev Agent**: Arch 설계를 받아서 코드 작성. 설계를 봐도 되지만 수정은 Arch에 요청.
-- **QA Agent**: Dev가 작성한 코드를 처음 보는 눈으로 검토. REJECT 시 구체적 수정안 제시.
-- QA REJECT → Dev 수정 → QA 재검토. 이견이 없을 때까지 반복.
+- **QA Agent**: Dev가 작성한 코드를 **처음 보는 눈으로** 검토. REJECT 시 구체적 수정안 제시.
+- QA REJECT → Dev Agent 수정 → QA Agent 재검토. 이견이 없을 때까지 반복.
+- **모든 Agent는 독립 실행** — 이전 대화 맥락을 모르는 상태에서 결과물만 보고 판단.
 
 | R | 관점 | 질문 |
 |---|------|------|
