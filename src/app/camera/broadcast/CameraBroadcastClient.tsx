@@ -285,7 +285,7 @@ export function CameraBroadcastClient() {
         // 홈 화면 실시간 업데이트: 미리 구독된 Broadcast 채널로 케어 이벤트 전파
         if (
           envBroadcastChannelRef.current &&
-          (careKind === "water_change" || careKind === "litter_clean")
+          (careKind === "water_change" || careKind === "litter_clean" || careKind === "medicine")
         ) {
           void envBroadcastChannelRef.current.send({
             type: "broadcast",
