@@ -731,14 +731,15 @@ export function CameraBroadcastClient() {
         setPeerConnectionState(pc.connectionState);
         if (pc.connectionState === "connected") {
           broadcasterRelayRetryRef.current = false;
-          /* 연결 성공 시 재연결 카운터 초기화 */
           autoReconnectCountRef.current = 0;
-          /* 연결 복구 시 유예 타이머 해제 */
           if (disconnectedGraceTimerRef.current) {
             clearTimeout(disconnectedGraceTimerRef.current);
             disconnectedGraceTimerRef.current = null;
           }
           setErrorMessage(null);
+          /* ★ 연결 성공 → 방송 상태를 "live"로 전환 */
+          setBroadcastPhase("live");
+          console.log("[broadcaster] connectionState: connected → live 전환");
           /* 연결 완료 → signaling 폴링·타임아웃 종료 */
           if (signalingPollIntervalRef.current) {
             clearInterval(signalingPollIntervalRef.current);
