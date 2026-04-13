@@ -17,8 +17,11 @@ type CameraSlotProps = {
   sessionId: string;
   offerSdp: string;
   deviceName: string;
-  /** home_id — zone 조회 + care_logs 자동 기록에 필요 */
   homeId?: string | null;
+  /** 외부 ICE config — MultiCameraGrid에서 1번만 로드해서 공유 */
+  rtcConfiguration?: RTCConfiguration | null;
+  /** 연결 지연 (ms) — 2대 동시 연결 시 stagger용 */
+  delayMs?: number;
   onExpand?: () => void;
   onPhaseChange?: (phase: SlotPhase) => void;
 };
@@ -28,13 +31,17 @@ export function CameraSlot({
   offerSdp,
   deviceName,
   homeId = null,
+  rtcConfiguration = null,
+  delayMs = 0,
   onExpand,
   onPhaseChange,
 }: CameraSlotProps) {
-  /* WebRTC 연결 훅 — 연결/정리/재시도 로직 전부 위임 */
+  /* WebRTC 연결 훅 — ICE config 공유 + stagger 지연 */
   const { videoRef, phase, pcRef, reconnect } = useWebRtcSlotConnection({
     sessionId,
     offerSdp,
+    rtcConfiguration,
+    delayMs,
     onPhaseChange,
   });
 

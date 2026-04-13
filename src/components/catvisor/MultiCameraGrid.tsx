@@ -10,10 +10,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { CameraSlot } from "@/components/catvisor/CameraSlot";
+import { resolveWebRtcPeerConnectionConfiguration } from "@/lib/webrtc/getWebRtcIceServersForPeerConnection";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { Smartphone, ArrowRight, Video } from "lucide-react";
 
 const MAX_SLOTS = 4;
+/** 2대 동시 연결 시 stagger 간격 (ms) */
+const STAGGER_DELAY_MS = 2000;
 
 type LiveSession = {
   id: string;
@@ -31,6 +34,21 @@ export function MultiCameraGrid({ homeId }: MultiCameraGridProps) {
   const watcherRef = useRef<RealtimeChannel | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [failedIds, setFailedIds] = useState<Set<string>>(new Set());
+
+  /* ICE config 캐시 — 전체 카메라가 공유 (중복 fetch 방지) */
+  const [iceConfig, setIceConfig] = useState<RTCConfiguration | null>(null);
+  useEffect(() => {
+    resolveWebRtcPeerConnectionConfiguration()
+      .then(({ rtcConfiguration }) => setIceConfig(rtcConfiguration))
+      .catch(() => { /* 실패 시 각 슬롯이 직접 fetch */ });
+  }, []);
+
+  /* loadSessions 디바운스 — Realtime 이벤트 중복 호출 방지 */
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  function debouncedLoadSessions(loadFn: () => Promise<void>) {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => { void loadFn(); }, 300);
+  }
 
   /* ── live 세션 초기 로드 + Realtime 감시 ── */
   useEffect(() => {
@@ -94,7 +112,8 @@ export function MultiCameraGrid({ homeId }: MultiCameraGridProps) {
         "postgres_changes",
         { event: "*", schema: "public", table: "camera_sessions", filter: `home_id=eq.${homeId}` },
         () => {
-          void loadSessions();
+          /* 디바운스: 여러 채널이 동시에 트리거해도 300ms 내 1회만 실행 */
+          debouncedLoadSessions(loadSessions);
         },
       )
       .subscribe();
@@ -105,11 +124,11 @@ export function MultiCameraGrid({ homeId }: MultiCameraGridProps) {
       .channel(`cam_session_broadcast_${homeId}`)
       .on("broadcast", { event: "session_started" }, () => {
         console.log("[MultiCameraGrid] session_started 수신 → 세션 재조회");
-        void loadSessions();
+        debouncedLoadSessions(loadSessions);
       })
       .on("broadcast", { event: "session_stopped" }, () => {
         console.log("[MultiCameraGrid] session_stopped 수신 → 세션 재조회");
-        void loadSessions();
+        debouncedLoadSessions(loadSessions);
       })
       .subscribe();
 
@@ -213,6 +232,7 @@ export function MultiCameraGrid({ homeId }: MultiCameraGridProps) {
           offerSdp={target.offer_sdp}
           deviceName={target.device_name}
           homeId={homeId}
+          rtcConfiguration={iceConfig}
         />
       </section>
     );
@@ -264,13 +284,15 @@ export function MultiCameraGrid({ homeId }: MultiCameraGridProps) {
       </div>
 
       <div className={`grid ${gridCols} gap-2`}>
-        {visibleSessions.map((s) => (
+        {visibleSessions.map((s, idx) => (
           <CameraSlot
             key={s.id}
             sessionId={s.id}
             offerSdp={s.offer_sdp}
             deviceName={s.device_name}
             homeId={homeId}
+            rtcConfiguration={iceConfig}
+            delayMs={idx * STAGGER_DELAY_MS}
             onExpand={() => setExpandedId(s.id)}
             onPhaseChange={(phase) => handleSlotPhase(s.id, phase)}
           />

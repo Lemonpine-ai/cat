@@ -31,12 +31,18 @@ const CODE_VERSION = "v3-rpc-hook";
 type UseWebRtcSlotConnectionOptions = {
   sessionId: string;
   offerSdp: string;
+  /** 외부에서 전달받은 ICE config — MultiCameraGrid에서 1번만 로드 */
+  rtcConfiguration?: RTCConfiguration | null;
+  /** 연결 지연 (ms) — 2대 동시 연결 시 stagger용 */
+  delayMs?: number;
   onPhaseChange?: (phase: SlotPhase) => void;
 };
 
 export function useWebRtcSlotConnection({
   sessionId,
   offerSdp,
+  rtcConfiguration: externalRtcConfig = null,
+  delayMs = 0,
   onPhaseChange,
 }: UseWebRtcSlotConnectionOptions) {
   const supabase = createSupabaseBrowserClient();
@@ -81,11 +87,21 @@ export function useWebRtcSlotConnection({
       console.log(`[CameraSlot] 코드 버전: ${CODE_VERSION}`);
       updatePhase("connecting");
       await cleanup();
-      await supabase.auth.getUser();
+      /* auth.getUser() 제거 — MultiCameraGrid에서 이미 호출했으므로
+         여기서 다시 호출하면 Auth Lock 경합 발생 (2대+ 동시 연결 시) */
 
       try {
-        const { rtcConfiguration, turnRelayConfigured } =
-          await resolveWebRtcPeerConnectionConfiguration({ forceRelay });
+        /* ICE config: 외부에서 받았으면 재사용, 없으면 직접 fetch */
+        let rtcConfiguration: RTCConfiguration;
+        let turnRelayConfigured: boolean;
+        if (externalRtcConfig && !forceRelay) {
+          rtcConfiguration = externalRtcConfig;
+          turnRelayConfigured = true;
+        } else {
+          const resolved = await resolveWebRtcPeerConnectionConfiguration({ forceRelay });
+          rtcConfiguration = resolved.rtcConfiguration;
+          turnRelayConfigured = resolved.turnRelayConfigured;
+        }
         const pc = new RTCPeerConnection(rtcConfiguration);
         pcRef.current = pc;
 
@@ -136,15 +152,17 @@ export function useWebRtcSlotConnection({
             relayRetried.current = false;
             updatePhase("connected");
           }
-          if (s === "failed" || s === "disconnected") {
+          /* failed에서만 relay 재시도 (disconnected는 일시적 — grace timer에 맡김) */
+          if (s === "failed") {
             if (!forceRelay && turnRelayConfigured && !relayRetried.current) {
               clearConnectTimeout();
               relayRetried.current = true;
-              console.log("[CameraSlot] ICE", s, "→ relay 재시도");
+              console.log("[CameraSlot] ICE failed → relay 재시도");
               void cleanup().then(() => void connect(true));
               return;
             }
-            if (s === "failed") { clearConnectTimeout(); reportFailure(); }
+            clearConnectTimeout();
+            reportFailure();
           }
         };
 
@@ -264,14 +282,14 @@ export function useWebRtcSlotConnection({
           await applyIce(row.candidate as RTCIceCandidateInit);
         }
 
-        /* 20초 타임아웃 */
+        /* 15초 타임아웃 — stale 세션을 빨리 제거하여 다른 세션에 양보 */
         connectTimeoutRef.current = setTimeout(() => {
           if (pcRef.current && pcRef.current.connectionState !== "connected") {
-            console.warn("[CameraSlot] 연결 타임아웃 (20초)", sessionId);
+            console.warn("[CameraSlot] 연결 타임아웃 (15초)", sessionId);
             updatePhase("error");
             void cleanup();
           }
-        }, 20_000);
+        }, 15_000);
       } catch (err) {
         console.error("[CameraSlot] 연결 실패:", err);
         updatePhase("error");
@@ -281,10 +299,10 @@ export function useWebRtcSlotConnection({
     [sessionId, offerSdp, supabase, cleanup, updatePhase],
   );
 
-  /* 마운트 시 연결, 언마운트 시 정리 */
+  /* 마운트 시 연결 — delayMs로 stagger (2대 동시 연결 경합 방지) */
   useEffect(() => {
-    void connect();
-    return () => { void cleanup(); };
+    const timer = setTimeout(() => { void connect(); }, delayMs);
+    return () => { clearTimeout(timer); void cleanup(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId, offerSdp]);
 
