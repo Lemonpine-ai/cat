@@ -699,6 +699,26 @@ src/components/diary/
 └── cuteMentMap.ts                    # care_type → 귀여운 멘트 매핑 객체
 ```
 
+### 8.5.1 Daily Diary (타임라인 일기) 컴포넌트
+
+힐링 다이어리에 날짜별 돌봄 타임라인을 제공하는 하위 컴포넌트 그룹.
+
+```
+src/features/diary/components/
+├── DiaryHeader.tsx                   # 일기장 제목 + FGS 건강 점수 플레이스홀더 (클라이언트)
+├── DiaryDateNav.tsx                  # 날짜 네비게이션 ←어제/오늘→ + date picker (클라이언트)
+├── DiarySummaryBar.tsx               # 하루 돌봄 횟수 한 줄 요약 바 (클라이언트)
+└── DiaryTimeline.tsx                 # 시간대별(오전/오후/저녁) 타임라인 UI (클라이언트)
+
+src/features/diary/lib/
+└── careLogToDiarySentence.ts         # 돌봄 로그 → 귀여운 일기 문장 변환 유틸
+
+src/types/diary.ts (추가 타입)
+├── CareLogEntry                     # 돌봄 로그 한 건 (cat_care_logs 기반)
+├── TimeSection                      # 시간대 구분 ("morning" | "afternoon" | "evening")
+└── DiaryTimelineEntry               # 타임라인 한 줄 렌더링용
+```
+
 ### 8.6 데이터 흐름 패턴
 
 ```
