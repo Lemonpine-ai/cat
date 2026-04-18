@@ -120,7 +120,8 @@
       "Bash(cp staging/types/behavior.ts src/types/)",
       "Bash(cp staging/workers/yoloInference.worker.ts src/workers/)",
       "Skill(design-consultation)",
-      "Skill(design-consultation:*)"
+      "Skill(design-consultation:*)",
+      "Bash(vercel --prod --yes)"
     ]
   }
 }

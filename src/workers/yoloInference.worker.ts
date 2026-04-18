@@ -1,3 +1,4 @@
+/// <reference lib="webworker" />
 /**
  * YOLO 추론 Web Worker
  * - onnxruntime-web으로 ONNX 모델 실행
