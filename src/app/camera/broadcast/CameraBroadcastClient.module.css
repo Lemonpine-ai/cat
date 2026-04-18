@@ -113,34 +113,6 @@
   backdrop-filter: blur(6px);
 }
 
-/* D1: 전면/후면 카메라 전환 버튼 — 비디오 좌측 하단 오버레이
-   P1: 눈에 잘 보이면서도 영상 시청 방해 안 되는 위치 */
-.switchCameraBtn {
-  position: absolute;
-  bottom: 1rem;
-  left: 1rem;
-  z-index: 10;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 2.75rem;
-  height: 2.75rem;
-  border-radius: 999px;
-  border: none;
-  background: rgba(255, 255, 255, 0.85);
-  color: #1e8f83;
-  cursor: pointer;
-  backdrop-filter: blur(8px);
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
-  transition: transform 0.15s, background 0.15s;
-  -webkit-tap-highlight-color: transparent;
-}
-
-.switchCameraBtn:active {
-  transform: scale(0.9);
-  background: rgba(255, 255, 255, 0.95);
-}
-
 /* 컨트롤 영역 */
 .controls {
   padding: 0.75rem 1.25rem 1.5rem;
@@ -477,7 +449,7 @@
   position: fixed;
   inset: 0;
   z-index: 9999;
-  background: rgba(0, 0, 0, 1.0);
+  background: rgba(0, 0, 0, 0.95);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -485,14 +457,12 @@
   gap: 1.5rem;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
-  will-change: opacity;
-  pointer-events: none;
-  animation: dimFadeIn 0.5s ease-out forwards;
+  animation: dimFadeIn 0.5s ease-out;
 }
 
 @keyframes dimFadeIn {
   from { opacity: 0; }
-  to { opacity: 1; pointer-events: auto; }
+  to { opacity: 1; }
 }
 
 /* 방송 중 펄스 인디케이터 — 사용자에게 방송 진행 중임을 알림 */

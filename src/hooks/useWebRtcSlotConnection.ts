@@ -20,13 +20,18 @@ import {
   encodePlainSdpForDatabaseColumn,
 } from "@/lib/webrtc/sessionDescriptionPayload";
 import { resolveWebRtcPeerConnectionConfiguration } from "@/lib/webrtc/getWebRtcIceServersForPeerConnection";
+import { ViewerReconnectEngine } from "@/lib/webrtc/viewerReconnectEngine";
+import {
+  logWebRtcEvent,
+  type WebRtcLogEvent,
+} from "@/lib/webrtc/webrtcConnectionLogger";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 
 /* 연결 상태 */
 export type SlotPhase = "connecting" | "connected" | "error";
 
 /* 코드 버전 — 브라우저 캐시 진단용 */
-const CODE_VERSION = "v3-rpc-hook";
+const CODE_VERSION = "v4-reconnect-engine";
 
 type UseWebRtcSlotConnectionOptions = {
   sessionId: string;
@@ -37,6 +42,8 @@ type UseWebRtcSlotConnectionOptions = {
   turnRelayConfigured?: boolean;
   /** 연결 지연 (ms) — 2대 동시 연결 시 stagger용 */
   delayMs?: number;
+  /** 로깅용 home_id — 없으면 로깅 생략 */
+  homeId?: string | null;
   onPhaseChange?: (phase: SlotPhase) => void;
 };
 
@@ -46,10 +53,61 @@ export function useWebRtcSlotConnection({
   rtcConfiguration: externalRtcConfig = null,
   turnRelayConfigured: externalTurnRelay,
   delayMs = 0,
+  homeId = null,
   onPhaseChange,
 }: UseWebRtcSlotConnectionOptions) {
   /* supabase 클라이언트를 useMemo로 안정화 — 매 렌더마다 새 인스턴스 생성 방지 */
   const supabase = useMemo(() => createSupabaseBrowserClient(), []);
+
+  /* 로깅 컨텍스트 — 훅 입력 + 런타임 재연결 카운터로 구성 */
+  const reconnectAttemptRef = useRef(0);
+  const lastLoggedEventRef = useRef<WebRtcLogEvent | null>(null);
+  const logCtx = useMemo(
+    () => ({
+      homeId,
+      deviceId:
+        typeof navigator !== "undefined" ? navigator.userAgent.slice(0, 120) : "unknown",
+      cameraId: sessionId,
+      role: "viewer_slot" as const,
+    }),
+    [homeId, sessionId],
+  );
+  /** 로그 기록 — fire-and-forget, connected 중복 억제 */
+  const logEvent = useCallback(
+    (
+      eventType: WebRtcLogEvent,
+      extra?: {
+        pcState?: RTCPeerConnectionState | null;
+        errorMessage?: string | null;
+        metadata?: Record<string, unknown> | null;
+      },
+    ) => {
+      if (!logCtx.homeId) return; /* homeId 없으면 RLS 실패 — 스킵 */
+      /* connected 중복 억제 — 직전이 connected 면 건너뜀 */
+      if (eventType === "connected" && lastLoggedEventRef.current === "connected") return;
+      lastLoggedEventRef.current = eventType;
+      const nav = typeof navigator !== "undefined" ? navigator : null;
+      const connType = (nav as unknown as {
+        connection?: { effectiveType?: string };
+      } | null)?.connection?.effectiveType;
+      void logWebRtcEvent(supabase, {
+        homeId: logCtx.homeId,
+        deviceId: logCtx.deviceId,
+        cameraId: logCtx.cameraId,
+        role: logCtx.role,
+        eventType,
+        pcState: extra?.pcState ?? null,
+        errorMessage: extra?.errorMessage ?? null,
+        reconnectAttempt: reconnectAttemptRef.current,
+        metadata: {
+          ua: nav?.userAgent,
+          ...(connType ? { connection: connType } : {}),
+          ...(extra?.metadata ?? {}),
+        },
+      });
+    },
+    [supabase, logCtx],
+  );
 
   /* externalRtcConfig를 ref로 보관 — connect 클로저 안에서 항상 최신값 참조 */
   const externalRtcConfigRef = useRef(externalRtcConfig);
@@ -65,12 +123,18 @@ export function useWebRtcSlotConnection({
   const iceChannelRef = useRef<RealtimeChannel | null>(null);
   const relayRetried = useRef(false);
   const connectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  /** grace timer — disconnected 상태 유예 타이머 (useRef로 cleanup 보장) */
-  const graceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** 재연결 엔진 — disconnected/keepalive/visibility 모두 위임 */
+  const engineRef = useRef<ViewerReconnectEngine | null>(null);
   /** answerNotifyCh 타이머 — cleanup 시 정리 보장 */
   const answerNotifyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** answerNotifyCh 채널 ref — cleanup 시 채널도 함께 제거 (누수 방지) */
   const answerNotifyChRef = useRef<RealtimeChannel | null>(null);
+  /**
+   * cleanup 진행 중 플래그 — 엔진의 full_reconnect 는 cleanup → connect 순으로 동작한다.
+   * 이전 PC 의 connectionState="closed" 이벤트가 새 PC 생성 후 늦게 도착하면
+   * 정상 재연결 중인 UI 를 error 로 덮어쓰는 race 가 발생한다. 이 플래그로 가드한다.
+   */
+  const cleanupInProgressRef = useRef(false);
 
   /* 상태 갱신 + 외부 콜백 */
   const updatePhase = useCallback(
@@ -80,14 +144,17 @@ export function useWebRtcSlotConnection({
 
   /* ── PeerConnection 정리 ── */
   const cleanup = useCallback(async () => {
+    /* cleanup 진행 중 플래그 ON — closed 이벤트 race 가드 */
+    cleanupInProgressRef.current = true;
+    try {
     if (connectTimeoutRef.current) {
       clearTimeout(connectTimeoutRef.current);
       connectTimeoutRef.current = null;
     }
-    /* graceTimer 정리 — 언마운트 시 stale 타이머 방지 */
-    if (graceTimerRef.current) {
-      clearTimeout(graceTimerRef.current);
-      graceTimerRef.current = null;
+    /* 재연결 엔진 정리 — 언마운트 시 모든 타이머/리스너 해제 */
+    if (engineRef.current) {
+      engineRef.current.dispose();
+      engineRef.current = null;
     }
     /* answerNotify 타이머 + 채널 정리 — 언마운트 시 누수 방지 */
     if (answerNotifyTimerRef.current) {
@@ -111,6 +178,10 @@ export function useWebRtcSlotConnection({
       iceChannelRef.current = null;
     }
     if (videoRef.current) videoRef.current.srcObject = null;
+    } finally {
+      /* cleanup 종료 — 이후 도착하는 closed 이벤트는 정상 처리 */
+      cleanupInProgressRef.current = false;
+    }
   }, [supabase]);
 
   /* ── WebRTC 연결 ── */
@@ -210,29 +281,60 @@ export function useWebRtcSlotConnection({
           }
         };
 
-        /* connection 상태 변화 — graceTimerRef 사용 (cleanup 시 정리 보장) */
+        /* ★ 재연결 엔진 생성 + PC 등록 */
+        const engine = new ViewerReconnectEngine();
+        engineRef.current = engine;
+        engine.attachPeerConnection(pc);
+        engine.onAction = (action) => {
+          if (action.type === "ice_restart") {
+            console.log("[CameraSlot] 엔진 → ice_restart");
+            logEvent("ice_restart");
+            try { pc.restartIce(); } catch { /* PC 이미 닫힘 */ }
+          } else if (action.type === "full_reconnect") {
+            console.log(`[CameraSlot] 엔진 → full_reconnect #${action.attempt} (${action.delayMs}ms 후)`);
+            reconnectAttemptRef.current = action.attempt;
+            logEvent("full_reconnect", { metadata: { delayMs: action.delayMs } });
+            void cleanup().then(() => void connect());
+          } else if (action.type === "keepalive_dead" || action.type === "visibility_reconnect") {
+            console.log(`[CameraSlot] 엔진 → ${action.type}`);
+            logEvent(action.type);
+            void cleanup().then(() => void connect());
+          } else if (action.type === "connection_recovered") {
+            console.log("[CameraSlot] 엔진 → 연결 복구");
+            reconnectAttemptRef.current = 0;
+            logEvent("connection_recovered");
+            updatePhase("connected");
+          }
+        };
+
+        /* connection 상태 변화 — 엔진에 위임 + 로그 기록 */
         pc.onconnectionstatechange = () => {
           const s = pc.connectionState;
+          engine.handleConnectionStateChange(s);
+          /* PC 상태 자체를 로그 (connected/disconnected/failed/closed) */
+          if (s === "connected" || s === "disconnected" || s === "failed" || s === "closed") {
+            logEvent(s, { pcState: s });
+          }
           if (s === "connected") {
             clearConnectTimeout();
-            if (graceTimerRef.current) { clearTimeout(graceTimerRef.current); graceTimerRef.current = null; }
             updatePhase("connected");
+            engine.startKeepalive();
           }
           if (s === "failed") {
             clearConnectTimeout();
-            if (graceTimerRef.current) { clearTimeout(graceTimerRef.current); graceTimerRef.current = null; }
+            /* 엔진 먼저 정리 후 실패 보고 — stale 타이머/리스너 방지 */
+            engine.dispose();
+            engineRef.current = null;
             reportFailure();
           }
-          if (s === "disconnected" && !reported) {
-            if (!graceTimerRef.current) {
-              graceTimerRef.current = setTimeout(() => {
-                graceTimerRef.current = null;
-                if (pc.connectionState === "disconnected") { reportFailure(); }
-              }, 10000);
-            }
-          }
           if (s === "closed") {
-            if (graceTimerRef.current) { clearTimeout(graceTimerRef.current); graceTimerRef.current = null; }
+            /*
+             * cleanup 진행 중이면 무시 — 엔진의 full_reconnect(cleanup→connect) 중
+             * 이전 PC 의 closed 이벤트가 새 PC 생성 직전에 늦게 도착해
+             * 정상 재연결을 error 로 덮어쓰는 race 를 방지.
+             */
+            if (cleanupInProgressRef.current) return;
+            engine.stopKeepalive();
             if (!reported) { updatePhase("error"); void cleanup(); }
           }
         };
@@ -349,11 +451,13 @@ export function useWebRtcSlotConnection({
         }, 15_000);
       } catch (err) {
         console.error("[CameraSlot] 연결 실패:", err);
+        const msg = err instanceof Error ? err.message : String(err);
+        logEvent("error", { errorMessage: msg });
         updatePhase("error");
         void cleanup();
       }
     },
-    [sessionId, offerSdp, supabase, cleanup, updatePhase],
+    [sessionId, offerSdp, supabase, cleanup, updatePhase, logEvent],
   );
 
   /*

@@ -11,8 +11,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { ZoneMotionDetector } from "@/lib/zone/zoneMotionDetector";
-import type { CameraZone } from "@/types/zone";
+import { ZoneBboxDetector } from "@/lib/zone/zoneBboxDetector";
+import { ZoneAlertEngine } from "@/lib/zone/zoneAlertEngine";
+import type { CameraZone, BboxCenter } from "@/types/zone";
 import type { ZoneActivityEvent } from "@/lib/zone/zoneMotionDetector";
+import type { ZoneActivityEvent as BboxActivityEvent } from "@/lib/zone/zoneBboxDetector";
 
 /* 분석 주기 (밀리초) */
 const DETECT_INTERVAL_MS = 2000;
@@ -26,6 +29,10 @@ type UseZoneDetectionOptions = {
   videoRef: React.RefObject<HTMLVideoElement | null>;
   /** 연결 상태 — connected일 때만 분석 */
   isConnected: boolean;
+  /** bbox 중심점 배열 — YOLO 등에서 전달. 있으면 bbox 모드, 없으면 pixel diff 폴백 */
+  bboxes?: BboxCenter[];
+  /** eating bbox 중심점 배열 — 식사 zone 외 eating 감지 알림용 (선택) */
+  eatingBboxes?: BboxCenter[];
 };
 
 export function useZoneDetection({
@@ -33,12 +40,18 @@ export function useZoneDetection({
   deviceId,
   videoRef,
   isConnected,
+  bboxes,
+  eatingBboxes,
 }: UseZoneDetectionOptions) {
   /* supabase 인스턴스를 useMemo로 안정화 — 매 렌더마다 재생성 방지 */
   const supabase = useMemo(() => createSupabaseBrowserClient(), []);
   const [zones, setZones] = useState<CameraZone[]>([]);
   const [activeZoneIds, setActiveZoneIds] = useState<Set<string>>(new Set());
   const detectorRef = useRef<ZoneMotionDetector | null>(null);
+  /** bbox 기반 감지기 */
+  const bboxDetectorRef = useRef<ZoneBboxDetector | null>(null);
+  /** 식사 zone 외 eating 알림 엔진 */
+  const alertEngineRef = useRef<ZoneAlertEngine | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   /** 이전 activeZoneIds — Set 내용 비교용 (불필요한 리렌더 방지) */
   const prevActiveIdsRef = useRef<Set<string>>(new Set());
@@ -78,7 +91,7 @@ export function useZoneDetection({
   /* zone Realtime 구독 — zone이 있을 때만 (불필요한 채널 방지) */
   /* 현재는 zone 설정 UI가 없으므로 Realtime 구독 생략 */
 
-  /* 활동 감지 시 care_logs에 자동 기록 */
+  /* 활동 감지 시 care_logs에 자동 기록 (pixel diff 모드) */
   const handleActivityEvent = useCallback(
     async (event: ZoneActivityEvent) => {
       if (!homeId) return;
@@ -93,8 +106,97 @@ export function useZoneDetection({
     [supabase, homeId],
   );
 
-  /* 2초마다 프레임 분석 */
+  /* bbox 기반 이벤트 처리 — zone_events INSERT + care_logs */
+  const handleBboxEvent = useCallback(
+    async (event: BboxActivityEvent) => {
+      if (!homeId || !deviceId) return;
+      console.log(`[ZoneDetection] bbox 이벤트: ${event.zone.name} → ${event.eventType}`);
+
+      /* zone_events 테이블에 기록 */
+      const { error: eventError } = await supabase
+        .from("zone_events")
+        .insert({
+          home_id: homeId,
+          device_id: deviceId,
+          zone_id: event.zone.id,
+          event_type: event.eventType,
+          care_kind: event.careKind,
+          started_at: new Date(event.startedAt).toISOString(),
+          duration_seconds: event.durationSeconds,
+        });
+      if (eventError) {
+        console.error("[ZoneDetection] zone_event INSERT 실패:", eventError.message);
+      }
+
+      /* dwell_complete + careKind가 있으면 care_logs에도 기록 */
+      if (event.eventType === "dwell_complete" && event.careKind) {
+        const { error: careError } = await supabase
+          .from("cat_care_logs")
+          .insert({ home_id: homeId, care_kind: event.careKind });
+        if (careError) {
+          console.error("[ZoneDetection] care_log INSERT 실패:", careError.message);
+        }
+      }
+    },
+    [supabase, homeId, deviceId],
+  );
+
+  /* bbox 모드 여부 — bboxes 배열이 전달되면 bbox 모드 사용 */
+  const useBboxMode = bboxes !== undefined;
+
+  /* bbox 모드: bboxes가 변경될 때마다 즉시 분석 (interval 불필요) */
   useEffect(() => {
+    if (!useBboxMode || !isConnected || zones.length === 0) return;
+
+    /* bbox detector 초기화 */
+    if (!bboxDetectorRef.current) {
+      bboxDetectorRef.current = new ZoneBboxDetector();
+    }
+
+    /* alert engine 초기화 */
+    if (!alertEngineRef.current) {
+      alertEngineRef.current = new ZoneAlertEngine();
+    }
+
+    /* bbox 기반 zone 진입/퇴장/체류 감지 */
+    const events = bboxDetectorRef.current.checkEntry(bboxes ?? [], zones);
+
+    /* activeZoneIds 업데이트 */
+    const nextIds = bboxDetectorRef.current.getActiveZoneIds();
+    const prevIds = prevActiveIdsRef.current;
+    const changed =
+      nextIds.size !== prevIds.size ||
+      [...nextIds].some((id) => !prevIds.has(id));
+    if (changed) {
+      prevActiveIdsRef.current = nextIds;
+      setActiveZoneIds(nextIds);
+    }
+
+    /* bbox 이벤트 처리 */
+    for (const event of events) {
+      void handleBboxEvent(event);
+    }
+
+    /* eating bbox 알림 확인 */
+    if (eatingBboxes && eatingBboxes.length > 0 && deviceId) {
+      const alert = alertEngineRef.current.checkEating(eatingBboxes, zones, deviceId);
+      if (alert) {
+        console.warn(`[ZoneAlert] ${alert.message}`);
+      }
+    }
+  }, [useBboxMode, isConnected, zones, bboxes, eatingBboxes, deviceId, handleBboxEvent]);
+
+  /* pixel diff 모드: 2초마다 프레임 분석 (bbox가 없을 때 폴백) */
+  useEffect(() => {
+    /* bbox 모드일 때는 pixel diff 사용 안 함 */
+    if (useBboxMode) {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+      return;
+    }
+
     /* 조건 불충족 시 분석 안 함 */
     if (!isConnected || zones.length === 0 || !videoRef.current) {
       if (intervalRef.current) {
@@ -144,13 +246,17 @@ export function useZoneDetection({
         intervalRef.current = null;
       }
     };
-  }, [isConnected, zones, videoRef, handleActivityEvent]);
+  }, [useBboxMode, isConnected, zones, videoRef, handleActivityEvent]);
 
-  /* 언마운트 시 detector 정리 */
+  /* 언마운트 시 detector/engine 정리 */
   useEffect(() => {
     return () => {
       detectorRef.current?.destroy();
       detectorRef.current = null;
+      bboxDetectorRef.current?.destroy();
+      bboxDetectorRef.current = null;
+      alertEngineRef.current?.destroy();
+      alertEngineRef.current = null;
     };
   }, []);
 

@@ -100,7 +100,27 @@
       "Bash(cp staging/components/broadcast/CameraBroadcastClient.module.css src/app/camera/broadcast/CameraBroadcastClient.module.css)",
       "Bash(cp staging/components/home/CareStatusGrid.tsx src/components/home/CareStatusGrid.tsx)",
       "Bash(explorer.exe C:\\\\Users\\\\PC\\\\Desktop\\\\projects\\\\cat\\\\src\\\\components\\\\auth:*)",
-      "WebFetch(domain:fonts.google.com)"
+      "WebFetch(domain:fonts.google.com)",
+      "Bash(awk '{print $1}' *.txt)",
+      "Bash(xargs -n 1000 awk '{print $1}')",
+      "Bash(shuf -n 5000)",
+      "Bash(xargs awk:*)",
+      "Bash(shuf -n 20000)",
+      "Bash(python3 -c ':*)",
+      "mcp__filesystem__directory_tree",
+      "mcp__filesystem__read_text_file",
+      "Skill(investigate)",
+      "Skill(investigate:*)",
+      "mcp__supabase__list_projects",
+      "mcp__supabase__apply_migration",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\('scripts:', list\\(d.get\\('scripts',{}\\).keys\\(\\)\\)\\)\")",
+      "Bash(mkdir -p src/lib/ai src/workers src/app/api/behavior)",
+      "Bash(cp staging/lib/ai/behaviorClasses.ts src/lib/ai/)",
+      "Bash(cp staging/lib/ai/yoloPostprocess.ts src/lib/ai/)",
+      "Bash(cp staging/types/behavior.ts src/types/)",
+      "Bash(cp staging/workers/yoloInference.worker.ts src/workers/)",
+      "Skill(design-consultation)",
+      "Skill(design-consultation:*)"
     ]
   }
 }

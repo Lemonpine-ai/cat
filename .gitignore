@@ -55,3 +55,13 @@ styles.css
 
 # screenshots (dev/debug only)
 *.png
+
+# AI training data
+/data/
+
+# ONNX 모델 (용량 큼, 배포 시 수동 업로드)
+/public/models/*.onnx
+fgs_mobilenetv3.onnx
+runs/
+.claude/worktrees/
+public/models/*.onnx

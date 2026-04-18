@@ -52,7 +52,7 @@ export const ZONE_TYPE_CONFIG: Record<
   food_bowl: {
     label: "밥그릇",
     lucideIcon: "UtensilsCrossed",
-    dwellSeconds: 10,
+    dwellSeconds: 5,
     eventMergeSeconds: 300,      // 5분
     careKind: "meal",
     defaultColor: "rgba(245,101,101,0.4)",
@@ -70,7 +70,7 @@ export const ZONE_TYPE_CONFIG: Record<
   litter_box: {
     label: "화장실",
     lucideIcon: "Sparkles",
-    dwellSeconds: 15,
+    dwellSeconds: 10,
     eventMergeSeconds: 0,
     careKind: "litter_clean",
     defaultColor: "rgba(159,122,234,0.4)",
@@ -116,6 +116,29 @@ export type GlobalMotionState = {
   currentState: "active" | "resting";
   /** 최초 분석 완료 여부 — false면 아직 한 번도 분석하지 않은 상태 */
   initialized: boolean;
+};
+
+/** zone 이벤트 종류 — 진입, 퇴장, 체류 완료 */
+export type ZoneEventType = "enter" | "exit" | "dwell_complete";
+
+/** zone 이벤트 DB 레코드 */
+export type ZoneEvent = {
+  id: string;
+  home_id: string;
+  device_id: string;
+  zone_id: string;
+  cat_id: string | null;
+  event_type: ZoneEventType;
+  care_kind: string | null;
+  started_at: string;
+  duration_seconds: number | null;
+  created_at: string;
+};
+
+/** bbox 중심점 좌표 (0~1 정규화) */
+export type BboxCenter = {
+  x: number; // bbox 중심 X (0~1)
+  y: number; // bbox 중심 Y (0~1)
 };
 
 /** 카메라당 최대 zone 개수 */

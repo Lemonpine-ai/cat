@@ -1,0 +1,64 @@
+/* ── 세로 모드 안내 오버레이 ──
+   JS(matchMedia) 감지 + CSS(@media portrait) 이중 보호.
+   Screen Orientation API 미지원 브라우저에서도 안내 표시. */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  background: rgba(13, 27, 24, 0.96);
+  backdrop-filter: blur(20px);
+  color: #fff;
+  text-align: center;
+  padding: 2rem;
+}
+
+/* 회전 아이콘 — 좌우 흔들리는 애니메이션 */
+.iconWrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 5rem;
+  height: 5rem;
+  border-radius: 1.5rem;
+  background: rgba(79, 209, 197, 0.15);
+  color: #4fd1c5;
+  animation: rotateHint 2s ease-in-out infinite;
+}
+
+@keyframes rotateHint {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(-20deg); }
+  75% { transform: rotate(20deg); }
+}
+
+.title {
+  margin: 0;
+  font-size: 1.3rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #4fd1c5;
+}
+
+.desc {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+/* ── CSS fallback — JS 미작동 시에도 portrait 이면 표시 ──
+   JS visible 로 렌더링 안 된 경우를 대비해
+   부모(.page) 에 portrait-hide 클래스를 주면 가로에서 숨김 */
+
+@media (orientation: landscape) {
+  .overlay {
+    /* 가로 모드이면 오버레이 숨김 (JS 감지 지연 대비 안전망) */
+    display: none;
+  }
+}
