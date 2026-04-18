@@ -65,3 +65,5 @@ fgs_mobilenetv3.onnx
 runs/
 .claude/worktrees/
 public/models/*.onnx
+yolo*.pt
+*.pt
