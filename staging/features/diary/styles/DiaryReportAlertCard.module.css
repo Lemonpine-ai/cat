@@ -1,0 +1,39 @@
+/* 리포트 상단 경고 카드 — severity 색상 */
+
+.card {
+  display: flex;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: #fff;
+  border: 1px solid #f0f0f0;
+  align-items: flex-start;
+  margin-bottom: 12px;
+  border-left: 4px solid transparent;
+}
+
+.card[data-severity="info"]    { border-left-color: #5bc7b2; background: #effbf7; }
+.card[data-severity="warning"] { border-left-color: #ff9870; background: #fff4ed; }
+.card[data-severity="danger"]  { border-left-color: #ff4d4f; background: #fff0f0; }
+
+.icon { flex-shrink: 0; margin-top: 1px; }
+.card[data-severity="info"] .icon    { color: #3fae97; }
+.card[data-severity="warning"] .icon { color: #ff7b4a; }
+.card[data-severity="danger"] .icon  { color: #ff4d4f; }
+
+.body { flex: 1; min-width: 0; }
+.body strong { display: block; font-size: 14px; margin-bottom: 3px; }
+.body p { margin: 0 0 4px 0; font-size: 13px; color: #555; line-height: 1.4; }
+.more { font-size: 11px; color: #888; }
+
+.link {
+  flex-shrink: 0;
+  align-self: center;
+  border: none;
+  background: transparent;
+  color: #3a76d8;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 4px 6px;
+  text-decoration: underline;
+}

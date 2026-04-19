@@ -7,7 +7,7 @@ import {
   RefreshCw,
   Sparkles,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { formatElapsedTimeLabel } from "@/lib/time/formatElapsedTimeLabel";
 
@@ -106,6 +106,9 @@ export function CareStatusGrid({
   envSavingMeal,
   envSavingMedicine,
 }: CareStatusGridProps) {
+  /* supabase 클라이언트를 useMemo로 안정화 — useEffect 내부 생성 제거 */
+  const supabase = useMemo(() => createSupabaseBrowserClient(), []);
+
   const [mealCount, setMealCount] = useState(initialTodayMealCount);
   const [medicineCount, setMedicineCount] = useState(initialTodayMedicineCount);
   const [isMounted, setIsMounted] = useState(false);
@@ -122,7 +125,6 @@ export function CareStatusGrid({
   /* Realtime 구독 — 돌봄 기록 INSERT 감시 */
   useEffect(() => {
     if (!homeId) return;
-    const supabase = createSupabaseBrowserClient();
     const channel = supabase
       .channel(`care_status_grid_${homeId}`)
       .on(
@@ -149,12 +151,12 @@ export function CareStatusGrid({
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [homeId]);
+  }, [homeId, supabase]);
 
-  /* C1: 따뜻한 상태 레이블 */
-  const waterLabel = lastWaterChangeAt ? "깨끗한 물 OK!" : "아직 기록 없어요";
-  const litterLabel = lastLitterCleanAt ? "반짝반짝 깨끗!" : "아직 기록 없어요";
-  const medicineLabel = lastMedicineAt ? "약 잘 먹었어요" : "아직 기록 없어요";
+  /* C1: 따뜻한 상태 레이블 + 귀여운 이모티콘 */
+  const waterLabel = lastWaterChangeAt ? "깨끗한 물 OK! 💧" : "아직 기록 없어요 🐾";
+  const litterLabel = lastLitterCleanAt ? "반짝반짝 깨끗! ✨" : "아직 기록 없어요 🐾";
+  const medicineLabel = lastMedicineAt ? "약 잘 먹었어요 💊" : "아직 기록 없어요 🐾";
 
   void revalidateTick;
 
@@ -163,10 +165,10 @@ export function CareStatusGrid({
       {/* C1: "CARE STATUS" → "오늘의 돌봄" */}
       <div className="mb-3 flex items-center justify-between px-0.5">
         <h2 className="font-[family-name:var(--font-display)] text-sm font-semibold tracking-wide text-[var(--color-primary-dark)]">
-          오늘의 돌봄
+          🐾 오늘의 돌봄
         </h2>
         <span className="text-[0.65rem] font-medium tracking-[0.08em] text-[var(--color-text-muted)]">
-          탭해서 기록해요
+          탭해서 기록해요 ✨
         </span>
       </div>
       <div className="grid grid-cols-2 gap-3">
@@ -179,7 +181,7 @@ export function CareStatusGrid({
         >
           <div className="flex items-center gap-2">
             <CareStatusIconBadge category="litter" />
-            <span className="text-xs font-bold text-[var(--color-text-sub)]">화장실 청소</span>
+            <span className="text-xs font-bold text-[var(--color-text-sub)]">✨ 화장실 청소</span>
           </div>
           <p className="font-[family-name:var(--font-display)] text-lg font-semibold text-[var(--color-primary-dark)]">
             {litterLabel}
@@ -187,7 +189,7 @@ export function CareStatusGrid({
           <p className="text-[0.72rem] text-[var(--color-text-muted)]" suppressHydrationWarning>
             {lastLitterCleanAt
               ? (isMounted ? formatElapsedTimeLabel(lastLitterCleanAt) : "")
-              : "탭하면 청소 기록이 남아요"}
+              : "탭하면 청소 기록이 남아요 🧹"}
           </p>
         </button>
 
@@ -200,7 +202,7 @@ export function CareStatusGrid({
         >
           <div className="flex items-center gap-2">
             <CareStatusIconBadge category="water" />
-            <span className="text-xs font-bold text-[var(--color-text-sub)]">물 갈아주기</span>
+            <span className="text-xs font-bold text-[var(--color-text-sub)]">💧 물 갈아주기</span>
           </div>
           <p className="font-[family-name:var(--font-display)] text-lg font-semibold text-[var(--color-primary-dark)]">
             {waterLabel}
@@ -208,11 +210,11 @@ export function CareStatusGrid({
           <p className="text-[0.72rem] text-[var(--color-text-muted)]" suppressHydrationWarning>
             {lastWaterChangeAt
               ? (isMounted ? formatElapsedTimeLabel(lastWaterChangeAt) : "")
-              : "탭하면 교체 기록이 남아요"}
+              : "탭하면 교체 기록이 남아요 🫧"}
           </p>
         </button>
 
-        {/* 밥 먹기 */}
+        {/* 밥 주기 */}
         <button
           type="button"
           onClick={onRequestMeal}
@@ -221,13 +223,12 @@ export function CareStatusGrid({
         >
           <div className="flex items-center gap-2">
             <CareStatusIconBadge category="meal" />
-            <span className="text-xs font-bold text-[var(--color-text-sub)]">밥 먹기</span>
+            <span className="text-xs font-bold text-[var(--color-text-sub)]">🍽️ 밥 주기</span>
           </div>
           <p className="font-[family-name:var(--font-display)] text-lg font-semibold text-[var(--color-primary-dark)]">
-            {mealCount}회
+            {mealCount}회 😋
           </p>
-          {/* C1: "탭해서 식사 기록" → "밥 줬어요!" */}
-          <p className="text-[0.72rem] text-[var(--color-text-muted)]">밥 줬어요!</p>
+          <p className="text-[0.72rem] text-[var(--color-text-muted)]">밥 줬어요! 🐾</p>
         </button>
 
         {/* 약 챙기기 */}
@@ -239,7 +240,7 @@ export function CareStatusGrid({
         >
           <div className="flex items-center gap-2">
             <CareStatusIconBadge category="medicine" />
-            <span className="text-xs font-bold text-[var(--color-text-sub)]">약 챙기기</span>
+            <span className="text-xs font-bold text-[var(--color-text-sub)]">💊 약 챙기기</span>
           </div>
           <p className="font-[family-name:var(--font-display)] text-lg font-semibold text-[var(--color-primary-dark)]">
             {medicineLabel}
@@ -247,7 +248,7 @@ export function CareStatusGrid({
           <p className="text-[0.72rem] text-[var(--color-text-muted)]" suppressHydrationWarning>
             {lastMedicineAt
               ? (isMounted ? formatElapsedTimeLabel(lastMedicineAt) : "")
-              : "약 먹었어요!"}
+              : "약 먹었어요! 🌟"}
           </p>
         </button>
       </div>

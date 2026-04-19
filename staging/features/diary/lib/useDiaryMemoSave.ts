@@ -3,10 +3,16 @@
 import { useCallback, useRef, useState } from "react";
 import type { DiaryMemo } from "@/types/diary";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { kstToday } from "./kstRange";
 
 /**
  * 집사 일기장 메모 저장 훅 — insert / update 분기 처리
- * 저장 성공 시 memo ID를 기억해서 다음 저장은 update로 처리한다.
+ * 저장 성공 시 DiaryMemo 객체를 반환하여 부모가 즉시 UI에 반영 가능.
+ * savedIdRef로 첫 insert 이후에는 update로 자동 전환된다.
+ *
+ * insert 시 id를 미리 생성해서 함께 넣는다.
+ * .select().single()은 RLS 환경에서 실패할 수 있어서 사용하지 않는다.
+ * 날짜는 KST 기준 — UTC 기반 toISOString()은 KST 자정~오전 9시 구간에서 전날로 잘못 기록되는 버그가 있어 kstToday() 사용.
  */
 export function useDiaryMemoSave(
   existingMemo: DiaryMemo | null,
@@ -17,7 +23,7 @@ export function useDiaryMemoSave(
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState("");
 
-  /* 저장된 memo id를 기억 — 첫 insert 후 다음은 update로 분기 */
+  /* 저장된 memo id 기억 — 첫 insert 후 다음 저장은 update로 분기 */
   const savedIdRef = useRef<string | null>(existingMemo?.id ?? null);
 
   const save = useCallback(
@@ -26,10 +32,11 @@ export function useDiaryMemoSave(
       setSaving(true);
       try {
         const supabase = createSupabaseBrowserClient();
-        const today = new Date().toISOString().slice(0, 10);
+        /* KST 자정~오전 9시 저장 시 전날 기록 버그 방지 */
+        const today = kstToday();
 
-        /* 이미 저장된 메모가 있으면 update, 없으면 insert */
         if (savedIdRef.current) {
+          /* 기존 메모 업데이트 */
           const { error } = await supabase
             .from("cat_diary")
             .update({ content: content.trim() })
@@ -39,7 +46,6 @@ export function useDiaryMemoSave(
           setToast("일기 수정 완료! ✏️");
           setTimeout(() => setToast(""), 3000);
 
-          /* 수정된 메모 객체 반환 */
           return {
             id: savedIdRef.current,
             cat_id: catId,
@@ -48,33 +54,35 @@ export function useDiaryMemoSave(
             created_at: existingMemo?.created_at ?? new Date().toISOString(),
           };
         } else {
-          /* 새 메모 insert — id를 돌려받아 저장 */
-          const { data, error } = await supabase
+          /* 새 메모 insert — id를 미리 생성해서 RLS SELECT 정책 우회 */
+          const newId = crypto.randomUUID();
+          const now = new Date().toISOString();
+
+          const { error } = await supabase
             .from("cat_diary")
             .insert({
+              id: newId,
               cat_id: catId,
               home_id: homeId,
               author_id: userId,
               content: content.trim(),
               date: today,
-            })
-            .select("id, created_at")
-            .single();
+            });
 
           if (error) throw error;
 
           /* 다음 저장은 update로 가도록 id 기억 */
-          savedIdRef.current = data.id;
+          savedIdRef.current = newId;
 
           setToast("일기 저장 완료! 📝");
           setTimeout(() => setToast(""), 3000);
 
           return {
-            id: data.id,
+            id: newId,
             cat_id: catId,
             content: content.trim(),
             date: today,
-            created_at: data.created_at,
+            created_at: now,
           };
         }
       } catch (err) {

@@ -1,0 +1,53 @@
+/* 알림 벨 — 흔들림 애니메이션 + 빨간 점 */
+
+.bellButton {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: none;
+  background: transparent;
+  color: var(--color-text, #1f1f1f);
+  cursor: pointer;
+  border-radius: 999px;
+  transition: background-color 0.15s ease;
+}
+
+.bellButton:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+/* wiggle 애니메이션 — 미확인/강제 구간에서 반복 */
+.bellButton[data-wiggle="true"] {
+  animation: wiggle 1.2s ease-in-out infinite;
+  transform-origin: top center;
+}
+
+@keyframes wiggle {
+  0%, 100% { transform: rotate(0deg); }
+  15% { transform: rotate(-14deg); }
+  30% { transform: rotate(12deg); }
+  45% { transform: rotate(-10deg); }
+  60% { transform: rotate(8deg); }
+  75% { transform: rotate(-4deg); }
+}
+
+/* 빨간 점 — 우상단 카운트 배지 */
+.dot {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  background: #ff4d4f;
+  color: #fff;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+  box-shadow: 0 0 0 2px #fff;
+}
