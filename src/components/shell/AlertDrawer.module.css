@@ -1,0 +1,85 @@
+/* 알림 드로어 — 우측 슬라이드 + severity 색상 */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 1000;
+  display: flex;
+  justify-content: flex-end;
+  /* data-open 속성으로 opacity 제어 — unmount 없이 transition 보존 */
+  opacity: 1;
+  transition: opacity 0.15s ease-out;
+  pointer-events: auto;
+}
+.overlay[data-open="false"] {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.drawer {
+  width: min(380px, 90vw);
+  height: 100%;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  box-shadow: -8px 0 24px rgba(0, 0, 0, 0.1);
+  transform: translateX(0);
+  transition: transform 0.2s ease-out;
+}
+.drawer[data-open="false"] {
+  transform: translateX(100%);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid #eee;
+}
+.header h2 { margin: 0; font-size: 17px; font-weight: 700; }
+.header button { border: none; background: transparent; cursor: pointer; padding: 4px; }
+
+.empty {
+  padding: 48px 20px;
+  text-align: center;
+  color: #888;
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.item {
+  display: flex;
+  gap: 12px;
+  padding: 14px 20px;
+  border-bottom: 1px solid #f3f3f3;
+  cursor: pointer;
+  transition: background 0.1s ease;
+  border-left: 3px solid transparent;
+}
+.item:hover { background: #fafafa; }
+
+/* severity 색상 — info=민트, warning=코랄, danger=빨강 */
+.item[data-severity="info"]    { border-left-color: #5bc7b2; }
+.item[data-severity="warning"] { border-left-color: #ff9870; }
+.item[data-severity="danger"]  { border-left-color: #ff4d4f; }
+
+.item[data-severity="info"] .icon    { color: #5bc7b2; }
+.item[data-severity="warning"] .icon { color: #ff9870; }
+.item[data-severity="danger"] .icon  { color: #ff4d4f; }
+
+/* 읽지 않은 알림은 배경 강조 */
+.item[data-unread="true"] { background: #fff8f3; }
+
+.icon { flex-shrink: 0; margin-top: 2px; }
+.body { flex: 1; min-width: 0; }
+.body strong { display: block; font-size: 14px; margin-bottom: 2px; }
+.body p { margin: 0 0 4px 0; font-size: 13px; color: #555; line-height: 1.4; }
+.body time { font-size: 11px; color: #999; }
