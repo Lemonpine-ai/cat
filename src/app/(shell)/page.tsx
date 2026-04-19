@@ -6,6 +6,7 @@ import {
   type CatLogJoinRow,
 } from "@/lib/catLog/mapActivityLogRows";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { dedupeCatsByName } from "@/lib/cat/dedupeCatsByName";
 import type { CatProfileRow } from "@/types/cat";
 import type { ActivityLogListItem } from "@/types/catLog";
 
@@ -46,7 +47,10 @@ export default async function HomePage() {
     if (catsError) {
       catsFetchError = catsError.message;
     } else {
-      cats = (catRows ?? []) as CatProfileRow[];
+      /* 이름 기준 중복 제거 — dedupeCatsByName 유틸로 단일화.
+       * (reports 페이지와 동일 규칙. 보리/찹쌀 각 1장씩만 카드 렌더.)
+       * 근본 원인 가드: DB 에 home_id+name 중복 row 존재 시 UI 두 번 렌더 방지. */
+      cats = dedupeCatsByName((catRows ?? []) as CatProfileRow[]);
     }
 
     const { data: logRows, error: logsError } = await supabase

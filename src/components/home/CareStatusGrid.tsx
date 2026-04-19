@@ -214,7 +214,7 @@ export function CareStatusGrid({
           </p>
         </button>
 
-        {/* 밥 먹기 */}
+        {/* 밥 주기 */}
         <button
           type="button"
           onClick={onRequestMeal}
@@ -223,7 +223,7 @@ export function CareStatusGrid({
         >
           <div className="flex items-center gap-2">
             <CareStatusIconBadge category="meal" />
-            <span className="text-xs font-bold text-[var(--color-text-sub)]">🍽️ 밥 먹기</span>
+            <span className="text-xs font-bold text-[var(--color-text-sub)]">🍽️ 밥 주기</span>
           </div>
           <p className="font-[family-name:var(--font-display)] text-lg font-semibold text-[var(--color-primary-dark)]">
             {mealCount}회 😋
