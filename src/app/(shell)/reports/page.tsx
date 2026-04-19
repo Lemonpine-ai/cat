@@ -1,11 +1,18 @@
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { DiaryPageClient } from "./DiaryPageClient";
+import { kstToday } from "@/features/diary/lib/kstRange";
+import {
+  fetchWeeklyBehaviorAvgMap,
+  type WeeklyAvgEntry,
+} from "@/features/diary/lib/weeklyBehaviorAvg";
+import { dedupeCatsByName } from "@/lib/cat/dedupeCatsByName";
 import type {
   DiaryCatProfile,
   CatHealthLog,
   CuteCapture,
   DiaryMemo,
   DailyChartPoint,
+  WeeklyCareStats,
 } from "@/types/diary";
 
 /**
@@ -18,15 +25,24 @@ export default async function ReportsPage() {
   let cats: DiaryCatProfile[] = [];
   let homeId = "";
   let userId = "";
-  let healthMap: Record<string, CatHealthLog> = {};
+  const healthMap: Record<string, CatHealthLog> = {};
   let captures: CuteCapture[] = [];
-  let memoMap: Record<string, DiaryMemo> = {};
-  let chartMap: Record<string, DailyChartPoint[]> = {};
+  const memoMap: Record<string, DiaryMemo> = {};
+  const chartMap: Record<string, DailyChartPoint[]> = {};
   /** 고양이별 오늘 돌봄 횟수 (일기 생성용) */
   type CareCount = { meal: number; water: number; litter: number; medicine: number; total: number };
-  let todayCareMap: Record<string, CareCount> = {};
+  const todayCareMap: Record<string, CareCount> = {};
   /** 30일 평균 */
-  let monthlyAvg = { meal: 0, water: 0, poop: 0, activity: 0 };
+  const monthlyAvg = { meal: 0, water: 0, poop: 0, activity: 0 };
+  /** 이번 주(최근 7일) 돌봄 집계 — WeeklyHighlightCards 폴백용 (유지) */
+  const weeklyStats: WeeklyCareStats = {
+    totalMeals: 0,
+    totalWater: 0,
+    totalLitter: 0,
+    totalMedicine: 0,
+  };
+  /** 고양이별 7일 주간 평균 (cat_behavior_events 기반) — WeeklyHighlightCards 용 */
+  let weeklyAvgMap: Record<string, WeeklyAvgEntry> = {};
 
   try {
     const supabase = await createSupabaseServerClient();
@@ -57,19 +73,20 @@ export default async function ReportsPage() {
       .eq("home_id", homeId)
       .order("name", { ascending: true });
 
-    /* 이름 기준 중복 제거 — 같은 이름 고양이가 여러 개면 첫 번째만 사용 */
-    const allCats = (catRows ?? []) as DiaryCatProfile[];
-    const seenNames = new Set<string>();
-    cats = allCats.filter((c) => {
-      if (seenNames.has(c.name)) return false;
-      seenNames.add(c.name);
-      return true;
-    });
+    /* 이름 기준 중복 제거 — dedupeCatsByName 유틸로 단일화.
+     * (홈 페이지와 동일 규칙. DB 에 home_id+name 중복 row 존재 시 UI 두 번 렌더 방지.) */
+    cats = dedupeCatsByName((catRows ?? []) as DiaryCatProfile[]);
 
     if (cats.length === 0) return <FallbackMessage text="등록된 고양이가 없어요 🐱" />;
 
-    /* ── 3. 최근 30일 건강 기록 조회 (차트 7일 + 평균 30일) ── */
-    const today = new Date().toISOString().slice(0, 10);
+    /* ── 3. 최근 30일 건강 기록 조회 (차트 7일 + 평균 30일) ──
+     * 날짜 기준은 KST 로 통일.
+     * - cat_diary.date, cat_health_logs.record_date 는 KST 기준으로 저장됨
+     * - UTC 자정~KST 09시 구간에서 UTC today ≠ KST today → 오늘 기록이 어제로 빠지는 버그 차단
+     */
+    const today = kstToday();
+    /* care_log 는 TIMESTAMPTZ(UTC) 라 UTC 오늘 비교가 정확 — KST 와 분리 유지 */
+    const utcToday = new Date().toISOString().slice(0, 10);
     const monthAgo = new Date();
     monthAgo.setDate(monthAgo.getDate() - 30);
     const monthAgoDate = monthAgo.toISOString().slice(0, 10);
@@ -115,15 +132,24 @@ export default async function ReportsPage() {
       .eq("home_id", homeId)
       .gte("created_at", monthAgoIso);
 
-    /* 30일 평균 (돌봄 로그 기반) + 오늘 돌봄 횟수 맵 */
+    /* 30일 평균 (돌봄 로그 기반) + 오늘 돌봄 횟수 맵 + 7일 weeklyStats */
+    const weekAgoIso = weekAgo.toISOString();
     if (careRows) {
       let totalWater = 0, totalActivity = 0;
       for (const row of careRows as { care_kind: string; cat_id: string; created_at: string }[]) {
         if (row.care_kind === "water_change") totalWater++;
         totalActivity++;
 
-        /* 오늘 데이터만 todayCareMap에 집계 */
-        if (row.created_at.slice(0, 10) === today) {
+        /* 최근 7일 구간 → weeklyStats 증가 (WeeklyHighlightCards 용) */
+        if (row.created_at >= weekAgoIso) {
+          if (row.care_kind === "meal") weeklyStats.totalMeals += 1;
+          else if (row.care_kind === "water_change") weeklyStats.totalWater += 1;
+          else if (row.care_kind === "litter_clean") weeklyStats.totalLitter += 1;
+          else if (row.care_kind === "medicine") weeklyStats.totalMedicine += 1;
+        }
+
+        /* 오늘 데이터만 todayCareMap에 집계 (UTC 타임스탬프 비교) */
+        if (row.created_at.slice(0, 10) === utcToday) {
           if (!todayCareMap[row.cat_id]) {
             todayCareMap[row.cat_id] = { meal: 0, water: 0, litter: 0, medicine: 0, total: 0 };
           }
@@ -139,6 +165,25 @@ export default async function ReportsPage() {
       monthlyAvg.water = Math.round((totalWater / days) * 10) / 10;
       monthlyAvg.activity = Math.round((totalActivity / days) * 10) / 10;
     }
+
+    /* ── 4-2. 고양이별 7일 주간 평균 (cat_behavior_events 기반) ──
+     *
+     * WeeklyHighlightCards 의 "오늘 vs 주간 평균" 비교에 사용.
+     * 로직은 `fetchWeeklyBehaviorAvgMap` 헬퍼로 분리
+     * (behaviorEventsToDiaryStats 의 세션 병합 규칙과 동일).
+     *   - eating: 5초 이상 + 5분 병합 → meal
+     *   - drinking/water_drink: 카운트 → water
+     *   - peeing/pooping: 카운트 → poop
+     *   - walk_run/roll/grooming: duration 초 합산 → activity
+     *   - confidence ≥ 0.6 만 유효
+     *   - 기록 없는 날도 0 으로 포함하여 7 로 나눔
+     */
+    weeklyAvgMap = await fetchWeeklyBehaviorAvgMap(
+      supabase,
+      homeId,
+      weekAgoIso,
+      cats.map((c) => c.id),
+    );
 
     /* ── 4-1. 고양이별 7일 차트 데이터 빌드 ── */
     {
@@ -251,11 +296,12 @@ export default async function ReportsPage() {
       homeId={homeId}
       userId={userId}
       healthMap={healthMap}
+      weeklyStats={weeklyStats}
       captures={captures}
       memoMap={memoMap}
       chartMap={chartMap}
-      todayCareMap={todayCareMap}
       monthlyAvg={monthlyAvg}
+      weeklyAvgMap={weeklyAvgMap}
     />
   );
 }

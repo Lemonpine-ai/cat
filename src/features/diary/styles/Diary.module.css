@@ -474,6 +474,8 @@
 .weeklyCardIconWater    { background: #eff6ff; }
 .weeklyCardIconLitter   { background: #f0fdf4; }
 .weeklyCardIconMedicine { background: #fdf4ff; }
+/* 활동 — 주황빛 파스텔 (달리기 느낌) */
+.weeklyCardIconActivity { background: #fef3c7; }
 
 .weeklyCardValue {
   font-size: 1.1rem;

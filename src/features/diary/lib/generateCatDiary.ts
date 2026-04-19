@@ -1,10 +1,16 @@
 /**
- * 고양이 시점 일기 자동 생성 — 성격별 어투 적용
- * catPersonalities.ts의 8종 성격 데이터 기반으로
- * 고양이마다 다른 어투의 일기를 생성한다.
+ * 고양이 시점 일기 자동 생성 — DiaryStats 기반
+ *
+ * 기존 generateCatDiary(catName, health, care) 대비 변경점:
+ * - 입력을 DiaryStats 하나로 통일 (여러 소스 병합된 최종 결과)
+ * - source='care_log' 일 때 "집사님이 N번 줬대요" 톤으로 미묘하게 변경
+ * - 기존 catPersonalities.ts 그대로 재사용
+ *
+ * NOTE: 기존 파일 (staging/lib/generateCatDiary.ts) 은 수정하지 않고
+ *       features/diary/lib/ 에 새 버전을 둔다.
  */
 
-import type { CatHealthLog } from "@/types/diary";
+import type { DiaryStats } from "../types/diaryStats";
 import {
   getPersonality,
   getMealTier,
@@ -20,75 +26,78 @@ import {
   TITLE,
 } from "./catPersonalities";
 
-type CareCount = {
-  meal: number;
-  water: number;
-  litter: number;
-  medicine: number;
-  total: number;
-};
+/** "N"을 실제 숫자로 치환 */
+function fillCount(template: string, count: number): string {
+  return template.replace(/N/g, String(count));
+}
 
-/** 오늘 날짜를 "2026년 4월 12일" 형식으로 */
-function formatKoreanDate(): string {
-  const d = new Date();
+/** 오늘 날짜를 "2026년 4월 18일" 형식으로 */
+function formatKoreanDate(date?: string): string {
+  const d = date ? new Date(`${date}T00:00:00`) : new Date();
   return `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일`;
 }
 
-/** 멘트 안의 N을 실제 숫자로 치환 */
-function fillCount(text: string, count: number): string {
-  return text.replace(/N/g, String(count));
+/**
+ * care_log 소스 전용 톤 변환
+ * AI 가 못 봤으니 "집사가 챙겨줬다" 관점으로 문장을 감싼다.
+ */
+function wrapCareLogTone(sentence: string): string {
+  /* 이미 '집사' 언급 있으면 그대로 */
+  if (sentence.includes("집사")) return sentence;
+  return `집사님이 챙겨줬대요 — ${sentence}`;
 }
 
 /**
- * 고양이 시점 일기 생성 — 성격별 어투
- * @param catName 고양이 이름 (이름으로 성격 자동 매핑)
- * @param health 오늘 건강 기록 (없으면 null)
- * @param care 오늘 돌봄 이벤트 횟수
- * @returns { title, date, body } 일기 내용
+ * DiaryStats → { title, date, body } 일기
+ *
+ * @param catName 고양이 이름 (성격 매핑용)
+ * @param stats   통합된 하루 통계
+ * @param date    YYYY-MM-DD (없으면 오늘)
  */
 export function generateCatDiary(
   catName: string,
-  health: CatHealthLog | null,
-  care: CareCount,
+  stats: DiaryStats,
+  date?: string,
 ) {
-  const personality = getPersonality(catName);
+  /* 성격 결정 */
+  const p = getPersonality(catName);
 
-  const mealCount = health?.meal_count ?? care.meal;
-  const poopCount = health?.poop_count ?? 0;
-  const painLevel = health?.pain_level ?? null;
+  /* DiaryStats 에서 카운트 추출 */
+  const mealCount = stats.meal_count;
+  const poopCount = stats.poop_count;
+  const waterCount = stats.water_count;
+  const painLevel = stats.pain_level === 0 ? null : stats.pain_level;
+  /* 활동 점수 = meal + water + poop + groom 합 (기존 care.total 대체) */
+  const totalEvents = mealCount + waterCount + poopCount + stats.groom_count;
 
-  /* 제목 — 성격별 */
-  const titleKey = getTitleKey(mealCount, poopCount, painLevel, care.total);
-  const title = TITLE[personality][titleKey];
+  /* 제목 */
+  const titleKey = getTitleKey(mealCount, poopCount, painLevel, totalEvents);
+  const title = TITLE[p][titleKey];
 
-  const date = formatKoreanDate();
-
-  /* 본문 조합 — 성격별 어투 */
+  /* 본문 조합 */
   const parts: string[] = [];
 
-  /* 식사 멘트 */
-  const mealTier = getMealTier(mealCount);
-  parts.push(fillCount(MEAL[personality][mealTier], mealCount));
+  /* 식사 */
+  parts.push(fillCount(MEAL[p][getMealTier(mealCount)], mealCount));
+  /* 배변 */
+  parts.push(fillCount(POOP[p][getPoopTier(poopCount, painLevel)], poopCount));
+  /* 음수 */
+  parts.push(fillCount(WATER[p][getWaterTier(waterCount)], waterCount));
+  /* 통증 */
+  if (painLevel && PAIN[p][painLevel]) {
+    parts.push(PAIN[p][painLevel]);
+  }
+  /* 마무리 */
+  parts.push(CLOSING[p][getActivityTier(totalEvents)]);
 
-  /* 배변 멘트 */
-  const poopTier = getPoopTier(poopCount, painLevel);
-  parts.push(fillCount(POOP[personality][poopTier], poopCount));
-
-  /* 음수 멘트 */
-  const waterTier = getWaterTier(care.water);
-  const waterText = fillCount(WATER[personality][waterTier], care.water);
-  if (waterText) parts.push(waterText);
-
-  /* 통증 멘트 */
-  if (painLevel && PAIN[personality][painLevel]) {
-    parts.push(PAIN[personality][painLevel]);
+  /* care_log 소스면 톤 미묘하게 변경 */
+  let body = parts.filter(Boolean).join("\n");
+  if (stats.source === "care_log") {
+    body = body
+      .split("\n")
+      .map((line, idx) => (idx === 0 ? wrapCareLogTone(line) : line))
+      .join("\n");
   }
 
-  /* 마무리 멘트 */
-  const activityTier = getActivityTier(care.total);
-  parts.push(CLOSING[personality][activityTier]);
-
-  const body = parts.filter(Boolean).join("\n");
-
-  return { title, date, body };
+  return { title, date: formatKoreanDate(date), body };
 }

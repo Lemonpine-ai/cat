@@ -3,6 +3,7 @@
 import { useCallback, useRef, useState } from "react";
 import type { DiaryMemo } from "@/types/diary";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { kstToday } from "./kstRange";
 
 /**
  * 집사 일기장 메모 저장 훅 — insert / update 분기 처리
@@ -11,6 +12,7 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/client";
  *
  * insert 시 id를 미리 생성해서 함께 넣는다.
  * .select().single()은 RLS 환경에서 실패할 수 있어서 사용하지 않는다.
+ * 날짜는 KST 기준 — UTC 기반 toISOString()은 KST 자정~오전 9시 구간에서 전날로 잘못 기록되는 버그가 있어 kstToday() 사용.
  */
 export function useDiaryMemoSave(
   existingMemo: DiaryMemo | null,
@@ -30,7 +32,8 @@ export function useDiaryMemoSave(
       setSaving(true);
       try {
         const supabase = createSupabaseBrowserClient();
-        const today = new Date().toISOString().slice(0, 10);
+        /* KST 자정~오전 9시 저장 시 전날 기록 버그 방지 */
+        const today = kstToday();
 
         if (savedIdRef.current) {
           /* 기존 메모 업데이트 */
