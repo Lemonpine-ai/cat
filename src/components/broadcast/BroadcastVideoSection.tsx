@@ -34,6 +34,14 @@ export function BroadcastVideoSection({
         muted
         playsInline
         aria-label="카메라 미리보기"
+        /* S9 autoplay race 회피: srcObject 가 붙은 뒤 metadata 도착 시점에
+         *  명시적으로 play() 를 호출 — autoPlay 속성만으로는 Chromium 구형
+         *  WebView 에서 가끔 첫 프레임이 안 그려지고 검은 화면으로 멈춤. */
+        onLoadedMetadata={() => {
+          void localVideoRef.current?.play().catch(() => {
+            /* play() 실패(interaction 필요 등)는 조용히 무시 — 다음 사용자 탭에서 풀림 */
+          });
+        }}
       />
       {/* 카메라 미작동 시 플레이스홀더 */}
       {broadcastPhase === "idle" || broadcastPhase === "acquiring" ? (

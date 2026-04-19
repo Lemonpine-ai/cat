@@ -3,6 +3,7 @@
 import type { RefObject } from "react";
 import { BroadcastVideoSection } from "@/components/broadcast/BroadcastVideoSection";
 import { BroadcastControlSection } from "@/components/broadcast/BroadcastControlSection";
+import { PortraitOverlay } from "@/components/broadcast/PortraitOverlay";
 import type { BroadcastPhase } from "@/hooks/useBroadcasterSignaling";
 import styles from "@/app/camera/broadcast/CameraBroadcastClient.module.css";
 
@@ -50,13 +51,15 @@ export interface BroadcastActions {
   onSwitchCamera: () => void;
 }
 
-/* ── 메인 뷰 props (5개 객체로 그루핑) ── */
+/* ── 메인 뷰 props (5개 객체 + 가로모드 스칼라) ── */
 export interface BroadcastMainViewProps {
   broadcastStatus: BroadcastStatusState;
   mediaRefs: MediaRefsState;
   dim: DimState;
   careBar: CareBarState;
   broadcastActions: BroadcastActions;
+  /** 세로 모드 여부 — true 이고 방송 페이즈가 idle 이 아닐 때 PortraitOverlay 노출 */
+  isPortrait: boolean;
 }
 
 /**
@@ -65,13 +68,17 @@ export interface BroadcastMainViewProps {
  * props 12개 한도 준수를 위해 5개 객체로 그루핑.
  */
 export function BroadcastMainView(props: BroadcastMainViewProps) {
-  const { broadcastStatus, mediaRefs, dim, careBar, broadcastActions } = props;
+  const { broadcastStatus, mediaRefs, dim, careBar, broadcastActions, isPortrait } = props;
   // 자주 쓰는 값은 구조분해로 가독성 확보
   const { broadcastPhase, peerConnectionState, activeSessionId } = broadcastStatus;
   const { deviceName, localVideoRef, remoteAudioRef, facingMode } = mediaRefs;
 
   return (
     <div className={styles.page}>
+      {/* 세로 모드 안내 오버레이 — 방송이 시작된 뒤에만 표시
+       *  (idle 에서는 카메라 켜기 버튼을 가리면 안 되므로 제외) */}
+      {isPortrait && broadcastPhase !== "idle" && <PortraitOverlay visible />}
+
       {/* 화면 딤 오버레이 — 터치하면 30초간 UI 표시 */}
       {dim.isDimmed && <DimOverlay onWakeUp={dim.onWakeUp} />}
 

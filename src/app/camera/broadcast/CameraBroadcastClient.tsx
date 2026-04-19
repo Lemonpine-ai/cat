@@ -7,9 +7,11 @@ import { useCameraStream } from "@/hooks/useCameraStream";
 import { useBroadcastCareLog } from "@/hooks/useBroadcastCareLog";
 import { useBroadcasterSignaling } from "@/hooks/useBroadcasterSignaling";
 import { useBroadcasterAutostart } from "@/hooks/useBroadcasterAutostart";
+import { useBroadcasterLifecycle } from "@/hooks/useBroadcasterLifecycle";
 import { useDeviceCredentials } from "@/hooks/useDeviceCredentials";
 import { useSoundPreference } from "@/hooks/useSoundPreference";
 import { useBroadcastMainViewProps } from "@/hooks/useBroadcastMainViewProps";
+import { useLandscapeLock } from "@/hooks/useLandscapeLock";
 import { BroadcastLoadingView } from "@/components/broadcast/BroadcastLoadingView";
 import { BroadcastUnpairedView } from "@/components/broadcast/BroadcastUnpairedView";
 import { BroadcastMainView } from "@/components/broadcast/BroadcastMainView";
@@ -28,6 +30,13 @@ export function CameraBroadcastClient() {
   const [sessionIdForCareLog, setSessionIdForCareLog] = useState<string | null>(null);
 
   const { localStreamRef, facingMode, isAcquiring, cameraError, acquireCamera, switchCamera, localVideoRef } = useCameraStream();
+
+  /* 가로모드 잠금 — 카메라 켜기(사용자 제스처) 직전에 requestLandscapeLock 을 래핑 호출 */
+  const { isPortrait, requestLandscapeLock } = useLandscapeLock(true);
+  const handleAcquireCameraWithLandscape = useCallback(async () => {
+    await requestLandscapeLock();
+    await acquireCamera();
+  }, [requestLandscapeLock, acquireCamera]);
 
   const care = useBroadcastCareLog({
     deviceToken: deviceIdentity?.deviceToken ?? null,
@@ -53,6 +62,7 @@ export function CameraBroadcastClient() {
     isAcquiring,
     cameraError,
     onSessionCreated: handleSessionCreated,
+    /* 재연결 시 카메라 재획득 — 가로 잠금은 이미 걸려있어 재요청 불필요(제스처 밖이라 어차피 실패) */
     onReacquireCamera: acquireCamera,
     supabaseClient,
   });
@@ -64,6 +74,13 @@ export function CameraBroadcastClient() {
     broadcastPhase,
     localStreamRef,
     onReacquireCamera: acquireCamera,
+    startBroadcast: signaling.startBroadcast,
+  });
+
+  // 탭 복귀/bfcache 복귀 시 pc 가 죽어있으면 방송 재시작
+  useBroadcasterLifecycle({
+    broadcastPhase,
+    peerConnectionRef: signaling.peerConnectionRef,
     startBroadcast: signaling.startBroadcast,
   });
 
@@ -91,6 +108,7 @@ export function CameraBroadcastClient() {
     remoteAudioRef: signaling.remoteAudioRef,
     isDimmed,
     onWakeUp: wakeUp,
+    isPortrait,
     careLogPending: care.careLogPending,
     careLogMessage: care.careLogMessage,
     lastWaterChangeAt: care.lastWaterChangeAt,
@@ -98,7 +116,8 @@ export function CameraBroadcastClient() {
     isSoundEnabled,
     onToggleSound: toggleSoundEnabled,
     onRecordCare: care.recordCareLog,
-    onAcquireCamera: acquireCamera,
+    /* 사용자 제스처에서 가로 잠금 요청 후 카메라 획득 */
+    onAcquireCamera: handleAcquireCameraWithLandscape,
     onStartBroadcast: signaling.startBroadcast,
     onStopBroadcast: signaling.stopBroadcast,
     onResetError: signaling.resetError,

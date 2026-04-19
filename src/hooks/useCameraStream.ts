@@ -102,7 +102,21 @@ export function useCameraStream(
 
   /* ── 공개 API ── */
 
-  /** 카메라 스트림 획득 (후면 우선, 실패 시 최소 제약 fallback) */
+  /**
+   * 카메라 스트림 획득 — 4-tier fallback.
+   *
+   * S9 등 레거시 Chromium(WebView 59~70) 에서는 `ideal` 해상도 제약도 exact 처럼
+   * 해석하여 검은 화면/트랙 ended 상태를 반환하는 사례가 있다.
+   * → 느슨한 제약으로 한 단계씩 내려가며 "살아있는" 비디오 트랙을 확보한다.
+   *
+   *   tier 1: 후면 + 1280x720 + 오디오
+   *   tier 2: 후면만 (해상도 제거)
+   *   tier 3: video:true 만 (오디오 격리 — 오디오 충돌 회피)
+   *   tier 4: video+audio (최후의 보루)
+   *
+   * 각 tier 는 getUserMedia 실패 또는 `getVideoTracks()[0].readyState === "ended"`
+   * 인 경우 다음 tier 로 넘어간다.
+   */
   const acquireCamera = useCallback(async () => {
     if (acquireInFlightRef.current) return;
     acquireInFlightRef.current = true;
@@ -119,29 +133,89 @@ export function useCameraStream(
     stopLocalPreviewTracksAndClearVideo();
     await delayMs(120);
 
-    const preferredConstraints: MediaStreamConstraints = {
-      video: {
-        facingMode: { ideal: facingMode },
-        width: { ideal: 1280 },
-        height: { ideal: 720 },
+    /* 4-tier constraints — 위에서부터 시도, ended 트랙이면 다음 tier 로 */
+    const tiers: MediaStreamConstraints[] = [
+      {
+        video: {
+          facingMode: { ideal: facingMode },
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+        },
+        audio: true,
       },
-      audio: true,
-    };
-    const minimalConstraints: MediaStreamConstraints = {
-      video: true,
-      audio: true,
-    };
+      { video: { facingMode: { ideal: facingMode } }, audio: true },
+      { video: true, audio: false },
+      { video: true, audio: true },
+    ];
+
+    /** 한 tier 시도 — 성공 + 비디오 트랙 live 여야 반환, 아니면 정리 후 null */
+    /* [s9-cam 진단] tierIndex 인자를 받아 tier 번호를 로그에 포함 */
+    async function tryTier(c: MediaStreamConstraints, tierIndex: number): Promise<MediaStream | null> {
+      /* [s9-cam 진단] tier 진입 시 constraints 기록 */
+      console.info("[s9-cam] tier=" + tierIndex + " attempting constraints=", JSON.stringify(c));
+      try {
+        const s = await getUserMediaWithNotReadableRetry(c);
+        const videoTrack = s.getVideoTracks()[0];
+        /* S9 증상: ended 상태로 즉시 반환됨 → 해당 스트림 폐기 후 다음 tier */
+        if (!videoTrack || videoTrack.readyState === "ended") {
+          /* [s9-cam 진단] ended 트랙 감지 로그 */
+          console.warn("[s9-cam] tier=" + tierIndex + " ended-track detected, discarding, trying next");
+          s.getTracks().forEach((t) => t.stop());
+          return null;
+        }
+        /* [s9-cam 진단] tier 성공 — 트랙 상태/라벨/세팅 기록 */
+        console.info(
+          "[s9-cam] tier=" + tierIndex + " acquired video.readyState=",
+          videoTrack?.readyState,
+          "label=",
+          videoTrack?.label,
+          "trackSettings=",
+          videoTrack?.getSettings ? JSON.stringify(videoTrack.getSettings()) : "n/a",
+        );
+        return s;
+      } catch (err) {
+        /* [s9-cam 진단] tier 실패 — 에러 name/message 기록 */
+        const e = err as { name?: string; message?: string } | undefined;
+        console.warn("[s9-cam] tier=" + tierIndex + " failed:", e?.name, e?.message);
+        return null;
+      }
+    }
 
     try {
       let stream: MediaStream | null = null;
-      try {
-        stream = await getUserMediaWithNotReadableRetry(preferredConstraints);
-      } catch {
-        stream = await getUserMediaWithNotReadableRetry(minimalConstraints);
+      let lastError: unknown = null;
+      for (let i = 0; i < tiers.length; i += 1) {
+        const tier = tiers[i];
+        try {
+          stream = await tryTier(tier, i + 1);
+          if (stream) break;
+        } catch (err) {
+          lastError = err;
+        }
       }
 
       if (!stream) {
-        throw new Error("카메라 스트림을 받지 못했어요.");
+        /* [s9-cam 진단] 모든 tier 소진 */
+        console.error("[s9-cam] all tiers exhausted — giving up");
+        /* 모든 tier 실패 — 마지막 tier 를 한 번 더 시도해 에러 원문 확보 */
+        try {
+          const fallbackStream = await navigator.mediaDevices.getUserMedia(
+            tiers[tiers.length - 1],
+          );
+          /* (변경 #2) 폴백 ended 검사 — tryTier 와 동일하게 readyState 확인.
+           * S9 등에서는 최후의 폴백도 ended 트랙을 반환할 수 있어 그대로 쓰면
+           * pc 에 addTrack 후 검은 화면 송출된다. → 트랙 정리 후 에러 throw. */
+          const vt = fallbackStream.getVideoTracks()[0];
+          if (!vt || vt.readyState === "ended") {
+            console.warn("[s9-cam] fallback ended-track detected, discarding");
+            fallbackStream.getTracks().forEach((t) => t.stop());
+            throw new Error("카메라가 켜지지 않아요. 잠시 후 다시 시도해 주세요.");
+          }
+          stream = fallbackStream;
+        } catch (err) {
+          throw err;
+        }
+        if (!stream) throw lastError ?? new Error("카메라 스트림을 받지 못했어요.");
       }
 
       localStreamRef.current = stream;

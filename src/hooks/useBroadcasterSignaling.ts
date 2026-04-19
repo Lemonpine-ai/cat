@@ -61,13 +61,10 @@ export function useBroadcasterSignaling({
     console.log(`[broadcaster] 코드 버전: ${BROADCAST_CODE_VERSION}`);
   }, []);
 
-  /* deviceToken 기반 초기 phase 자동 결정 */
+  /* deviceToken 기반 초기 phase 자동 결정 — null 이면 loading 유지 (상위가 unpaired 판단) */
   useEffect(() => {
     if (broadcastPhase !== "loading") return;
-    if (deviceToken) {
-      setBroadcastPhase("idle");
-    }
-    // deviceToken이 null이면 loading 유지 (메인 컴포넌트가 unpaired 판단)
+    if (deviceToken) setBroadcastPhase("idle");
   }, [deviceToken, broadcastPhase]);
 
   /* 카메라 획득 상태 → broadcastPhase 동기화 */
@@ -158,6 +155,8 @@ export function useBroadcasterSignaling({
         answerReadyChRef.current = null;
       }
 
+      /* track.onended 클로저 해제 — pc.close() 이전. 수일 재연결 시 heap 누수 방지 */
+      localStreamRef.current?.getTracks().forEach((t) => { t.onended = null; });
       if (peerConnectionRef.current) {
         peerConnectionRef.current.onconnectionstatechange = null;
         peerConnectionRef.current.onicecandidate = null;
@@ -215,11 +214,12 @@ export function useBroadcasterSignaling({
   /* 언마운트 시 리소스 정리 */
   useEffect(() => () => { void cleanupPeerResourcesOnly(false); }, [cleanupPeerResourcesOnly]);
 
-  /* 탭 닫기/숨기기 시 세션 정리 — stale live 세션 방지 */
+  /* 탭 닫기/숨기기 시 세션 정리 — stale live 세션 방지.
+   * bfcache: pagehide(persisted=true) 는 캐시로 들어가는 중이므로 beacon 스킵 (복귀 시 재연결). */
   useEffect(() => {
-    function handleUnload() {
+    function handleUnload(e: Event) {
       if (!deviceToken || !sessionIdRef.current) return;
-      /* sendBeacon 으로 비동기 종료 — 탭 닫힘 후에도 전송 보장 */
+      if (e.type === "pagehide" && (e as PageTransitionEvent).persisted) return;
       const url = `${window.location.origin}/api/webrtc/stop-broadcast`;
       navigator.sendBeacon(url, JSON.stringify({ device_token: deviceToken }));
     }
@@ -394,5 +394,7 @@ export function useBroadcasterSignaling({
     resetError,
     replaceVideoTrack,
     remoteAudioRef,
+    /** lifecycle 훅이 pc 상태를 보고 재시작 판단하도록 노출 */
+    peerConnectionRef,
   };
 }

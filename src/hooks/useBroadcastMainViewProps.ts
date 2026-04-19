@@ -25,6 +25,8 @@ interface Options {
   /* dim */
   isDimmed: boolean;
   onWakeUp: () => void;
+  /* 가로모드 감지 — true 면 PortraitOverlay 표시 */
+  isPortrait: boolean;
   /* careBar */
   careLogPending: boolean;
   careLogMessage: string | null;
@@ -90,5 +92,6 @@ export function useBroadcastMainViewProps(o: Options) {
     [o.onAcquireCamera, o.onStartBroadcast, o.onStopBroadcast, o.onResetError, o.onSwitchCamera],
   );
 
-  return { broadcastStatus, mediaRefs, dim, careBar, broadcastActions };
+  /* isPortrait 은 scalar — 별도 props 로 그대로 전달 (총 6개, 12개 한도 내) */
+  return { broadcastStatus, mediaRefs, dim, careBar, broadcastActions, isPortrait: o.isPortrait };
 }

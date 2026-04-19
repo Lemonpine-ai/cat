@@ -32,7 +32,12 @@ export function useLandscapeLock(enabled: boolean): {
   isPortrait: boolean;
   requestLandscapeLock: () => Promise<void>;
 } {
-  const [isPortrait, setIsPortrait] = useState(false);
+  /* SSR-safe lazy init — 초기값 즉시 계산, effect 내 setState 회피 (React 19 set-state-in-effect 룰). */
+  const [isPortrait, setIsPortrait] = useState(() =>
+    typeof window !== "undefined"
+      ? window.matchMedia("(orientation: portrait)").matches
+      : false
+  );
   /** fullscreen 진입 여부 추적 — cleanup 시 exitFullscreen 호출 판단용 */
   const fullscreenEnteredRef = useRef(false);
 
@@ -88,20 +93,11 @@ export function useLandscapeLock(enabled: boolean): {
 
   /* ── matchMedia fallback — portrait 감지 ── */
   useEffect(() => {
-    if (!enabled) {
-      setIsPortrait(false);
-      return;
-    }
-
-    /* 초기 상태 설정 */
+    /* enabled=true 일 때만 리스너 등록. 초기값은 useState lazy init 에서 처리.
+     * 한계: enabled false→true→false 전환 시 stale 값 유지되나, 방송 중에만 호출되므로 실사용 문제 없음. */
+    if (!enabled) return;
     const mql = window.matchMedia("(orientation: portrait)");
-    setIsPortrait(mql.matches);
-
-    /* orientation 변경 감지 */
-    function handleChange(e: MediaQueryListEvent) {
-      setIsPortrait(e.matches);
-    }
-
+    const handleChange = (e: MediaQueryListEvent) => setIsPortrait(e.matches);
     mql.addEventListener("change", handleChange);
     return () => mql.removeEventListener("change", handleChange);
   }, [enabled]);
