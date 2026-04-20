@@ -17,7 +17,7 @@ type ShellSplashGateProps = {
  * `/logo.jpeg` 는 `next/image` 로만 로드 (직접 URL 접근시 auth 307).
  * — public/ 직하 자산은 matcher prefix 그룹(ort-wasm|fonts|models)에 미포함이므로
  *   `<img src="/logo.jpeg">` 같은 직접 참조를 쓰면 비로그인 사용자는 /login 으로 튕깁니다.
- *   정책 상세: `docs/proxy-auth-rules.md` "public/ 직하 자산 정책" 절 참조.
+ *   정책 상세: `staging/docs/proxy-auth-rules.md` "public/ 직하 자산 정책" 절 참조.
  */
 export function ShellSplashGate({ children }: ShellSplashGateProps) {
   const [isSplashVisible, setIsSplashVisible] = useState(true);
