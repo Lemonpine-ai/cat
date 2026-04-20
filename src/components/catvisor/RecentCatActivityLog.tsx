@@ -79,7 +79,12 @@ export function RecentCatActivityLog({
   }, [catsLookup]);
 
   const catByIdRef = useRef(catById);
-  catByIdRef.current = catById;
+  /* catById 최신값을 ref 로 sync — realtime subscription 콜백에서
+   * stale closure 없이 최신 lookup 참조용.
+   * 렌더 중 ref write 는 React 19 룰 위반이라 effect 로 이동. */
+  useEffect(() => {
+    catByIdRef.current = catById;
+  }, [catById]);
 
   useEffect(() => {
     setLogs(initialLogs);
@@ -211,7 +216,11 @@ function ActivityLogRow({ entry }: { entry: ActivityLogListItem }) {
   }, [entry.storage_path]);
 
   const [formattedTime, setFormattedTime] = useState<string>("");
+  /* 의도된 client-only 포맷. Intl.DateTimeFormat 은 서버/클라이언트
+   * 타임존 차이로 hydration mismatch 유발 → effect 내 setState 로
+   * client 첫 마운트 후 주입. suppressHydrationWarning 와 짝. */
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setFormattedTime(formatActivityTimestamp(entry.captured_at));
   }, [entry.captured_at]);
 
@@ -233,7 +242,6 @@ function ActivityLogRow({ entry }: { entry: ActivityLogListItem }) {
             width={44}
             height={44}
             className={styles.activityThumbRound}
-            unoptimized
           />
         ) : (
           <span className={styles.activityEmojiFallback}>🐾</span>
