@@ -69,14 +69,32 @@ export function useBroadcasterSignaling({
 
   /* 카메라 획득 상태 → broadcastPhase 동기화 */
   useEffect(() => {
+    /* [s9-cam 진단] effect 진입 시 모든 변수 상태 기록 — 왜 ready 로 안 가는지 pin-point */
+    console.info(
+      "[s9-cam] phase-effect isAcquiring=",
+      isAcquiring,
+      "phase=",
+      broadcastPhase,
+      "cameraError=",
+      cameraError,
+      "localStream=",
+      !!localStreamRef.current,
+    );
     if (isAcquiring && broadcastPhase === "idle") {
+      console.info("[s9-cam] phase-effect → acquiring");
       setBroadcastPhase("acquiring");
     }
     if (!isAcquiring && broadcastPhase === "acquiring") {
       if (cameraError) {
+        console.info("[s9-cam] phase-effect → error (cameraError)");
         setBroadcastPhase("error");
       } else if (localStreamRef.current) {
+        console.info("[s9-cam] phase-effect → ready (stream present)");
         setBroadcastPhase("ready");
+      } else {
+        console.warn(
+          "[s9-cam] phase-effect stuck — !isAcquiring && phase=acquiring but no stream and no error",
+        );
       }
     }
     /* connecting 상태에서 카메라 에러 발생 시 error 전환 (autostart/재연결 시) */

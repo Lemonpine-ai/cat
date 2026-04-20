@@ -219,8 +219,20 @@ export function useCameraStream(
       }
 
       localStreamRef.current = stream;
+      /* [s9-cam 진단] stream 을 localStreamRef 에 저장 직후 상태 추적 */
+      console.info(
+        "[s9-cam] acquire stream stored — localStreamRef set=",
+        !!localStreamRef.current,
+        "videoTracks=",
+        stream.getVideoTracks().length,
+        "videoRef=",
+        !!localVideoRef.current,
+      );
       if (localVideoRef.current) {
         localVideoRef.current.srcObject = stream;
+        console.info("[s9-cam] acquire srcObject attached to videoRef");
+      } else {
+        console.warn("[s9-cam] acquire videoRef is null — srcObject attach skipped");
       }
     } catch (err) {
       stopLocalPreviewTracksAndClearVideo();
@@ -228,6 +240,11 @@ export function useCameraStream(
     } finally {
       setIsAcquiring(false);
       acquireInFlightRef.current = false;
+      /* [s9-cam 진단] finally 완료 — isAcquiring=false 로 내려간 뒤 phase 전환 effect 가 트리거되는지 확인용 */
+      console.info(
+        "[s9-cam] acquire finally — isAcquiring=false, streamSet=",
+        !!localStreamRef.current,
+      );
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [facingMode, stopLocalPreviewTracksAndClearVideo]);
