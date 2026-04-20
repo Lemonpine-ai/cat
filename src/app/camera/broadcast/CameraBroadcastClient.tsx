@@ -15,6 +15,7 @@ import { useLandscapeLock } from "@/hooks/useLandscapeLock";
 import { BroadcastLoadingView } from "@/components/broadcast/BroadcastLoadingView";
 import { BroadcastUnpairedView } from "@/components/broadcast/BroadcastUnpairedView";
 import { BroadcastMainView } from "@/components/broadcast/BroadcastMainView";
+import { DebugLogOverlay } from "@/components/broadcast/DebugLogOverlay";
 
 /**
  * 남는 폰에서 실행하는 WebRTC 방송 클라이언트 (오케스트레이션 메인).
@@ -125,11 +126,27 @@ export function CameraBroadcastClient() {
   });
 
   // ── 렌더 분기 ──
+  // DebugLogOverlay: ?debug=1 쿼리 시 화면 하단에 [s9-cam] 로그 표시 (USB 디버깅 대체)
   if (!credentialsLoaded || (broadcastPhase === "loading" && deviceIdentity !== null)) {
-    return <BroadcastLoadingView />;
+    return (
+      <>
+        <BroadcastLoadingView />
+        <DebugLogOverlay />
+      </>
+    );
   }
   if ((credentialsLoaded && !deviceIdentity) || broadcastPhase === "unpaired") {
-    return <BroadcastUnpairedView />;
+    return (
+      <>
+        <BroadcastUnpairedView />
+        <DebugLogOverlay />
+      </>
+    );
   }
-  return <BroadcastMainView {...mainViewProps} />;
+  return (
+    <>
+      <BroadcastMainView {...mainViewProps} />
+      <DebugLogOverlay />
+    </>
+  );
 }
