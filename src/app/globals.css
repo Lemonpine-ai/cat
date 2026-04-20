@@ -1,9 +1,12 @@
 @import "tailwindcss";
 
 /* ─── 오뮤다예쁨체 — 사장님이 선택한 귀여운 손글씨 ─── */
+/* OmuDaye 폰트 — same-origin 배치 (COEP require-corp 환경에서 jsdelivr 차단 방지).
+ * 원본: Project Noonnu omyu_pretty (라이선스: 상업 이용 가능).
+ * public/fonts/ 는 Next.js 가 /_next/static/media 로 자동 CORP: same-origin 부여. */
 @font-face {
   font-family: 'OmuDaye';
-  src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_2304-01@1.0/omyu_pretty.woff2') format('woff2');
+  src: url('/fonts/omyu_pretty.woff2') format('woff2');
   font-weight: normal;
   font-display: swap;
 }

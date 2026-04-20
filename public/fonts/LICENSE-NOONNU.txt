@@ -1,0 +1,4 @@
+Font: omyu_pretty
+Source: https://noonnu.cc (Project Noonnu)
+License: Free for commercial use
+Original CDN: https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_2304-01@1.0/omyu_pretty.woff2
