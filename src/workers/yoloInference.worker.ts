@@ -24,6 +24,27 @@ import * as ort from "onnxruntime-web";
  */
 if (typeof self !== "undefined" && self.location) {
   ort.env.wasm.wasmPaths = `${self.location.origin}/ort-wasm/`;
+  /* crossOriginIsolated=true 일 때만 SharedArrayBuffer 사용 가능 → threaded wasm.
+   * false(COOP/COEP 미적용 라우트)면 numThreads=1 로 single-thread fallback.
+   * 이 조치로 COI 헤더 설정 실패 시에도 최소 동작(느리지만 동작)을 보장한다. */
+  const isolated =
+    (self as unknown as { crossOriginIsolated?: boolean })
+      .crossOriginIsolated === true;
+  ort.env.wasm.numThreads = isolated
+    ? Math.min(4, navigator.hardwareConcurrency ?? 2)
+    : 1;
+  ort.env.wasm.simd = true;
+  /* proxy=false — worker 내부에서 직접 wasm 로드 (별도 proxy worker 생성 금지) */
+  ort.env.wasm.proxy = false;
+  /* [yolo-debug] 초기화 상태 로그 — R1 진단용 */
+  console.info(
+    "[yolo-wasm] env ready — wasmPaths=",
+    ort.env.wasm.wasmPaths,
+    "crossOriginIsolated=",
+    isolated,
+    "numThreads=",
+    ort.env.wasm.numThreads,
+  );
 }
 
 // Next.js Turbopack worker 번들러가 경로 별칭(@/…)을 resolve 못하는 경우가 있어
@@ -67,6 +88,9 @@ async function createSession(modelUrl: string): Promise<ort.InferenceSession> {
       currentBackend = c.name;
       return s;
     } catch (err) {
+      /* [yolo-debug] 백엔드별 실패 사유 상세 로그 — R1 진단용.
+       * wasm 까지 실패하는 경우 근본 원인(COI/파일누락/MIME 등)을 이 로그로 추적. */
+      console.warn(`[yolo-wasm] ${c.name} backend failed:`, err);
       lastError = err;
       // 다음 백엔드로 폴백
     }
