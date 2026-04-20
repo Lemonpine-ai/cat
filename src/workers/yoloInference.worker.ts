@@ -11,6 +11,21 @@
  */
 
 import * as ort from "onnxruntime-web";
+
+/* ONNX Runtime Web WASM 파일 경로 — Worker 컨텍스트에서 절대 URL 필요.
+ *
+ * 원인: Worker 는 상대경로 resolve 시 base URL 이 main thread 와 달라
+ *       `/_next/static/media/ort-wasm-*.wasm` 같은 Next.js 경로를 fetch 못 함.
+ *       프로덕션에서 "Failed to parse URL" / "initWasm() failed" 에러 발생.
+ *
+ * 해결: postinstall 스크립트(scripts/copy-onnx-wasm.js)가 빌드 시
+ *       node_modules/onnxruntime-web/dist/*.wasm → public/ort-wasm/ 복사.
+ *       wasmPaths 를 self.location.origin + "/ort-wasm/" 로 절대 URL 지정.
+ */
+if (typeof self !== "undefined" && self.location) {
+  ort.env.wasm.wasmPaths = `${self.location.origin}/ort-wasm/`;
+}
+
 // Next.js Turbopack worker 번들러가 경로 별칭(@/…)을 resolve 못하는 경우가 있어
 // 상대 경로로 고정한다. (staging/workers → staging/lib, staging/types)
 import {

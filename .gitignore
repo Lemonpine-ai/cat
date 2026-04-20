@@ -67,3 +67,6 @@ runs/
 public/models/*.onnx
 yolo*.pt
 *.pt
+
+# ONNX Runtime Web WASM — postinstall 에서 자동 복사 (repo 크기 관리)
+/public/ort-wasm/

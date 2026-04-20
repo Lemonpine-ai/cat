@@ -4,9 +4,10 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "node scripts/copy-onnx-wasm.js && next build",
     "start": "next start",
     "lint": "eslint",
+    "postinstall": "node scripts/copy-onnx-wasm.js",
     "test:playwright": "playwright test",
     "test:playwright:smoke": "playwright test tests/broadcast-smoke.spec.ts"
   },
