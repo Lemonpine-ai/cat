@@ -16,7 +16,7 @@
  *      news/evil.wasm` 같은 **동적 라우트 우회** 공격에 취약. 반드시
  *      public 디렉토리 prefix 와 결합해야 한다. (R1 QA HIGH #1)
  *
- * 운영 규약: `docs/proxy-auth-rules.md` 참고.
+ * 운영 규약: `staging/docs/proxy-auth-rules.md` 참고.
  */
 
 import { createServerClient } from "@supabase/ssr";
@@ -135,7 +135,7 @@ export async function proxy(request: NextRequest) {
  *   - json, txt, xml → 미래 사용자 업로드 경로 대비 보수적 제외
  *   - pdf            → 인증된 리포트 다운로드일 수 있음
  *
- * 새 확장자/디렉토리 추가 시 `docs/proxy-auth-rules.md` 규약 필독.
+ * 새 확장자/디렉토리 추가 시 `staging/docs/proxy-auth-rules.md` 규약 필독.
  */
 export const config = {
   matcher: [
