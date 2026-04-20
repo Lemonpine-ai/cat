@@ -22,9 +22,17 @@ if (!fs.existsSync(src)) {
 
 fs.mkdirSync(dst, { recursive: true });
 
-const files = fs.readdirSync(src).filter((f) => f.endsWith(".wasm"));
+/* ort-wasm-simd-threaded.* 접두어의 .wasm + .mjs 쌍을 모두 복사한다.
+ * onnxruntime-web 1.24+ 는 WebGPU/JSEP 백엔드가 .jsep.mjs 를 dynamic import
+ * 로 로드하므로 .wasm 만 복사하면 "Failed to fetch dynamically imported module"
+ * 런타임 에러가 발생한다. .wasm 과 .mjs 는 언제나 쌍으로 존재해야 한다. */
+const files = fs.readdirSync(src).filter(
+  (f) =>
+    f.startsWith("ort-wasm-simd-threaded") &&
+    (f.endsWith(".wasm") || f.endsWith(".mjs")),
+);
 if (files.length === 0) {
-  console.warn("[onnx-wasm] no .wasm files found in onnxruntime-web/dist");
+  console.warn("[onnx-wasm] no runtime files found in onnxruntime-web/dist");
   process.exit(0);
 }
 
@@ -32,16 +40,21 @@ for (const f of files) {
   fs.copyFileSync(path.join(src, f), path.join(dst, f));
   console.log(`[onnx-wasm] copied ${f}`);
 }
-console.log(`[onnx-wasm] ${files.length} wasm files → public/ort-wasm/`);
+console.log(`[onnx-wasm] ${files.length} runtime files → public/ort-wasm/`);
 
 /* 검증 가드 — 빈 디렉토리/0바이트 파일 배포 방지.
- * ONNX Runtime Web 이 런타임에 요구하는 4종 파일이 모두 존재하고 크기 > 0 인지
- * 확인. 누락/빈 파일 있으면 exit 1 로 빌드 실패시켜 프로덕션 사고 차단. */
+ * ONNX Runtime Web 이 런타임에 요구하는 .wasm 4 + .mjs 4 = 8종 파일이 모두
+ * 존재하고 크기 > 0 인지 확인. 누락/빈 파일 있으면 exit 1 로 빌드 실패시켜
+ * 프로덕션 사고 차단. .mjs 는 WebGPU/JSEP backend 의 dynamic import 대상. */
 const REQUIRED_FILES = [
-  "ort-wasm-simd-threaded.asyncify.wasm",
-  "ort-wasm-simd-threaded.jsep.wasm",
-  "ort-wasm-simd-threaded.jspi.wasm",
   "ort-wasm-simd-threaded.wasm",
+  "ort-wasm-simd-threaded.mjs",
+  "ort-wasm-simd-threaded.asyncify.wasm",
+  "ort-wasm-simd-threaded.asyncify.mjs",
+  "ort-wasm-simd-threaded.jsep.wasm",
+  "ort-wasm-simd-threaded.jsep.mjs",
+  "ort-wasm-simd-threaded.jspi.wasm",
+  "ort-wasm-simd-threaded.jspi.mjs",
 ];
 const missing = [];
 for (const f of REQUIRED_FILES) {
