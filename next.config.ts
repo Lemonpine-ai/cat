@@ -39,14 +39,31 @@ const nextConfig: NextConfig = {
         { key: "Cross-Origin-Embedder-Policy", value: "require-corp" },
       ],
     },
-    /* /ort-wasm/ 의 .wasm 파일 전용 헤더.
-     * - Content-Type: .wasm MIME 확정 (일부 호스트 기본값이 octet-stream)
-     * - CORP: COEP require-corp 환경에서 same-origin 리소스 로드 허용
-     * - Cache-Control: 해시 없는 고정 경로 — 장기 캐시로 재다운로드 방지 */
+    /* /ort-wasm/ 정적 자산 헤더 — 확장자별 분리 (.wasm vs .mjs).
+     *
+     * 배경: 기존 `/ort-wasm/:file*` 단일 룰은 모든 파일에 Content-Type: application/wasm
+     *       을 강제해 .mjs 에도 잘못 적용됨. 브라우저가 strict MIME check 로
+     *       "Failed to load module script: Expected a JavaScript-or-Wasm module
+     *       script but the server responded with a MIME type of application/wasm"
+     *       에러를 내며 WebGPU 백엔드 동적 import 가 실패, 연쇄로 YOLO Worker
+     *       모든 백엔드 실패.
+     *
+     * 해결: source 에서 path-to-regexp 의 capture pattern 으로 확장자 매칭.
+     *   - .wasm  → application/wasm  (ONNX Runtime WASM 바이너리)
+     *   - .mjs   → text/javascript   (WebGPU JSEP 등 JS 모듈 wrapper)
+     * CORP + Cache-Control 은 양쪽 동일. */
     {
-      source: "/ort-wasm/:file*",
+      source: "/ort-wasm/:file(.*\\.wasm)",
       headers: [
         { key: "Content-Type", value: "application/wasm" },
+        { key: "Cross-Origin-Resource-Policy", value: "same-origin" },
+        { key: "Cache-Control", value: "public, max-age=31536000, immutable" },
+      ],
+    },
+    {
+      source: "/ort-wasm/:file(.*\\.mjs)",
+      headers: [
+        { key: "Content-Type", value: "text/javascript; charset=utf-8" },
         { key: "Cross-Origin-Resource-Policy", value: "same-origin" },
         { key: "Cache-Control", value: "public, max-age=31536000, immutable" },
       ],
