@@ -267,6 +267,12 @@ export function useBroadcasterSignaling({
       /* [로거] 새 PC — connected 재기록 허용을 위해 직전 이벤트 초기화 */
       lastLoggedEventRef.current = null;
       const { rtcConfiguration, turnRelayConfigured } = await resolveWebRtcPeerConnectionConfiguration({ forceRelay });
+      /* 누수 방어 — race 로 이전 PC 가 ref 에 남아있으면 close 후 교체.
+       * "Cannot create so many PeerConnections" 브라우저 한도(~500) 도달 방지. */
+      if (peerConnectionRef.current) {
+        try { peerConnectionRef.current.close(); } catch { /* 무시 */ }
+        peerConnectionRef.current = null;
+      }
       const pc = new RTCPeerConnection(rtcConfiguration);
       peerConnectionRef.current = pc;
 

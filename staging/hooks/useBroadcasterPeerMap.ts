@@ -303,14 +303,20 @@ export function useBroadcasterPeerMap(
       setBroadcastPhase("connecting");
       setErrorMessage(null);
       try {
-        /* dummy PC → offer SDP 추출용 (start_device_broadcast 가 NOT NULL 요구) */
+        /* dummy PC → offer SDP 추출용 (start_device_broadcast 가 NOT NULL 요구).
+         * 누수 방어: createOffer/setLocalDescription 중 throw 되어도 반드시 close.
+         * "Cannot create so many PeerConnections" 브라우저 한도 방지. */
         const dummyPc = new RTCPeerConnection();
-        localStreamRef.current.getTracks().forEach((t) =>
-          dummyPc.addTransceiver(t.kind, { direction: "sendonly" }));
-        const dummyOffer = await dummyPc.createOffer();
-        await dummyPc.setLocalDescription(dummyOffer);
-        const dummySdp = dummyPc.localDescription?.sdp;
-        dummyPc.close();
+        let dummySdp: string | undefined;
+        try {
+          localStreamRef.current.getTracks().forEach((t) =>
+            dummyPc.addTransceiver(t.kind, { direction: "sendonly" }));
+          const dummyOffer = await dummyPc.createOffer();
+          await dummyPc.setLocalDescription(dummyOffer);
+          dummySdp = dummyPc.localDescription?.sdp;
+        } finally {
+          try { dummyPc.close(); } catch { /* 무시 */ }
+        }
         if (!dummySdp) throw new Error("dummy offer SDP 추출 실패");
         const { data: r, error: e } = await supabase.rpc("start_device_broadcast", {
           input_device_token: deviceToken,
@@ -358,6 +364,12 @@ export function useBroadcasterPeerMap(
         }
         sessionIdRef.current = null;
         setActiveSessionId(null);
+        /* sentinel PC close — 누수 방어. startBroadcast 재호출 시 새로 생성됨. */
+        if (sentinelPcRef.current) {
+          try { sentinelPcRef.current.close(); } catch { /* 무시 */ }
+          sentinelPcRef.current = null;
+        }
+        peerConnectionRef.current = null;
         if (!opts.keepCamera && localStreamRef.current) {
           localStreamRef.current.getTracks().forEach((t) => t.stop());
         }
