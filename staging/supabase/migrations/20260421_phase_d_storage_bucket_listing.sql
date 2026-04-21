@@ -1,0 +1,64 @@
+-- =====================================================================
+-- Phase D — Storage Bucket Listing 경고 해소 (Advisor WARN 3건)
+-- =====================================================================
+-- 대상 Advisor: public_bucket_allows_listing
+--   - cat-frames  (1 policy)
+--   - cat-moments (3 policies)
+--   - post-images (2 policies)
+--
+-- 원리:
+--   Supabase 의 public bucket 은 bucket.public 플래그로 객체 URL
+--   (getPublicUrl) 의 anon 접근을 허용한다. storage.objects 의
+--   SELECT RLS 정책은 "목록 조회 (list)" 권한이며, public 플래그로
+--   만든 URL 직접 접근과는 무관하다.
+--   따라서 SELECT 정책을 DROP 해도 getPublicUrl() 로 만든 이미지 URL
+--   은 계속 동작한다. 대신 anon/authenticated 가 storage.from(..).list()
+--   로 파일 목록을 훑는 경로만 차단된다.
+--
+-- 코드 사용 실태 (실측):
+--   - .upload() / .getPublicUrl() 만 사용
+--   - .list() / .delete() / .update() / .remove() / .download() 호출 0건
+--   → SELECT 정책 제거 안전. ALL(authenticated) 의 UPDATE/DELETE 기능도
+--     실제로 쓰이지 않으므로 제거.
+--
+-- 실측 DROP 대상 (pg_policies 기준 4건, 3 Advisor 전부 해소):
+--   1) "Public Read Access 1ffclfh_0"              — SELECT public, qual=true
+--      (3 버킷 공통으로 허용하는 단일 정책. DROP 1 회로 3 Advisor 모두
+--       SELECT 카운트 1 감소)
+--   2) "Allow authenticated users to view images"  — SELECT authenticated, cat-moments
+--   3) "Allow authenticated users to update/delete"— ALL authenticated,    cat-moments
+--   4) "post_images_읽기_모든유저"                  — SELECT public,        post-images
+--
+-- 유지 정책 (업로드/본인 삭제 기능 보존):
+--   - "Authenticated Upload Access 1ffclfh_0"      (cat-frames INSERT)
+--   - "Allow authenticated users to upload images" (cat-moments INSERT)
+--   - "post_images_업로드_로그인유저"                (post-images INSERT)
+--   - "post_images_삭제_본인만"                     (post-images DELETE, 본인 폴더)
+-- =====================================================================
+
+-- [1/1] 광범위 SELECT 및 ALL 정책 DROP (storage.objects)
+-- 멱등: IF EXISTS 로 재실행 안전.
+DROP POLICY IF EXISTS "Public Read Access 1ffclfh_0"               ON storage.objects;
+DROP POLICY IF EXISTS "Allow authenticated users to view images"   ON storage.objects;
+DROP POLICY IF EXISTS "Allow authenticated users to update/delete" ON storage.objects;
+DROP POLICY IF EXISTS "post_images_읽기_모든유저"                     ON storage.objects;
+
+-- =====================================================================
+-- 롤백 참조 (문제 발생 시 아래 블록을 주석 해제하여 복원)
+-- =====================================================================
+-- CREATE POLICY "Public Read Access 1ffclfh_0"
+--   ON storage.objects FOR SELECT TO public
+--   USING (true);
+--
+-- CREATE POLICY "Allow authenticated users to view images"
+--   ON storage.objects FOR SELECT TO authenticated
+--   USING (bucket_id = 'cat-moments');
+--
+-- CREATE POLICY "Allow authenticated users to update/delete"
+--   ON storage.objects FOR ALL TO authenticated
+--   USING (bucket_id = 'cat-moments');
+--
+-- CREATE POLICY "post_images_읽기_모든유저"
+--   ON storage.objects FOR SELECT TO public
+--   USING (bucket_id = 'post-images');
+-- =====================================================================
