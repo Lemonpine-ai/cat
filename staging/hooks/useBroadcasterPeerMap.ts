@@ -146,9 +146,11 @@ export function useBroadcasterPeerMap(
       viewersRef.current.delete(viewerId);
       console.info(`[s9-cam] viewer closed viewerId=${viewerId}`);
       if (opts?.sendCloseRpc && deviceToken) {
+        /* supabase-js v2 의 rpc 는 PostgrestFilterBuilder (thenable) — .catch() 불가.
+         * .then(onFulfilled, onRejected) 로 fire-and-forget + 에러 무시. */
         void supabase.rpc("broadcaster_close_viewer", {
           input_device_token: deviceToken, input_viewer_connection_id: viewerId,
-        }).catch(() => undefined);
+        }).then(() => undefined, () => undefined);
       }
       updateRepresentativeState();
     },
@@ -179,11 +181,12 @@ export function useBroadcasterPeerMap(
         pc.onicecandidate = (ev) => {
           if (!ev.candidate) return;
           console.info(`[s9-cam] viewer ICE sent out viewerId=${viewerId}`);
+          /* thenable(PostgrestFilterBuilder) — .catch() 불가, .then 으로 무시 */
           void supabase.rpc("add_device_ice_candidate_v2", {
             input_device_token: deviceToken,
             input_viewer_connection_id: viewerId,
             input_candidate: ev.candidate.toJSON(),
-          }).catch(() => undefined);
+          }).then(() => undefined, () => undefined);
         };
         /* connectionstatechange — failed/closed 즉시 close, disconnected 는 10s 유예 */
         let disconnectedAt: number | null = null;
