@@ -48,8 +48,8 @@ type LogEntry = {
   id: number;
   /** HH:MM:SS.mmm 타임스탬프 */
   time: string;
-  /** 레벨 — 색상 구분용 */
-  level: "info" | "warn" | "error";
+  /** 레벨 — 색상 구분용. log = 기본(회색 가까운 민트), info/warn/error 는 기존 색상 */
+  level: "log" | "info" | "warn" | "error";
   /** 출력 텍스트 — 인자들을 space 로 join */
   text: string;
 };
@@ -102,6 +102,7 @@ export function DebugLogOverlay() {
     if (!enabled || typeof console === "undefined") return;
 
     /* 원본 함수 백업 — 언마운트 시 복구 */
+    const originalLog = console.log;
     const originalInfo = console.info;
     const originalWarn = console.warn;
     const originalError = console.error;
@@ -123,11 +124,17 @@ export function DebugLogOverlay() {
         }
       };
 
-    /* info/warn/error 만 프록시 — log 는 noise 많아서 제외 */
+    /* log/info/warn/error 모두 프록시 — [CameraSlot] 단계별 로그(console.log)도
+     * 진단에 필요해 log 포함. 필터 태그가 걸러서 noise 최소화. */
+    const capturedLog = captureFactory("log");
     const capturedInfo = captureFactory("info");
     const capturedWarn = captureFactory("warn");
     const capturedError = captureFactory("error");
 
+    console.log = (...args: unknown[]) => {
+      capturedLog(...args);
+      originalLog(...args);
+    };
     console.info = (...args: unknown[]) => {
       capturedInfo(...args);
       originalInfo(...args);
@@ -143,6 +150,7 @@ export function DebugLogOverlay() {
 
     /* cleanup — 원본 복구 */
     return () => {
+      console.log = originalLog;
       console.info = originalInfo;
       console.warn = originalWarn;
       console.error = originalError;
@@ -224,7 +232,9 @@ export function DebugLogOverlay() {
                       ? "#ff6b6b"
                       : l.level === "warn"
                         ? "#ffd166"
-                        : "#95e1d3",
+                        : l.level === "info"
+                          ? "#95e1d3"
+                          : /* log — 덜 두드러지는 회색 민트 */ "#6a8a85",
                   wordBreak: "break-all",
                   marginBottom: 2,
                 }}
