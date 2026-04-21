@@ -1,15 +1,11 @@
 "use client";
 
 /**
- * CameraLiveViewer — 대시보드 카메라 섹션 WebRTC 수신 뷰어.
+ * CameraLiveViewerMulti — Multi-Viewer(R3) 대시보드 라이브 뷰어.
  *
- * WebRTC 연결 로직 → useWebRtcLiveConnection 훅
- * 케어 기록 UI → CameraQuickCarePanel 컴포넌트
- * 이 파일은 세션 감시 + UI 조합만 담당.
- *
- * Multi-Viewer(R3) 분기:
- *   NEXT_PUBLIC_MULTI_VIEWER=1 일 때는 staging/ 의 CameraLiveViewerMulti
- *   를 그대로 렌더한다. flag OFF(기본) 경로는 아래 기존 코드 그대로.
+ * 기존 CameraLiveViewer 의 JSX 를 그대로 복사했고,
+ * WebRTC 훅만 useWebRtcLiveConnectionMulti 로 교체했다.
+ * ConnectionOverlay 에 `too_many_viewers` 케이스를 추가 — 30초 카운트다운 안내.
  */
 
 import { useEffect, useMemo, useState } from "react";
@@ -22,49 +18,31 @@ import {
   Mic,
   Radio,
   Smartphone,
+  Users,
   Video,
 } from "lucide-react";
-import { useWebRtcLiveConnection } from "@/hooks/useWebRtcLiveConnection";
+import { useWebRtcLiveConnectionMulti } from "@/../staging/hooks/useWebRtcLiveConnectionMulti";
 import { CameraQuickCarePanel } from "@/components/catvisor/CameraQuickCarePanel";
-import { isMultiViewerEnabled } from "@/../staging/lib/featureFlags";
-import { CameraLiveViewerMulti } from "@/../staging/components/CameraLiveViewerMulti";
 
 /* ─── Props ─── */
 
-type CameraLiveViewerProps = {
-  /** 식수 교체 기록 시 홈 화면 상태를 즉시 동기화하는 콜백 */
+type CameraLiveViewerMultiProps = {
   onWaterChangeRecorded?: (isoTimestamp: string) => void;
-  /** 화장실 청소 기록 시 홈 화면 상태를 즉시 동기화하는 콜백 */
   onLitterCleanRecorded?: (isoTimestamp: string) => void;
-  /** 홈 피그마 스타일 라이브 카드 */
   variant?: "default" | "figma";
-  /** variant figma 일 때 오버레이 위치 라벨 (예: 거실, 캣타워) */
   heroPlaceLabel?: string;
 };
 
 /* ─── 컴포넌트 ─── */
 
-/**
- * Multi-Viewer flag 에 따라 분기하는 외부 엔트리.
- * React Rules of Hooks 를 위해 분기 이후의 훅 호출은 내부 함수로 격리한다.
- */
-export function CameraLiveViewer(props: CameraLiveViewerProps = {}) {
-  if (isMultiViewerEnabled()) {
-    return <CameraLiveViewerMulti {...props} />;
-  }
-  return <CameraLiveViewerClassic {...props} />;
-}
-
-/** flag OFF 경로 — 기존 1:1 single-viewer 구현 그대로 */
-function CameraLiveViewerClassic({
+export function CameraLiveViewerMulti({
   onWaterChangeRecorded,
   onLitterCleanRecorded,
   variant = "default",
   heroPlaceLabel = "거실",
-}: CameraLiveViewerProps = {}) {
+}: CameraLiveViewerMultiProps = {}) {
   const isFigmaVariant = variant === "figma";
   const [homeId, setHomeId] = useState<string | null>(null);
-  /* supabase 클라이언트를 useMemo로 안정화 — 매 렌더마다 새 인스턴스 생성 방지 */
   const supabase = useMemo(() => createSupabaseBrowserClient(), []);
 
   /* 1단계: 내 home_id 가져오기 */
@@ -82,19 +60,17 @@ function CameraLiveViewerClassic({
     void fetchHomeId();
   }, [supabase]);
 
-  /* WebRTC 연결 훅 */
+  /* WebRTC 연결 훅 (Multi) */
   const {
     videoRef,
     connectionPhase,
     errorMessage,
     retryConnection,
     liveSession,
-  } = useWebRtcLiveConnection(homeId);
+  } = useWebRtcLiveConnectionMulti(homeId);
 
-  /* home_id 없으면 렌더링 안 함 */
   if (!homeId) return null;
 
-  /* 시각 레이블 (figma 오버레이용) */
   const liveClockLabel = new Intl.DateTimeFormat("ko-KR", {
     hour: "2-digit",
     minute: "2-digit",
@@ -125,7 +101,7 @@ function CameraLiveViewerClassic({
       >
         <video
           ref={videoRef}
-          className="size-full object-contain" /* zone overlay 좌표 호환 — object-cover 사용 금지 */
+          className="size-full object-contain"
           autoPlay
           playsInline
           muted
@@ -133,7 +109,6 @@ function CameraLiveViewerClassic({
           aria-label="라이브 카메라 화면"
         />
 
-        {/* 연결 중 / 대기 / 에러 오버레이 */}
         {connectionPhase !== "connected" ? (
           <ConnectionOverlay
             connectionPhase={connectionPhase}
@@ -143,7 +118,6 @@ function CameraLiveViewerClassic({
           />
         ) : null}
 
-        {/* figma: 연결 중 하단 오버레이 */}
         {isFigmaVariant && connectionPhase === "connected" ? (
           <FigmaBottomOverlay
             heroPlaceLabel={heroPlaceLabel}
@@ -166,9 +140,8 @@ function CameraLiveViewerClassic({
   );
 }
 
-/* ─── 서브 컴포넌트 (파일 내 분리) ─── */
+/* ─── 서브 컴포넌트 ─── */
 
-/** figma 변형 헤더 */
 function FigmaHeader() {
   return (
     <div className="mb-3 flex items-center justify-between px-0.5">
@@ -183,7 +156,6 @@ function FigmaHeader() {
   );
 }
 
-/** 기본 헤더 — 연결 상태에 따라 배지 표시 */
 function DefaultHeader({ connectionPhase }: { connectionPhase: string }) {
   return (
     <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -201,6 +173,11 @@ function DefaultHeader({ connectionPhase }: { connectionPhase: string }) {
           <Loader2 className="size-3.5 animate-spin" aria-hidden />
           연결 중…
         </span>
+      ) : connectionPhase === "too_many_viewers" ? (
+        <span className="inline-flex items-center gap-1 rounded-full bg-amber-400/20 px-3 py-1 text-[0.7rem] font-semibold text-amber-700">
+          <Users className="size-3.5" aria-hidden />
+          대기 중
+        </span>
       ) : (
         <span className="rounded-full bg-slate-200/80 px-3 py-1 text-[0.7rem] font-medium text-slate-500">
           대기 중
@@ -210,7 +187,7 @@ function DefaultHeader({ connectionPhase }: { connectionPhase: string }) {
   );
 }
 
-/** 연결 상태 오버레이 (대기 / 연결 중 / 에러) */
+/** 연결 상태 오버레이 (대기 / 연결 중 / 에러 / too_many_viewers) */
 function ConnectionOverlay({
   connectionPhase,
   errorMessage,
@@ -223,6 +200,29 @@ function ConnectionOverlay({
   isFigmaVariant: boolean;
 }) {
   const radius = isFigmaVariant ? "rounded-[1.75rem]" : "rounded-3xl";
+
+  /*
+   * too_many_viewers: 30초 카운트다운.
+   * 외부 시간(setInterval) → React state 동기화이므로 effect 내 setState 는 허용 케이스.
+   * (react/you-might-not-need-an-effect 는 이 흐름을 인지하지 못해 eslint-disable 처리)
+   */
+  const isTooMany = connectionPhase === "too_many_viewers";
+  const [secondsLeft, setSecondsLeft] = useState(30);
+  /* eslint-disable react-hooks/set-state-in-effect */
+  useEffect(() => {
+    if (!isTooMany) {
+      setSecondsLeft(30);
+      return;
+    }
+    setSecondsLeft(30);
+    const id = setInterval(
+      () =>
+        setSecondsLeft((prev) => (prev > 0 ? prev - 1 : 0)),
+      1000,
+    );
+    return () => clearInterval(id);
+  }, [isTooMany]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   return (
     <div
@@ -251,6 +251,22 @@ function ConnectionOverlay({
           <Loader2 className="size-10 animate-spin text-[#4FD1C5]" strokeWidth={1.75} aria-hidden />
           <span className="text-sm text-slate-300">연결 중…</span>
         </>
+      ) : connectionPhase === "too_many_viewers" ? (
+        <>
+          <Users className="size-10 text-amber-300" strokeWidth={1.75} aria-hidden />
+          <span className="max-w-[24ch] text-sm leading-relaxed text-slate-200">
+            지금은 4명이 함께 보고 있어요.
+            <br />
+            <span className="text-amber-300">{secondsLeft}초</span> 뒤 자동 재시도할게요.
+          </span>
+          <button
+            type="button"
+            onClick={onRetry}
+            className="mt-1 rounded-full border border-amber-300/50 bg-amber-500/20 px-4 py-2 text-sm font-semibold text-amber-200 transition hover:bg-amber-500/30"
+          >
+            지금 다시 시도
+          </button>
+        </>
       ) : connectionPhase === "error" ? (
         <>
           <AlertTriangle className="size-10 text-[#FFAB91]" strokeWidth={1.75} aria-hidden />
@@ -270,7 +286,6 @@ function ConnectionOverlay({
   );
 }
 
-/** figma 변형 — 연결 시 하단 오버레이 (위치 라벨 + 버튼) */
 function FigmaBottomOverlay({
   heroPlaceLabel,
   liveClockLabel,

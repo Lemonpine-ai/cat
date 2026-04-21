@@ -1,75 +1,59 @@
 "use client";
 
 /**
- * MultiCameraGrid — v2 카피 개선
- * C1(카피): 따뜻한 안내 문구, 기계적 톤 제거
- * P1(심리): 대기 화면에서 불안감 대신 안내감 전달
- * 로직/기능 변경 없음, 문구와 UI 텍스트만 업데이트
+ * MultiCameraGridMulti — Multi-Viewer(R3) 용 카메라 그리드.
+ *
+ * 기존 MultiCameraGrid 를 그대로 복사했고 Multi 모드에 맞춰 아래를 조정했다:
+ *   - camera_sessions SELECT 에서 offer_sdp 제거 (id 만 가져옴)
+ *   - session_refreshed broadcast payload 는 session_id 만 읽음 (offer_sdp 무시)
+ *   - CameraSlot → CameraSlotMulti 로 교체, offerSdp prop 제거
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
-import { CameraSlot } from "@/components/catvisor/CameraSlot";
+import { CameraSlotMulti } from "@/../staging/components/catvisor/CameraSlotMulti";
 import { resolveWebRtcPeerConnectionConfiguration } from "@/lib/webrtc/getWebRtcIceServersForPeerConnection";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { Smartphone, ArrowRight, Video } from "lucide-react";
-import { isMultiViewerEnabled } from "@/../staging/lib/featureFlags";
-import { MultiCameraGridMulti } from "@/../staging/components/catvisor/MultiCameraGridMulti";
 
 const MAX_SLOTS = 4;
 /** 2대 동시 연결 시 stagger 간격 (ms) */
 const STAGGER_DELAY_MS = 2000;
 
-type LiveSession = {
+type LiveSessionLite = {
   id: string;
-  offer_sdp: string;
   device_name: string;
 };
 
-/** 카메라 전체 상태 — CatStatusBoard에 전달용 */
 export type CameraAggregateStatus = {
-  /** 연결된 카메라 수 */
   connectedCount: number;
-  /** 하나라도 움직임 감지 중인지 */
   hasMotion: boolean;
 };
 
-type MultiCameraGridProps = {
+type MultiCameraGridMultiProps = {
   homeId: string | null;
-  /** 카메라 상태 변경 시 호출 */
   onCameraStatusChange?: (status: CameraAggregateStatus) => void;
 };
 
-/**
- * Multi-Viewer flag 에 따라 분기하는 외부 엔트리.
- * React Rules of Hooks 를 위해 분기 이후의 훅 호출은 내부 함수로 격리한다.
- */
-export function MultiCameraGrid({ homeId, onCameraStatusChange }: MultiCameraGridProps) {
-  if (isMultiViewerEnabled()) {
-    return (
-      <MultiCameraGridMulti homeId={homeId} onCameraStatusChange={onCameraStatusChange} />
-    );
-  }
-  return (
-    <MultiCameraGridClassic homeId={homeId} onCameraStatusChange={onCameraStatusChange} />
-  );
-}
-
-/** flag OFF 경로 — 기존 1:1 single-viewer 구현 그대로 */
-function MultiCameraGridClassic({ homeId, onCameraStatusChange }: MultiCameraGridProps) {
-  /* supabase 클라이언트를 useMemo로 안정화 — 매 렌더마다 새 인스턴스 생성 방지 */
+export function MultiCameraGridMulti({
+  homeId,
+  onCameraStatusChange,
+}: MultiCameraGridMultiProps) {
   const supabase = useMemo(() => createSupabaseBrowserClient(), []);
-  const [sessions, setSessions] = useState<LiveSession[]>([]);
+  const [sessions, setSessions] = useState<LiveSessionLite[]>([]);
   const watcherRef = useRef<RealtimeChannel | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [failedIds, setFailedIds] = useState<Set<string>>(new Set());
 
-  /* 카메라별 연결/모션 상태 추적 (CatStatusBoard용) */
+  /* 카메라별 연결/모션 상태 추적 */
   const connectedIdsRef = useRef<Set<string>>(new Set());
   const motionMapRef = useRef<Map<string, boolean>>(new Map());
 
-  /* ICE config 캐시 — 전체 카메라가 공유 (중복 fetch 방지) */
-  const [iceConfig, setIceConfig] = useState<{ rtcConfiguration: RTCConfiguration; turnRelayConfigured: boolean } | null>(null);
+  /* ICE config 공유 캐시 */
+  const [iceConfig, setIceConfig] = useState<{
+    rtcConfiguration: RTCConfiguration;
+    turnRelayConfigured: boolean;
+  } | null>(null);
   useEffect(() => {
     resolveWebRtcPeerConnectionConfiguration()
       .then(({ rtcConfiguration, turnRelayConfigured }) =>
@@ -78,17 +62,14 @@ function MultiCameraGridClassic({ homeId, onCameraStatusChange }: MultiCameraGri
       .catch(() => { /* 실패 시 각 슬롯이 직접 fetch */ });
   }, []);
 
-  /* loadSessions 디바운스 — Realtime 이벤트 중복 호출 방지 */
+  /* loadSessions 디바운스 + 언마운트 정리 */
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   function debouncedLoadSessions(loadFn: () => Promise<void>) {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => { void loadFn(); }, 300);
   }
-  /* debounceRef 언마운트 시 정리 — stale 타이머 방지 */
   useEffect(() => {
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-    };
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
   }, []);
 
   /* ── live 세션 초기 로드 + Realtime 감시 ── */
@@ -98,47 +79,37 @@ function MultiCameraGridClassic({ homeId, onCameraStatusChange }: MultiCameraGri
     async function loadSessions() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
-        console.warn("[MultiCameraGrid] auth 유저 없음 — 세션 조회 건너뜀");
+        console.warn("[MultiCameraGridMulti] auth 유저 없음 — 세션 조회 건너뜀");
         return;
       }
 
+      /* Multi 모드: offer_sdp 제거, id 만 */
       const { data, error } = await supabase
         .from("camera_sessions")
-        .select("id, offer_sdp")
+        .select("id")
         .eq("home_id", homeId!)
         .eq("status", "live")
-        .not("offer_sdp", "is", null)
         .limit(MAX_SLOTS);
 
       if (error) {
-        console.error("[MultiCameraGrid] 세션 조회 실패:", error.message, error.code);
+        console.error("[MultiCameraGridMulti] 세션 조회 실패:", error.message, error.code);
         return;
       }
       if (!data) return;
 
-      console.log("[MultiCameraGrid] 세션 조회 결과:", data.length, "건");
-
       const next = data.map((row, idx) => ({
-        id: row.id,
-        offer_sdp: row.offer_sdp!,
+        id: row.id as string,
         device_name: `카메라 ${idx + 1}`,
       }));
 
       setSessions((prev) => {
-        /*
-         * ★ 기존 세션 객체 재사용 — offer_sdp 참조가 바뀌면
-         * CameraSlot의 useEffect가 재실행되어 WebRTC 재연결 발생.
-         * ID와 offer_sdp 내용이 같으면 기존 객체를 그대로 유지한다.
-         */
+        /* 기존 세션 객체 재사용 — id 가 같으면 참조 유지, 새 객체는 추가 */
         const prevMap = new Map(prev.map((s) => [s.id, s]));
         const merged = next.map((s) => {
           const existing = prevMap.get(s.id);
-          if (existing && existing.offer_sdp === s.offer_sdp) {
-            return existing; /* 기존 참조 유지 → useEffect 재실행 안 됨 */
-          }
+          if (existing) return existing;
           return s;
         });
-
         const nextIds = new Set(next.map((s) => s.id));
         const hasNewSession = next.some((s) => !prevMap.has(s.id));
         const hasRemovedSession = prev.some((s) => !nextIds.has(s.id));
@@ -147,26 +118,32 @@ function MultiCameraGridClassic({ homeId, onCameraStatusChange }: MultiCameraGri
         }
         return merged;
       });
-      setExpandedId((prev) => (prev && !next.some((s) => s.id === prev) ? null : prev));
+      setExpandedId((prev) =>
+        prev && !next.some((s) => s.id === prev) ? null : prev,
+      );
     }
     void loadSessions();
 
     const { data: { subscription: authSub } } = supabase.auth.onAuthStateChange(
       (event) => {
         if (event === "SIGNED_IN") {
-          console.log("[MultiCameraGrid] SIGNED_IN 감지 → 세션 재조회");
+          console.log("[MultiCameraGridMulti] SIGNED_IN → 세션 재조회");
           void loadSessions();
         }
       },
     );
 
     const watcher = supabase
-      .channel(`multi-cam-${homeId}`)
+      .channel(`multi-cam-multi-${homeId}`)
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "camera_sessions", filter: `home_id=eq.${homeId}` },
+        {
+          event: "*",
+          schema: "public",
+          table: "camera_sessions",
+          filter: `home_id=eq.${homeId}`,
+        },
         () => {
-          /* 디바운스: 여러 채널이 동시에 트리거해도 300ms 내 1회만 실행 */
           debouncedLoadSessions(loadSessions);
         },
       )
@@ -175,49 +152,35 @@ function MultiCameraGridClassic({ homeId, onCameraStatusChange }: MultiCameraGri
     watcherRef.current = watcher;
 
     const broadcastCh = supabase
-      .channel(`cam_session_broadcast_${homeId}`)
+      .channel(`cam_session_broadcast_multi_${homeId}`)
       .on("broadcast", { event: "session_started" }, () => {
-        console.log("[MultiCameraGrid] session_started 수신 → 세션 재조회");
+        console.log("[MultiCameraGridMulti] session_started → 세션 재조회");
         debouncedLoadSessions(loadSessions);
       })
       .on("broadcast", { event: "session_stopped" }, () => {
-        console.log("[MultiCameraGrid] session_stopped 수신 → 세션 재조회");
+        console.log("[MultiCameraGridMulti] session_stopped → 세션 재조회");
         debouncedLoadSessions(loadSessions);
       })
       .subscribe();
 
     /*
-     * session_refreshed: 카메라 전환 시 offer가 바뀔 때 사용.
-     * 기존 세션 목록을 1개로 덮어쓰지 않고, 해당 세션만 업데이트.
-     * (이전에는 setSessions([1개])로 덮어써서 다른 카메라 연결이 끊어짐)
-     *
-     * ⚠ 알려진 제한: 같은 sessionId에서 offer_sdp만 교체되는 경우,
-     * CameraSlot의 useWebRtcSlotConnection useEffect는 sessionId dep만
-     * 감시하므로 자동 재연결이 일어나지 않음. 현재는 session_refreshed 시
-     * 새 sessionId가 발급되므로 문제없으나, 추후 같은 ID 재사용 시 대응 필요.
+     * Multi 모드: session_refreshed 이벤트에서는 session_id 만 읽는다.
+     * offer_sdp 는 뷰어가 직접 생성하므로 payload 에 실려 와도 무시.
+     * 세션 목록에 없는 id 면 "새 세션 진입" 으로 처리, 있으면 그대로 둔다.
      */
     const refreshCh = supabase
-      .channel(`cam_session_refresh_${homeId}`)
+      .channel(`cam_session_refresh_multi_${homeId}`)
       .on("broadcast", { event: "session_refreshed" }, (event) => {
-        const payload = event.payload as { session_id?: string; offer_sdp?: string } | undefined;
-        if (!payload?.session_id || !payload?.offer_sdp) return;
-        console.log("[MultiCameraGrid] session_refreshed 수신 →", payload.session_id);
-        /* 기존 세션 목록에서 해당 세션만 교체 (다른 세션은 유지) */
+        const payload = event.payload as { session_id?: string } | undefined;
+        if (!payload?.session_id) return;
+        const sid = payload.session_id;
+        console.log("[MultiCameraGridMulti] session_refreshed →", sid);
         setSessions((prev) => {
-          const exists = prev.some((s) => s.id === payload.session_id);
-          if (exists) {
-            return prev.map((s) =>
-              s.id === payload.session_id
-                ? { ...s, offer_sdp: payload.offer_sdp! }
-                : s
-            );
-          }
-          /* 새 세션이면 추가 */
-          return [...prev, {
-            id: payload.session_id!,
-            offer_sdp: payload.offer_sdp!,
-            device_name: `카메라 ${prev.length + 1}`,
-          }];
+          if (prev.some((s) => s.id === sid)) return prev;
+          return [
+            ...prev,
+            { id: sid, device_name: `카메라 ${prev.length + 1}` },
+          ];
         });
       })
       .subscribe();
@@ -231,10 +194,15 @@ function MultiCameraGridClassic({ homeId, onCameraStatusChange }: MultiCameraGri
     };
   }, [homeId, supabase]);
 
+  /* 폴링 콜백 안에서 최신값을 쓰기 위한 ref — effect 로 동기화 */
   const sessionsRef = useRef(sessions);
-  sessionsRef.current = sessions;
   const failedIdsRef = useRef(failedIds);
-  failedIdsRef.current = failedIds;
+  useEffect(() => {
+    sessionsRef.current = sessions;
+  }, [sessions]);
+  useEffect(() => {
+    failedIdsRef.current = failedIds;
+  }, [failedIds]);
 
   /* 폴링 fallback */
   useEffect(() => {
@@ -246,38 +214,30 @@ function MultiCameraGridClassic({ homeId, onCameraStatusChange }: MultiCameraGri
           .select("id")
           .eq("home_id", homeId)
           .eq("status", "live")
-          .not("offer_sdp", "is", null)
           .limit(1);
         const curSessions = sessionsRef.current;
         const curFailedIds = failedIdsRef.current;
         const visibleCount = curSessions.filter((s) => !curFailedIds.has(s.id)).length;
-        const hasNewLiveSession = data ? data.some((d: { id: string }) => !curSessions.some((s) => s.id === d.id)) : false;
+        const hasNewLiveSession = data
+          ? data.some((d: { id: string }) => !curSessions.some((s) => s.id === d.id))
+          : false;
         if (data && data.length > 0 && (visibleCount === 0 || hasNewLiveSession)) {
           const { data: fresh } = await supabase
             .from("camera_sessions")
-            .select("id, offer_sdp")
+            .select("id")
             .eq("home_id", homeId)
             .eq("status", "live")
-            .not("offer_sdp", "is", null)
             .limit(MAX_SLOTS);
           if (fresh && fresh.length > 0) {
             const freshSessions = fresh.map((row, idx) => ({
-              id: row.id,
-              offer_sdp: row.offer_sdp!,
+              id: row.id as string,
               device_name: `카메라 ${idx + 1}`,
             }));
-            /*
-             * ★ prevMap 병합 패턴 — loadSessions와 동일.
-             * 기존 세션 객체를 재사용하여 offer_sdp 참조 변경에 의한
-             * CameraSlot useEffect 재실행(WebRTC 재연결)을 방지한다.
-             */
             setSessions((prev) => {
               const prevMap = new Map(prev.map((s) => [s.id, s]));
               const merged = freshSessions.map((s) => {
                 const existing = prevMap.get(s.id);
-                if (existing && existing.offer_sdp === s.offer_sdp) {
-                  return existing; /* 기존 참조 유지 → useEffect 재실행 안 됨 */
-                }
+                if (existing) return existing;
                 return s;
               });
               return merged;
@@ -290,46 +250,56 @@ function MultiCameraGridClassic({ homeId, onCameraStatusChange }: MultiCameraGri
     return () => clearInterval(fallback);
   }, [homeId, supabase]);
 
-  /** 카메라 상태 집계 → 상위 컴포넌트에 전달 */
+  /** 집계 상태 → 상위 전달 */
   const reportAggregateStatus = useCallback(() => {
     const connectedCount = connectedIdsRef.current.size;
     let hasMotion = false;
-    motionMapRef.current.forEach((v) => { if (v) hasMotion = true; });
+    motionMapRef.current.forEach((v) => {
+      if (v) hasMotion = true;
+    });
     onCameraStatusChange?.({ connectedCount, hasMotion });
   }, [onCameraStatusChange]);
 
-  const handleSlotPhase = useCallback((sessionId: string, phase: "connecting" | "connected" | "error") => {
-    if (phase === "error") {
-      /* 에러 — 실패 목록에 추가하고 연결/모션 상태 제거 */
-      setFailedIds((prev) => new Set(prev).add(sessionId));
-      connectedIdsRef.current.delete(sessionId);
-      motionMapRef.current.delete(sessionId);
-    } else if (phase === "connected") {
-      /* 연결 완료 — 연결 목록에 추가 */
-      connectedIdsRef.current.add(sessionId);
-    } else {
-      /* 연결 중 — 아직 미확정이므로 기존 상태 초기화 */
-      connectedIdsRef.current.delete(sessionId);
-      motionMapRef.current.delete(sessionId);
-    }
-    reportAggregateStatus();
-  }, [reportAggregateStatus]);
+  const handleSlotPhase = useCallback(
+    (sessionId: string, phase: "connecting" | "connected" | "error") => {
+      if (phase === "error") {
+        setFailedIds((prev) => new Set(prev).add(sessionId));
+        connectedIdsRef.current.delete(sessionId);
+        motionMapRef.current.delete(sessionId);
+      } else if (phase === "connected") {
+        connectedIdsRef.current.add(sessionId);
+      } else {
+        connectedIdsRef.current.delete(sessionId);
+        motionMapRef.current.delete(sessionId);
+      }
+      reportAggregateStatus();
+    },
+    [reportAggregateStatus],
+  );
 
-  /** 카메라별 모션 변경 핸들러 */
-  const handleSlotMotion = useCallback((sessionId: string, hasMotion: boolean) => {
-    motionMapRef.current.set(sessionId, hasMotion);
-    reportAggregateStatus();
-  }, [reportAggregateStatus]);
+  const handleSlotMotion = useCallback(
+    (sessionId: string, hasMotion: boolean) => {
+      motionMapRef.current.set(sessionId, hasMotion);
+      reportAggregateStatus();
+    },
+    [reportAggregateStatus],
+  );
 
-  /* 세션 목록 변경 시 사라진 세션의 상태 정리 */
+  /* 사라진 세션의 상태 정리 */
   useEffect(() => {
     const currentIds = new Set(sessions.map((s) => s.id));
     let changed = false;
     connectedIdsRef.current.forEach((id) => {
-      if (!currentIds.has(id)) { connectedIdsRef.current.delete(id); changed = true; }
+      if (!currentIds.has(id)) {
+        connectedIdsRef.current.delete(id);
+        changed = true;
+      }
     });
     motionMapRef.current.forEach((_, id) => {
-      if (!currentIds.has(id)) { motionMapRef.current.delete(id); changed = true; }
+      if (!currentIds.has(id)) {
+        motionMapRef.current.delete(id);
+        changed = true;
+      }
     });
     if (changed) reportAggregateStatus();
   }, [sessions, reportAggregateStatus]);
@@ -354,9 +324,8 @@ function MultiCameraGridClassic({ homeId, onCameraStatusChange }: MultiCameraGri
         >
           ← 전체 보기
         </button>
-        <CameraSlot
+        <CameraSlotMulti
           sessionId={target.id}
-          offerSdp={target.offer_sdp}
           deviceName={target.device_name}
           homeId={homeId}
           rtcConfiguration={iceConfig?.rtcConfiguration ?? null}
@@ -368,7 +337,7 @@ function MultiCameraGridClassic({ homeId, onCameraStatusChange }: MultiCameraGri
     );
   }
 
-  /* ── 대기 화면 — v2 따뜻한 문구 ── */
+  /* 대기 화면 */
   if (visibleSessions.length === 0) {
     return (
       <section
@@ -376,7 +345,6 @@ function MultiCameraGridClassic({ homeId, onCameraStatusChange }: MultiCameraGri
         aria-label="카메라 대기"
       >
         <Smartphone className="size-10 text-[#4FD1C5]" strokeWidth={1.5} />
-        {/* C1: 따뜻하고 쉬운 안내 문구 */}
         <span className="max-w-[24ch] text-sm leading-relaxed text-slate-300">
           다른 폰을 카메라로 쓸 수 있어요
         </span>
@@ -386,7 +354,6 @@ function MultiCameraGridClassic({ homeId, onCameraStatusChange }: MultiCameraGri
           target="_blank"
           rel="noreferrer"
         >
-          {/* C1: "방송 시작하러 가기" → "카메라 연결하기" */}
           카메라 연결하기
           <ArrowRight className="size-4" strokeWidth={2} />
         </a>
@@ -394,16 +361,12 @@ function MultiCameraGridClassic({ homeId, onCameraStatusChange }: MultiCameraGri
     );
   }
 
-  /* 그리드 */
   const gridCols =
-    visibleSessions.length === 1
-      ? "grid-cols-1"
-      : "grid-cols-1 sm:grid-cols-2";
+    visibleSessions.length === 1 ? "grid-cols-1" : "grid-cols-1 sm:grid-cols-2";
 
   return (
     <section className="w-full" aria-label="멀티 카메라 그리드">
       <div className="mb-3 flex items-center justify-between px-0.5">
-        {/* C1: "LIVE CAM" → "우리집 카메라" */}
         <h2 className="flex items-center gap-2 text-sm font-semibold tracking-wide text-[#1e8f83]">
           <Video className="size-4 text-[#4FD1C5]" strokeWidth={2} />
           우리집 카메라
@@ -415,10 +378,9 @@ function MultiCameraGridClassic({ homeId, onCameraStatusChange }: MultiCameraGri
 
       <div className={`grid ${gridCols} gap-2`}>
         {visibleSessions.map((s, idx) => (
-          <CameraSlot
+          <CameraSlotMulti
             key={s.id}
             sessionId={s.id}
-            offerSdp={s.offer_sdp}
             deviceName={s.device_name}
             homeId={homeId}
             rtcConfiguration={iceConfig?.rtcConfiguration ?? null}
