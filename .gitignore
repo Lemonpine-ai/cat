@@ -64,6 +64,8 @@ styles.css
 fgs_mobilenetv3.onnx
 runs/
 .claude/worktrees/
+# MCP 서버 설정 — Vercel API 토큰 등 민감 정보 포함
+.claude/mcp.json
 public/models/*.onnx
 yolo*.pt
 *.pt
