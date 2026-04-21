@@ -121,3 +121,46 @@ Next.js 16 (App Router) + React 19 + TypeScript / Supabase / Tailwind CSS + CSS 
 ## Skill routing
 
 버그 → `/investigate` | 배포 → `/ship` | QA → `/qa` | 코드 리뷰 → `/review` | 설계 검토 → `/plan-eng-review`
+
+## WebRTC / Supabase 운영 교훈 (2026-04-22 장애 회고)
+
+하루 종일 "로그인 느림 → 카메라 안 뜸 → DB 전면 timeout" 이 이어진 사고에서 배운 것. 같은 실수 재발 방지용.
+
+### 🔴 반드시 금지 패턴
+1. **`supabase.rpc(...).catch(fn)` 금지** — supabase-js v2 의 rpc 반환값은 Promise 가 아닌 `PostgrestFilterBuilder` (thenable). `.catch()` 메서드 없어 TypeScript 빌드 에러.
+   ```ts
+   // ❌ 빌드 실패
+   void supabase.rpc("x", {...}).catch(() => {});
+   // ✅ 올바름
+   void supabase.rpc("x", {...}).then(() => undefined, () => undefined);
+   ```
+2. **`new RTCPeerConnection` 직전 기존 ref close 누락 금지** — race 상황에서 PC 누수 → 브라우저 한도 ~500 도달 → "Cannot create so many PeerConnections" 에러.
+   ```ts
+   // ❌ 누수 위험
+   const pc = new RTCPeerConnection(cfg);
+   peerConnectionRef.current = pc;
+   // ✅ 방어
+   if (peerConnectionRef.current) {
+     try { peerConnectionRef.current.close(); } catch {}
+     peerConnectionRef.current = null;
+   }
+   const pc = new RTCPeerConnection(cfg);
+   peerConnectionRef.current = pc;
+   ```
+3. **dummy PC / sentinel PC close 를 try/finally 밖에 둠 금지** — throw 경로에서 close 누락 시 누수.
+
+### 🟠 배포/테스트 순서 엄수
+4. **feature flag 전환 전 Vercel 빌드 READY 확인 필수** — 제가 flag ON 한 뒤 사장님 테스트 시작했는데 실제 프로덕션은 이전 에러 빌드 상태. Vercel MCP `getDeployments` 로 `readyState: "READY" + readySubstate: "PROMOTED"` 확인 후 테스트 지시.
+5. **로컬 `pnpm build` 통과 후 push** — 특히 staging/ 디렉터리가 src/ 에서 import 되면 빌드 대상 포함. tsconfig exclude 해도 import 경로 따라 들어감.
+6. **Next.js `NEXT_PUBLIC_*` 는 빌드타임 주입** — 환경변수만 바꾸고 redeploy 안 하면 적용 안 됨. 빈 커밋 push 로 강제 재빌드.
+
+### 🟡 Supabase Free tier 운영 한계
+7. **Connection pool = 15 (Nano)** — WebRTC 다중 사용자 시 금방 고갈. 가족 4명 동시 시청 시 pool 만으로 20+ connection 필요. **Pro 또는 Compute upgrade 필수**.
+8. **cleanup 함수의 `1일 기준` 은 폭증 대응 못함** — 방송폰이 1시간 안에 1000+ rows INSERT 하면 cleanup 은 24시간 뒤에나 작동. **즉시 삭제 조건 (ex: 같은 device 의 old live session) 추가** 고려.
+9. **Realtime WebSocket teardown 지연 30~60초** — 브라우저 탭 닫아도 Supabase 측에서 timeout 기다림. 장애 복구 시 "탭 닫으면 즉시 회복" 아님.
+10. **DB pool 막힌 상태 → TRUNCATE/DELETE 도 timeout** — connection 자체를 얻을 수 없음. `pause_project` → `restore_project` MCP 로 강제 리셋이 유일한 길 (데이터 보존).
+
+### 🟢 운영 원칙
+11. **Vercel MCP / Supabase MCP 연동 필수** — 대시보드 스크린샷 기반 디버깅은 너무 느림. 배포 상태 / DB row 수 / env 값 직접 조회·수정 가능해야 장애 대응 분 단위 가능.
+12. **사장님 실기기 테스트 전 DB row 수 체크** — `camera_sessions`, `ice_candidates`, `camera_viewer_connections` 합계 1000 초과면 경고. 누수 징후 선제 감지.
+13. **Multi-viewer 같은 구조 변경은 기존 flag OFF 경로 무손상 원칙** — 새 flag ON 에서 문제 생기면 flag OFF 로 즉시 롤백 가능해야. src/ 기존 훅/컴포넌트는 절대 수정 금지.
