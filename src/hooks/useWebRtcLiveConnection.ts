@@ -314,8 +314,32 @@ export function useWebRtcLiveConnection(homeId: string | null) {
 
         /* answer SDP → RPC 저장 */
         const encodedAnswer = encodePlainSdpForDatabaseColumn(committedAnswer.sdp);
-        const { data: ansRpcData, error: ansErr } = await supabase.rpc("viewer_update_answer_sdp", { p_session_id: session.id, p_answer_sdp: encodedAnswer });
-        if (ansErr) { logWebRtcDebug("viewer", "signaling.answer_db_update_failed", { message: ansErr.message }); throw new Error(ansErr.message); }
+        /* 55P03 (lock_not_available) exponential backoff retry — 마이그 [5/7] 의 FOR UPDATE NOWAIT 대응.
+         * - 방송폰 재시작 + 뷰어 answer 도달 race 에서 드물게 55P03 이 떨어짐 → 일시적이므로 200/400/800ms 최대 3회 재시도.
+         * - 다른 SQLSTATE 는 즉시 throw (retry 해도 같은 결과).
+         * - 정상 경로 (첫 시도 성공) 에는 오버헤드 0ms.
+         * - 최악 지연 200+400+800=1400ms, 15s 타임아웃의 10% 이내 → LTE 환경에서 '연결 실패 고착' 자동 복구. */
+        let ansRpcData: unknown = null;
+        let lastErr: { code?: string; message?: string } | null = null;
+        for (let attempt = 0; attempt < 3; attempt++) {
+          const { data, error } = await supabase.rpc("viewer_update_answer_sdp", {
+            p_session_id: session.id,
+            p_answer_sdp: encodedAnswer,
+          });
+          if (!error) { ansRpcData = data; lastErr = null; break; }
+          lastErr = error as { code?: string; message?: string };
+          if (error.code !== "55P03") {
+            logWebRtcDebug("viewer", "signaling.answer_db_update_failed", { message: error.message });
+            throw new Error(error.message);
+          }
+          const delay = 200 * Math.pow(2, attempt);
+          logWebRtcDebug("viewer", "signaling.answer_lock_retry", { attempt: attempt + 1, delay });
+          await new Promise((r) => setTimeout(r, delay));
+        }
+        if (lastErr) {
+          logWebRtcDebug("viewer", "signaling.answer_db_update_failed", { message: lastErr.message ?? "", code: lastErr.code });
+          throw new Error(lastErr.message ?? "answer SDP 저장 실패 (잠금 경쟁)");
+        }
         if ((ansRpcData as { error?: string } | null)?.error) throw new Error((ansRpcData as { error: string }).error);
         logWebRtcDebug("viewer", "signaling.answer_persisted", { sessionId: session.id });
 

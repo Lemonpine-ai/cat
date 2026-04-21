@@ -16,6 +16,10 @@ import {
   summarizeIceServersForLog,
 } from "@/lib/webrtc/webrtcDebugLog";
 import { ViewerReconnectEngine } from "@/lib/webrtc/viewerReconnectEngine";
+import {
+  logWebRtcEvent,
+  type WebRtcLogEvent,
+} from "@/lib/webrtc/webrtcConnectionLogger";
 
 export type ViewerConnectionPhase =
   | "idle" | "watching_for_broadcast" | "connecting" | "connected" | "error";
@@ -42,6 +46,55 @@ export function useWebRtcLiveConnection(homeId: string | null) {
 
   /* supabase 클라이언트를 useMemo로 안정화 — 매 렌더마다 새 인스턴스 생성 방지 */
   const supabase = useMemo(() => createSupabaseBrowserClient(), []);
+
+  /* 로깅 컨텍스트 */
+  const reconnectAttemptRef = useRef(0);
+  const lastLoggedEventRef = useRef<WebRtcLogEvent | null>(null);
+  const logCtx = useMemo(
+    () => ({
+      homeId,
+      deviceId:
+        typeof navigator !== "undefined" ? navigator.userAgent.slice(0, 120) : "unknown",
+      role: "viewer_live" as const,
+    }),
+    [homeId],
+  );
+  /** 로그 기록 — fire-and-forget, connected 중복 억제 */
+  const logEvent = useCallback(
+    (
+      eventType: WebRtcLogEvent,
+      extra?: {
+        pcState?: RTCPeerConnectionState | null;
+        errorMessage?: string | null;
+        cameraId?: string | null;
+        metadata?: Record<string, unknown> | null;
+      },
+    ) => {
+      if (!logCtx.homeId) return; /* homeId 없으면 RLS 실패 — 스킵 */
+      if (eventType === "connected" && lastLoggedEventRef.current === "connected") return;
+      lastLoggedEventRef.current = eventType;
+      const nav = typeof navigator !== "undefined" ? navigator : null;
+      const connType = (nav as unknown as {
+        connection?: { effectiveType?: string };
+      } | null)?.connection?.effectiveType;
+      void logWebRtcEvent(supabase, {
+        homeId: logCtx.homeId,
+        deviceId: logCtx.deviceId,
+        cameraId: extra?.cameraId ?? null,
+        role: logCtx.role,
+        eventType,
+        pcState: extra?.pcState ?? null,
+        errorMessage: extra?.errorMessage ?? null,
+        reconnectAttempt: reconnectAttemptRef.current,
+        metadata: {
+          ua: nav?.userAgent,
+          ...(connType ? { connection: connType } : {}),
+          ...(extra?.metadata ?? {}),
+        },
+      });
+    },
+    [supabase, logCtx],
+  );
 
   /** PeerConnection 및 관련 타이머/채널 정리 */
   const closePeerConnection = useCallback(async () => {
@@ -170,23 +223,32 @@ export function useWebRtcLiveConnection(homeId: string | null) {
         engine.onAction = (action) => {
           if (action.type === "ice_restart") {
             logWebRtcDebug("viewer", "engine.ice_restart", {});
+            logEvent("ice_restart", { cameraId: session.id });
             try { pc.restartIce(); } catch { /* PC 이미 닫힘 */ }
           } else if (action.type === "full_reconnect") {
             logWebRtcDebug("viewer", "engine.full_reconnect", { attempt: action.attempt });
+            reconnectAttemptRef.current = action.attempt;
+            logEvent("full_reconnect", { cameraId: session.id, metadata: { delayMs: action.delayMs } });
             void closePeerConnection().then(() => void connectToLiveSession(session));
           } else if (action.type === "keepalive_dead" || action.type === "visibility_reconnect") {
             logWebRtcDebug("viewer", `engine.${action.type}`, {});
+            logEvent(action.type, { cameraId: session.id });
             void closePeerConnection().then(() => void connectToLiveSession(session));
           } else if (action.type === "connection_recovered") {
             logWebRtcDebug("viewer", "engine.connection_recovered", {});
+            reconnectAttemptRef.current = 0;
+            logEvent("connection_recovered", { cameraId: session.id });
             setConnectionPhase("connected");
           }
         };
 
-        /* Peer 연결 상태 변경 — 엔진에 위임 */
+        /* Peer 연결 상태 변경 — 엔진에 위임 + 로그 기록 */
         pc.onconnectionstatechange = () => {
           const state = pc.connectionState;
           logWebRtcDebug("viewer", "peer.connection_state", { connectionState: state });
+          if (state === "connected" || state === "disconnected" || state === "failed" || state === "closed") {
+            logEvent(state, { pcState: state, cameraId: session.id });
+          }
           engine.handleConnectionStateChange(state);
           if (state === "connected") {
             if (connectTimeoutRef.current) { clearTimeout(connectTimeoutRef.current); connectTimeoutRef.current = null; }
@@ -252,8 +314,32 @@ export function useWebRtcLiveConnection(homeId: string | null) {
 
         /* answer SDP → RPC 저장 */
         const encodedAnswer = encodePlainSdpForDatabaseColumn(committedAnswer.sdp);
-        const { data: ansRpcData, error: ansErr } = await supabase.rpc("viewer_update_answer_sdp", { p_session_id: session.id, p_answer_sdp: encodedAnswer });
-        if (ansErr) { logWebRtcDebug("viewer", "signaling.answer_db_update_failed", { message: ansErr.message }); throw new Error(ansErr.message); }
+        /* 55P03 (lock_not_available) exponential backoff retry — 마이그 [5/7] 의 FOR UPDATE NOWAIT 대응.
+         * - 방송폰 재시작 + 뷰어 answer 도달 race 에서 드물게 55P03 이 떨어짐 → 일시적이므로 200/400/800ms 최대 3회 재시도.
+         * - 다른 SQLSTATE 는 즉시 throw (retry 해도 같은 결과).
+         * - 정상 경로 (첫 시도 성공) 에는 오버헤드 0ms.
+         * - 최악 지연 200+400+800=1400ms, 15s 타임아웃의 10% 이내 → LTE 환경에서 '연결 실패 고착' 자동 복구. */
+        let ansRpcData: unknown = null;
+        let lastErr: { code?: string; message?: string } | null = null;
+        for (let attempt = 0; attempt < 3; attempt++) {
+          const { data, error } = await supabase.rpc("viewer_update_answer_sdp", {
+            p_session_id: session.id,
+            p_answer_sdp: encodedAnswer,
+          });
+          if (!error) { ansRpcData = data; lastErr = null; break; }
+          lastErr = error as { code?: string; message?: string };
+          if (error.code !== "55P03") {
+            logWebRtcDebug("viewer", "signaling.answer_db_update_failed", { message: error.message });
+            throw new Error(error.message);
+          }
+          const delay = 200 * Math.pow(2, attempt);
+          logWebRtcDebug("viewer", "signaling.answer_lock_retry", { attempt: attempt + 1, delay });
+          await new Promise((r) => setTimeout(r, delay));
+        }
+        if (lastErr) {
+          logWebRtcDebug("viewer", "signaling.answer_db_update_failed", { message: lastErr.message ?? "", code: lastErr.code });
+          throw new Error(lastErr.message ?? "answer SDP 저장 실패 (잠금 경쟁)");
+        }
         if ((ansRpcData as { error?: string } | null)?.error) throw new Error((ansRpcData as { error: string }).error);
         logWebRtcDebug("viewer", "signaling.answer_persisted", { sessionId: session.id });
 
@@ -280,12 +366,13 @@ export function useWebRtcLiveConnection(homeId: string | null) {
       } catch (err) {
         const msg = err instanceof Error ? err.message : "연결에 실패했어요.";
         logWebRtcDebug("viewer", "connect.failed", { message: msg });
+        logEvent("error", { errorMessage: msg, cameraId: session.id });
         setErrorMessage(msg);
         setConnectionPhase("error");
         void closePeerConnection();
       }
     },
-    [supabase, closePeerConnection],
+    [supabase, closePeerConnection, logEvent],
   );
 
   /* ── 세션 감시: homeId 확보 후 live 세션 자동 감지 ── */

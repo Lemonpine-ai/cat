@@ -21,6 +21,10 @@ import {
 } from "@/lib/webrtc/sessionDescriptionPayload";
 import { resolveWebRtcPeerConnectionConfiguration } from "@/lib/webrtc/getWebRtcIceServersForPeerConnection";
 import { ViewerReconnectEngine } from "@/lib/webrtc/viewerReconnectEngine";
+import {
+  logWebRtcEvent,
+  type WebRtcLogEvent,
+} from "@/lib/webrtc/webrtcConnectionLogger";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 
 /* 연결 상태 */
@@ -38,6 +42,8 @@ type UseWebRtcSlotConnectionOptions = {
   turnRelayConfigured?: boolean;
   /** 연결 지연 (ms) — 2대 동시 연결 시 stagger용 */
   delayMs?: number;
+  /** 로깅용 home_id — 없으면 로깅 생략 */
+  homeId?: string | null;
   onPhaseChange?: (phase: SlotPhase) => void;
 };
 
@@ -47,10 +53,61 @@ export function useWebRtcSlotConnection({
   rtcConfiguration: externalRtcConfig = null,
   turnRelayConfigured: externalTurnRelay,
   delayMs = 0,
+  homeId = null,
   onPhaseChange,
 }: UseWebRtcSlotConnectionOptions) {
   /* supabase 클라이언트를 useMemo로 안정화 — 매 렌더마다 새 인스턴스 생성 방지 */
   const supabase = useMemo(() => createSupabaseBrowserClient(), []);
+
+  /* 로깅 컨텍스트 — 훅 입력 + 런타임 재연결 카운터로 구성 */
+  const reconnectAttemptRef = useRef(0);
+  const lastLoggedEventRef = useRef<WebRtcLogEvent | null>(null);
+  const logCtx = useMemo(
+    () => ({
+      homeId,
+      deviceId:
+        typeof navigator !== "undefined" ? navigator.userAgent.slice(0, 120) : "unknown",
+      cameraId: sessionId,
+      role: "viewer_slot" as const,
+    }),
+    [homeId, sessionId],
+  );
+  /** 로그 기록 — fire-and-forget, connected 중복 억제 */
+  const logEvent = useCallback(
+    (
+      eventType: WebRtcLogEvent,
+      extra?: {
+        pcState?: RTCPeerConnectionState | null;
+        errorMessage?: string | null;
+        metadata?: Record<string, unknown> | null;
+      },
+    ) => {
+      if (!logCtx.homeId) return; /* homeId 없으면 RLS 실패 — 스킵 */
+      /* connected 중복 억제 — 직전이 connected 면 건너뜀 */
+      if (eventType === "connected" && lastLoggedEventRef.current === "connected") return;
+      lastLoggedEventRef.current = eventType;
+      const nav = typeof navigator !== "undefined" ? navigator : null;
+      const connType = (nav as unknown as {
+        connection?: { effectiveType?: string };
+      } | null)?.connection?.effectiveType;
+      void logWebRtcEvent(supabase, {
+        homeId: logCtx.homeId,
+        deviceId: logCtx.deviceId,
+        cameraId: logCtx.cameraId,
+        role: logCtx.role,
+        eventType,
+        pcState: extra?.pcState ?? null,
+        errorMessage: extra?.errorMessage ?? null,
+        reconnectAttempt: reconnectAttemptRef.current,
+        metadata: {
+          ua: nav?.userAgent,
+          ...(connType ? { connection: connType } : {}),
+          ...(extra?.metadata ?? {}),
+        },
+      });
+    },
+    [supabase, logCtx],
+  );
 
   /* externalRtcConfig를 ref로 보관 — connect 클로저 안에서 항상 최신값 참조 */
   const externalRtcConfigRef = useRef(externalRtcConfig);
@@ -72,6 +129,12 @@ export function useWebRtcSlotConnection({
   const answerNotifyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** answerNotifyCh 채널 ref — cleanup 시 채널도 함께 제거 (누수 방지) */
   const answerNotifyChRef = useRef<RealtimeChannel | null>(null);
+  /**
+   * cleanup 진행 중 플래그 — 엔진의 full_reconnect 는 cleanup → connect 순으로 동작한다.
+   * 이전 PC 의 connectionState="closed" 이벤트가 새 PC 생성 후 늦게 도착하면
+   * 정상 재연결 중인 UI 를 error 로 덮어쓰는 race 가 발생한다. 이 플래그로 가드한다.
+   */
+  const cleanupInProgressRef = useRef(false);
 
   /* 상태 갱신 + 외부 콜백 */
   const updatePhase = useCallback(
@@ -81,6 +144,9 @@ export function useWebRtcSlotConnection({
 
   /* ── PeerConnection 정리 ── */
   const cleanup = useCallback(async () => {
+    /* cleanup 진행 중 플래그 ON — closed 이벤트 race 가드 */
+    cleanupInProgressRef.current = true;
+    try {
     if (connectTimeoutRef.current) {
       clearTimeout(connectTimeoutRef.current);
       connectTimeoutRef.current = null;
@@ -112,6 +178,10 @@ export function useWebRtcSlotConnection({
       iceChannelRef.current = null;
     }
     if (videoRef.current) videoRef.current.srcObject = null;
+    } finally {
+      /* cleanup 종료 — 이후 도착하는 closed 이벤트는 정상 처리 */
+      cleanupInProgressRef.current = false;
+    }
   }, [supabase]);
 
   /* ── WebRTC 연결 ── */
@@ -218,23 +288,33 @@ export function useWebRtcSlotConnection({
         engine.onAction = (action) => {
           if (action.type === "ice_restart") {
             console.log("[CameraSlot] 엔진 → ice_restart");
+            logEvent("ice_restart");
             try { pc.restartIce(); } catch { /* PC 이미 닫힘 */ }
           } else if (action.type === "full_reconnect") {
             console.log(`[CameraSlot] 엔진 → full_reconnect #${action.attempt} (${action.delayMs}ms 후)`);
+            reconnectAttemptRef.current = action.attempt;
+            logEvent("full_reconnect", { metadata: { delayMs: action.delayMs } });
             void cleanup().then(() => void connect());
           } else if (action.type === "keepalive_dead" || action.type === "visibility_reconnect") {
             console.log(`[CameraSlot] 엔진 → ${action.type}`);
+            logEvent(action.type);
             void cleanup().then(() => void connect());
           } else if (action.type === "connection_recovered") {
             console.log("[CameraSlot] 엔진 → 연결 복구");
+            reconnectAttemptRef.current = 0;
+            logEvent("connection_recovered");
             updatePhase("connected");
           }
         };
 
-        /* connection 상태 변화 — 엔진에 위임 */
+        /* connection 상태 변화 — 엔진에 위임 + 로그 기록 */
         pc.onconnectionstatechange = () => {
           const s = pc.connectionState;
           engine.handleConnectionStateChange(s);
+          /* PC 상태 자체를 로그 (connected/disconnected/failed/closed) */
+          if (s === "connected" || s === "disconnected" || s === "failed" || s === "closed") {
+            logEvent(s, { pcState: s });
+          }
           if (s === "connected") {
             clearConnectTimeout();
             updatePhase("connected");
@@ -248,6 +328,12 @@ export function useWebRtcSlotConnection({
             reportFailure();
           }
           if (s === "closed") {
+            /*
+             * cleanup 진행 중이면 무시 — 엔진의 full_reconnect(cleanup→connect) 중
+             * 이전 PC 의 closed 이벤트가 새 PC 생성 직전에 늦게 도착해
+             * 정상 재연결을 error 로 덮어쓰는 race 를 방지.
+             */
+            if (cleanupInProgressRef.current) return;
             engine.stopKeepalive();
             if (!reported) { updatePhase("error"); void cleanup(); }
           }
@@ -278,11 +364,27 @@ export function useWebRtcSlotConnection({
         const committed = pc.localDescription;
         if (!committed?.sdp) throw new Error("answer SDP 확정 실패");
 
-        const { data: ansData, error: ansErr } = await supabase.rpc(
-          "viewer_update_answer_sdp",
-          { p_session_id: sessionId, p_answer_sdp: encodePlainSdpForDatabaseColumn(committed.sdp) },
-        );
-        if (ansErr) throw new Error(ansErr.message);
+        /* 55P03 (lock_not_available) exponential backoff retry — 마이그 [5/7] 의 FOR UPDATE NOWAIT 대응.
+         * - 방송폰 재시작 + 뷰어 answer 도달 race 에서 드물게 55P03 이 떨어짐 → 일시적이므로 200/400/800ms 최대 3회 재시도.
+         * - 다른 SQLSTATE 는 즉시 throw (retry 해도 같은 결과).
+         * - 정상 경로 (첫 시도 성공) 에는 오버헤드 0ms.
+         * - 최악 지연 200+400+800=1400ms, 15s 타임아웃의 10% 이내 → LTE 환경에서 '연결 실패 고착' 자동 복구. */
+        const encodedAnswer = encodePlainSdpForDatabaseColumn(committed.sdp);
+        let ansData: unknown = null;
+        let lastErr: { code?: string; message?: string } | null = null;
+        for (let attempt = 0; attempt < 3; attempt++) {
+          const { data, error } = await supabase.rpc("viewer_update_answer_sdp", {
+            p_session_id: sessionId,
+            p_answer_sdp: encodedAnswer,
+          });
+          if (!error) { ansData = data; lastErr = null; break; }
+          lastErr = error as { code?: string; message?: string };
+          if (error.code !== "55P03") throw new Error(error.message);
+          const delay = 200 * Math.pow(2, attempt);
+          console.warn(`[CameraSlot] answer SDP 잠금 경쟁 재시도 ${attempt + 1}/3 (${delay}ms)`);
+          await new Promise((r) => setTimeout(r, delay));
+        }
+        if (lastErr) throw new Error(lastErr.message ?? "answer SDP 저장 실패 (잠금 경쟁)");
         const ansResult = ansData as { success?: boolean; error?: string } | null;
         if (ansResult?.error) throw new Error(ansResult.error);
         console.log("[CameraSlot] ② answer DB 저장 완료 (RPC)");
@@ -365,11 +467,13 @@ export function useWebRtcSlotConnection({
         }, 15_000);
       } catch (err) {
         console.error("[CameraSlot] 연결 실패:", err);
+        const msg = err instanceof Error ? err.message : String(err);
+        logEvent("error", { errorMessage: msg });
         updatePhase("error");
         void cleanup();
       }
     },
-    [sessionId, offerSdp, supabase, cleanup, updatePhase],
+    [sessionId, offerSdp, supabase, cleanup, updatePhase, logEvent],
   );
 
   /*

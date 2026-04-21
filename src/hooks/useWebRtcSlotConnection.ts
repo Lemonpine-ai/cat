@@ -364,11 +364,27 @@ export function useWebRtcSlotConnection({
         const committed = pc.localDescription;
         if (!committed?.sdp) throw new Error("answer SDP 확정 실패");
 
-        const { data: ansData, error: ansErr } = await supabase.rpc(
-          "viewer_update_answer_sdp",
-          { p_session_id: sessionId, p_answer_sdp: encodePlainSdpForDatabaseColumn(committed.sdp) },
-        );
-        if (ansErr) throw new Error(ansErr.message);
+        /* 55P03 (lock_not_available) exponential backoff retry — 마이그 [5/7] 의 FOR UPDATE NOWAIT 대응.
+         * - 방송폰 재시작 + 뷰어 answer 도달 race 에서 드물게 55P03 이 떨어짐 → 일시적이므로 200/400/800ms 최대 3회 재시도.
+         * - 다른 SQLSTATE 는 즉시 throw (retry 해도 같은 결과).
+         * - 정상 경로 (첫 시도 성공) 에는 오버헤드 0ms.
+         * - 최악 지연 200+400+800=1400ms, 15s 타임아웃의 10% 이내 → LTE 환경에서 '연결 실패 고착' 자동 복구. */
+        const encodedAnswer = encodePlainSdpForDatabaseColumn(committed.sdp);
+        let ansData: unknown = null;
+        let lastErr: { code?: string; message?: string } | null = null;
+        for (let attempt = 0; attempt < 3; attempt++) {
+          const { data, error } = await supabase.rpc("viewer_update_answer_sdp", {
+            p_session_id: sessionId,
+            p_answer_sdp: encodedAnswer,
+          });
+          if (!error) { ansData = data; lastErr = null; break; }
+          lastErr = error as { code?: string; message?: string };
+          if (error.code !== "55P03") throw new Error(error.message);
+          const delay = 200 * Math.pow(2, attempt);
+          console.warn(`[CameraSlot] answer SDP 잠금 경쟁 재시도 ${attempt + 1}/3 (${delay}ms)`);
+          await new Promise((r) => setTimeout(r, delay));
+        }
+        if (lastErr) throw new Error(lastErr.message ?? "answer SDP 저장 실패 (잠금 경쟁)");
         const ansResult = ansData as { success?: boolean; error?: string } | null;
         if (ansResult?.error) throw new Error(ansResult.error);
         console.log("[CameraSlot] ② answer DB 저장 완료 (RPC)");
