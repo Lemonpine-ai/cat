@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { BottomTabBar } from "@/components/shell/BottomTabBar";
 import { ShellSplashGate } from "@/components/shell/ShellSplashGate";
+import { DebugLogOverlay } from "@/components/broadcast/DebugLogOverlay";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 /**
@@ -63,6 +64,8 @@ export default async function MainShellLayout({
       </header>
       <div className="app-main">{children}</div>
       <BottomTabBar />
+      {/* ?debug=1 쿼리 시만 활성화 — LTE 에서 F12 없이 WebRTC/YOLO 진단 */}
+      <DebugLogOverlay />
     </ShellSplashGate>
   );
 }

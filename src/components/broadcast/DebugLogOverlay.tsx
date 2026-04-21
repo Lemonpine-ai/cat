@@ -24,8 +24,23 @@ import { useEffect, useRef, useState } from "react";
 
 /** 오버레이에 유지할 최근 로그 최대 줄 수 */
 const MAX_LOG_LINES = 50;
-/** 로그 필터 태그 — 이 태그가 포함된 console 호출만 오버레이에 표시 */
-const LOG_FILTER_TAG = "[s9-cam]";
+/**
+ * 로그 필터 태그들 — 이 태그들 중 하나라도 포함된 console 호출을 오버레이에 표시.
+ *
+ * - `[s9-cam]` : 방송폰 (camera/broadcast) 진단 로그
+ * - `[CameraSlot]` : 뷰어측 개별 카메라 연결 상태 (offer/answer/ICE)
+ * - `[MultiCameraGrid]` : 뷰어측 카메라 그리드 세션 관리
+ * - `[yolo-wasm]` : ONNX Runtime Web 초기화 로그 (env ready, backend 상태)
+ * - `[YOLO Worker]` : YOLO 추론 worker 에러/진행
+ * - `[thermal]` : 발열 저감 훅 (방송폰 내부, [s9-cam][thermal] 이라 [s9-cam] 에 이미 포함)
+ */
+const LOG_FILTER_TAGS = [
+  "[s9-cam]",
+  "[CameraSlot]",
+  "[MultiCameraGrid]",
+  "[yolo-wasm]",
+  "[YOLO Worker]",
+];
 
 /** 개별 로그 엔트리 */
 type LogEntry = {
@@ -91,11 +106,12 @@ export function DebugLogOverlay() {
     const originalWarn = console.warn;
     const originalError = console.error;
 
-    /* 공통 처리 — 태그 매칭 시 state 에 추가 */
+    /* 공통 처리 — 태그 배열 중 하나라도 매칭 시 state 에 추가 */
     const captureFactory = (level: LogEntry["level"]) =>
       (...args: unknown[]) => {
         const text = args.map(formatArg).join(" ");
-        if (text.includes(LOG_FILTER_TAG)) {
+        /* 태그 배열을 순회하며 하나라도 포함되면 캡처 — some() 으로 short-circuit */
+        if (LOG_FILTER_TAGS.some((tag) => text.includes(tag))) {
           idRef.current += 1;
           const entry: LogEntry = {
             id: idRef.current,
@@ -180,7 +196,7 @@ export function DebugLogOverlay() {
         }}
         aria-label={collapsed ? "로그 펼치기" : "로그 접기"}
       >
-        <span>🐾 [s9-cam] debug · {logs.length}건 · {collapsed ? "▲ 탭하면 펼침" : "▼ 탭하면 접음"}</span>
+        <span>🐾 debug · {logs.length}건 · {collapsed ? "▲ 탭하면 펼침" : "▼ 탭하면 접음"}</span>
         <span style={{ opacity: 0.7 }}>?debug=1</span>
       </button>
 
@@ -196,7 +212,7 @@ export function DebugLogOverlay() {
         >
           {logs.length === 0 ? (
             <div style={{ color: "#888", padding: "8px 0" }}>
-              로그 대기 중… 카메라 켜기 탭하면 [s9-cam] 로그가 쌓입니다.
+              로그 대기 중… [s9-cam] / [CameraSlot] / [MultiCameraGrid] / [yolo-wasm] / [YOLO Worker] 태그 로그가 여기 쌓입니다.
             </div>
           ) : (
             logs.map((l) => (
