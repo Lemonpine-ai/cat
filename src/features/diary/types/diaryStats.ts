@@ -6,15 +6,23 @@
 export type DiaryStats = {
   // 식사 횟수 (세션 병합 후)
   meal_count: number;
-  // 음수 횟수
+  // Phase A 신규: 식사 총 지속 시간(초). 세션 병합 후 합산.
+  meal_total_seconds?: number;
+  // 음수(=물마심) 횟수
   water_count: number;
   // 배변 횟수 (litter zone 10초 이상 체류 기준)
   poop_count: number;
+  // Phase A 신규: behavior_class="elimination" 단순 카운트 (poop_count 와 별개의 AI 직접 감지치).
+  elimination_count?: number;
   // 그루밍 세션 횟수
   groom_count: number;
-  // 활동 시간(초) — walk_run, roll 등 누적
+  // Phase A 신규: 그루밍 총 지속 시간(초). 세션 병합 후 합산.
+  groom_total_seconds?: number;
+  // Phase A 신규: 스크래칭 이벤트 카운트 (alert semantic, 임계값 분석 입력값).
+  scratching_count?: number;
+  // 활동 시간(초) — playing/walking/running semantic 누적
   activity_seconds: number;
-  // 휴식 시간(초) — lying, sit_down 등 누적
+  // 휴식 시간(초) — sleeping/sitting/standing semantic 누적
   rest_seconds: number;
   // 통증 레벨 (0=없음, 1=경미, 2=주의, 3=위험)
   pain_level: 0 | 1 | 2 | 3;

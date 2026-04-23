@@ -1,0 +1,41 @@
+-- ============================================================================
+-- Phase A — Step 7 전용: behavior_class CHECK constraint VALIDATE
+-- ----------------------------------------------------------------------------
+-- 목적
+--   20260423_phase_a_behavior_full.sql 에서 NOT VALID 로 추가한
+--   cat_behavior_events_behavior_class_check 를 기존 row 까지 검증.
+--
+-- ⚠️ 실행 전제 (둘 중 하나 만족 시 안전)
+--   (A) 1주일 운영 후 구 클래스 row 가 cleanup/archive 이관으로 0건이 된 경우.
+--   (B) 구 클래스 row 가 처음부터 0건임을 사전 점검(아래)으로 확인한 경우.
+--
+-- ⚠️ 실행 시점
+--   - 본 파일은 Phase A 본 마이그레이션과 분리. apply_migration 별도 실행.
+--   - VALIDATE 는 ACCESS EXCLUSIVE LOCK 을 요구하지 않음 (SHARE UPDATE EXCLUSIVE)
+--     이지만, 대량 row 풀스캔이라 트래픽 적은 시간대 권장.
+--
+-- ----------------------------------------------------------------------------
+-- 사전 점검 — Supabase MCP execute_sql 로 먼저 확인 (구 클래스 row 0건 검증)
+-- ----------------------------------------------------------------------------
+-- 예시:
+--   SELECT behavior_class, count(*)
+--   FROM public.cat_behavior_events
+--   WHERE behavior_class NOT IN (
+--     'eating','drinking','grooming','sleeping','playing',
+--     'walking','running','sitting','standing','scratching',
+--     'elimination','other'
+--   )
+--   GROUP BY behavior_class;
+--
+--   → 결과 0행이어야 본 마이그레이션 안전. 1행이라도 나오면 cleanup/archive
+--     이관 또는 구→신 매핑 마이그레이션 선행 필요.
+-- ============================================================================
+
+-- 본 작업 — 기존 row 검증 + constraint 활성화
+ALTER TABLE public.cat_behavior_events
+  VALIDATE CONSTRAINT cat_behavior_events_behavior_class_check;
+
+-- ============================================================================
+-- 끝. 본 마이그레이션 성공 시 cat_behavior_events.behavior_class 는
+-- 12 클래스 화이트리스트로 완전 강제됨 (신규 + 기존 모두).
+-- ============================================================================

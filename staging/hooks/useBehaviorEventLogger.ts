@@ -17,7 +17,16 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
-import type { BehaviorDetection } from "@/types/behavior";
+// Phase A: staging/types/behavior.ts 의 확장 타입 (top2/bboxAreaRatio 옵셔널) 사용.
+// (staging/hooks → staging/types)
+import type { BehaviorDetection } from "../types/behavior";
+
+/**
+ * Phase A: 모델 버전 상수 — metadata.model_version 기록.
+ * - Phase E 에서 archive vs active 구분 키로 활용 ("v1" 데이터는 archive 대상).
+ * - 추후 v2 모델 배포 시 본 상수만 갱신 (DB 스키마 변경 불필요).
+ */
+const BEHAVIOR_MODEL_VERSION = "v1";
 
 type UseBehaviorEventLoggerArgs = {
   /** 현재 집 ID (RLS home_id 기준) */
@@ -98,6 +107,18 @@ export function useBehaviorEventLogger({
    */
   const identifiedCatIdRef = useRef<string | null>(identifiedCatId ?? null);
   identifiedCatIdRef.current = identifiedCatId ?? null;
+  /**
+   * ⚠️ R8 추가 (R72): localStorage 큐 100건 초과 warn 1회 가드.
+   *   세션 동안 동일 메시지 반복 출력 방지.
+   */
+  const queueOverflowWarnedRef = useRef<boolean>(false);
+  /**
+   * ⚠️ R8 추가 (R7-(2)): flush 동시 실행 mutex.
+   *   INSERT 성공 시 큐 flush 가 호출되는데, 짧은 시간 내 여러 성공 INSERT 가
+   *   연달아 발생하면 같은 큐를 동시 INSERT 해 중복 row 가 생길 수 있음.
+   *   flushInProgressRef 가 true 면 후속 호출 즉시 return → 직렬화.
+   */
+  const flushInProgressRef = useRef<boolean>(false);
 
   /**
    * 초기 1회 user_id 해석:
@@ -198,27 +219,127 @@ export function useBehaviorEventLogger({
         }
         const userId = userIdRef.current;
         if (!userId) return null;
+        // Phase A: metadata JSONB 적재 (top2 / bbox_area_ratio / model_version)
+        // - undefined 키는 명시적으로 제외 (DB JSONB 가 undefined 인식 못함).
+        // - model_version 은 항상 채움 (Phase E export/archive 분류 키).
+        const metadata: Record<string, unknown> = {
+          model_version: BEHAVIOR_MODEL_VERSION,
+        };
+        if (detection.top2Class !== undefined) {
+          metadata.top2_class = detection.top2Class;
+        }
+        if (typeof detection.top2Confidence === "number") {
+          metadata.top2_confidence = detection.top2Confidence;
+        }
+        if (typeof detection.bboxAreaRatio === "number") {
+          metadata.bbox_area_ratio = detection.bboxAreaRatio;
+        }
+
+        // INSERT payload — 실패 시 localStorage 큐에 저장할 동일 객체.
+        const insertPayload = {
+          user_id: userId,
+          home_id: homeId,
+          camera_id: cameraId,
+          // 개체 구별 결과 — null이면 미구별 이벤트로 기록 (RLS OK, 컬럼 nullable)
+          cat_id: identifiedCatIdRef.current,
+          behavior_class: detection.classKey,
+          behavior_label: detection.label,
+          // 항상 최신 avgConfidence 사용 (ref로 읽어 effect 재실행 방지)
+          confidence: avgConfRef.current ?? detection.confidence,
+          bbox: detection.bbox,
+          detected_at: startedAt.toISOString(),
+          metadata,
+        };
+
         const { data, error } = await supabase
           .from("cat_behavior_events")
-          .insert({
-            user_id: userId,
-            home_id: homeId,
-            camera_id: cameraId,
-            // 개체 구별 결과 — null이면 미구별 이벤트로 기록 (RLS OK, 컬럼 nullable)
-            cat_id: identifiedCatIdRef.current,
-            behavior_class: detection.classKey,
-            behavior_label: detection.label,
-            // 항상 최신 avgConfidence 사용 (ref로 읽어 effect 재실행 방지)
-            confidence: avgConfRef.current ?? detection.confidence,
-            bbox: detection.bbox,
-            detected_at: startedAt.toISOString(),
-          })
+          .insert(insertPayload)
           .select("id")
           .single();
         if (error || !data) {
           // eslint-disable-next-line no-console
           console.error("[BehaviorLogger] INSERT 실패", error);
+          // ⚠️ R7 추가 (R62): INSERT 실패 시 localStorage 큐에 보존.
+          //   다음 성공 INSERT 후 flush 되어 오프라인/일시 장애에도 이벤트 유실 방지.
+          //   max 100 rows — 넘치면 oldest 부터 drop (LRU). ended_at 은 큐에서 재구성
+          //   불가하므로 open 상태 row 로만 복구됨 (Phase D 라벨링 가능).
+          try {
+            const raw = localStorage.getItem("pending_behavior_events");
+            const queue = raw ? JSON.parse(raw) : [];
+            // ⚠️ R8 변경 (R72): push 전 검사 + 1회 warn.
+            //   기존 코드는 push 후 shift 였는데, shift 가 항상 oldest(=index 0)를
+            //   제거하므로 새로 push 한 신규 row 가 100건 도달 직후에는 oldest 와 함께
+            //   "직전 row" 가 밀려 FIFO 순서가 살짝 손상될 수 있음. push 전에 cap 을
+            //   먼저 확보하면 신규 row 는 항상 큐 끝에 보존되며 100 cap 도 정확히 유지.
+            //   warn 은 1 세션 1회만 출력 (큐 폭증 시 로그 도배 방지).
+            if (queue.length >= 100) {
+              if (!queueOverflowWarnedRef.current) {
+                // eslint-disable-next-line no-console
+                console.warn(
+                  "[useBehaviorEventLogger] localStorage 큐 100건 초과 — oldest drop",
+                );
+                queueOverflowWarnedRef.current = true;
+              }
+              queue.shift();
+            }
+            queue.push({
+              ...insertPayload,
+              queued_at: new Date().toISOString(),
+            });
+            localStorage.setItem(
+              "pending_behavior_events",
+              JSON.stringify(queue),
+            );
+          } catch {
+            /* localStorage 실패 무시 — private mode / quota 초과 등 */
+          }
           return null;
+        }
+        // ⚠️ R7 추가 (R62): INSERT 성공 후 큐 flush 시도.
+        //   offline 복구 시 축적된 이벤트 일괄 전송. 성공 시 큐 비움.
+        //   실패 시 다음 기회에 재시도 (큐 유지).
+        // ⚠️ R8 추가 (R7-(2)): flushInProgressRef 로 중복 flush 차단.
+        //   짧은 시간 내 여러 성공 INSERT 가 연달아 발생해도 큐 INSERT 는 1회만.
+        //   try/finally 로 마지막에 false 복원 — 에러 경로에서도 mutex 해제 보장.
+        if (!flushInProgressRef.current) {
+          flushInProgressRef.current = true;
+          try {
+            const raw = localStorage.getItem("pending_behavior_events");
+            const queue = raw ? JSON.parse(raw) : [];
+            if (Array.isArray(queue) && queue.length > 0) {
+              // queued_at 은 DB 컬럼이 아니므로 INSERT 직전 제거.
+              const sanitized = queue.map((row: Record<string, unknown>) => {
+                const rest = { ...row };
+                delete rest.queued_at;
+                return rest;
+              });
+              const flushPromise = supabase
+                .from("cat_behavior_events")
+                .insert(sanitized)
+                .then(
+                  ({ error: flushError }) => {
+                    if (!flushError) {
+                      try {
+                        localStorage.removeItem("pending_behavior_events");
+                      } catch {
+                        /* 무시 */
+                      }
+                    }
+                  },
+                  () => undefined,
+                );
+              // flush 비동기 종료 후 mutex 해제 (성공/실패 무관).
+              void Promise.resolve(flushPromise).finally(() => {
+                flushInProgressRef.current = false;
+              });
+            } else {
+              // 큐가 비어있으면 즉시 mutex 해제.
+              flushInProgressRef.current = false;
+            }
+          } catch {
+            /* localStorage 파싱 실패 무시 — 다음 성공 시 재시도 */
+            flushInProgressRef.current = false;
+          }
         }
         return (data.id as string) ?? null;
       })();
@@ -307,4 +428,29 @@ export function useBehaviorEventLogger({
       lastKeyRef.current = "__none__";
     };
   }, [homeId, cameraId, supabase]);
+
+  /**
+   * ⚠️ R8 추가 (R7-(1)): 로그아웃 시 localStorage 큐 + 사용자 캐시 초기화.
+   *   - SIGNED_OUT 이벤트 발생 시 pending_behavior_events 제거 → 다음 사용자가
+   *     로그인했을 때 이전 사용자의 user_id 가 박힌 row 가 잘못 flush 되는 것 방지.
+   *   - userIdRef 도 비워 다음 로그인에서 homes.owner_id 재해석 강제.
+   *   - lastKeyRef 도 초기화 → 재로그인 후 첫 감지가 "전환" 으로 인식되도록.
+   *   - 구독 정리 cleanup 필수 (HMR/언마운트 시 leak 방지).
+   */
+  useEffect(() => {
+    const sub = supabase.auth.onAuthStateChange((event) => {
+      if (event === "SIGNED_OUT") {
+        try {
+          localStorage.removeItem("pending_behavior_events");
+        } catch {
+          /* 무시 — private mode / quota 등 */
+        }
+        userIdRef.current = null;
+        lastKeyRef.current = "__none__";
+      }
+    });
+    return () => {
+      sub.data.subscription.unsubscribe();
+    };
+  }, [supabase]);
 }

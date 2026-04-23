@@ -151,14 +151,23 @@ export function parseYoloOutput(
     : (anchor: number, channel: number) => channel * numAnchors + anchor;
 
   for (let i = 0; i < numAnchors; i++) {
-    // 클래스 점수 중 최대값 찾기
+    // 클래스 점수 중 1위/2위 찾기 (Phase A: top-2 메타 보강)
+    // - 단일 패스 안에서 max + secondMax 추적 → 추가 정렬 비용 0
     let maxScore = 0;
     let maxClass = -1;
+    let secondScore = 0;
+    let secondClass = -1;
     for (let c = 0; c < numClasses; c++) {
       const score = output[idx(i, 4 + c)];
       if (score > maxScore) {
+        // 새 1위 → 기존 1위는 2위로 강등
+        secondScore = maxScore;
+        secondClass = maxClass;
         maxScore = score;
         maxClass = c;
+      } else if (score > secondScore) {
+        secondScore = score;
+        secondClass = c;
       }
     }
     if (maxScore < confThreshold || maxClass < 0) continue;
@@ -169,17 +178,31 @@ export function parseYoloOutput(
     const w = output[idx(i, 2)];
     const h = output[idx(i, 3)];
 
-    // corner 좌표로 변환
+    // corner 좌표로 변환 (letterbox 좌표계)
     const bboxLB = { x: cx - w / 2, y: cy - h / 2, w, h };
     const bbox = unletterbox(bboxLB, padX, padY, scale, originalW, originalH);
 
+    // 정규화 bbox 면적 비율 (0~1) — DB metadata 에 기록.
+    // - 너무 작은 박스(0.5% 미만)는 노이즈 가능성 → Phase D 라벨링 UI 에서 활용.
+    // - 정규화 좌표라 frameW/H 인자 별도 필요 없음 (이미 0~1 스케일).
+    const bboxAreaRatio = Math.max(0, Math.min(1, bbox.w * bbox.h));
+
     const cls = BEHAVIOR_CLASSES[maxClass];
+    const second =
+      secondClass >= 0 && secondClass < BEHAVIOR_CLASSES.length
+        ? BEHAVIOR_CLASSES[secondClass]
+        : null;
+
     detections.push({
       classId: maxClass,
       classKey: cls.key,
       label: cls.label,
       confidence: maxScore,
       bbox,
+      // Phase A 옵셔널 메타 (logger 가 metadata JSONB 로 적재):
+      top2Class: second?.key,
+      top2Confidence: second ? secondScore : undefined,
+      bboxAreaRatio,
     });
   }
 

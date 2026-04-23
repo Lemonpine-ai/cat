@@ -164,3 +164,37 @@ Next.js 16 (App Router) + React 19 + TypeScript / Supabase / Tailwind CSS + CSS 
 11. **Vercel MCP / Supabase MCP 연동 필수** — 대시보드 스크린샷 기반 디버깅은 너무 느림. 배포 상태 / DB row 수 / env 값 직접 조회·수정 가능해야 장애 대응 분 단위 가능.
 12. **사장님 실기기 테스트 전 DB row 수 체크** — `camera_sessions`, `ice_candidates`, `camera_viewer_connections` 합계 1000 초과면 경고. 누수 징후 선제 감지.
 13. **Multi-viewer 같은 구조 변경은 기존 flag OFF 경로 무손상 원칙** — 새 flag ON 에서 문제 생기면 flag OFF 로 즉시 롤백 가능해야. src/ 기존 훅/컴포넌트는 절대 수정 금지.
+14. **데이터 모델 변경 시 src/ 직접 수정 예외** (#13 의 예외)
+    - 대상: AI 모델 클래스 정의 변경, DB 컬럼 의미 변경, 양방향 호환 불가능한 스키마 변경
+    - 이유: 새 모델/스키마와 기존 OFF 경로가 호환 불가 → flag 분기 의미 없음
+    - 필수 조건 3가지:
+      1. atomic deploy (단일 커밋, 단일 PR)
+      2. Vercel `getDeployments` 로 READY + PROMOTED 확인 후 DB 마이그 적용
+      3. Vercel Instant Rollback 경로 사전 확인 (이전 commit ID 메모)
+    - 일반 기능 추가 (예: 새 페이지, 새 훅) 는 #13 원칙 그대로 staging/ 만.
+
+## 🟣 운영 모드별 정책 (베타 → 프로덕션 전환 가이드)
+
+규모가 커지면 자동으로 적용 정책이 바뀌어야 한다. 다음 표를 참조해 현 시점에 맞는 정책 적용.
+
+| 항목 | 베타 (사용자 ≤30) | 성장 (30~100) | 프로덕션 (100+) |
+|---|---|---|---|
+| **Deploy 시간대** | 수시 (사장님 깨어있을 때) | 야간 21~24시 권장 | 새벽 2~5시 고정 |
+| **DB CHECK VALIDATE 시점** | 구 row 0건 확인 즉시 (Supabase MCP) | 1일 모니터링 후 | 7일 고정 + 알림 |
+| **모니터링** | 사장님 + Claude MCP 동시 주시 | pg_cron + 일간 알림 | 24/7 monitoring + on-call |
+| **롤백 임계값** | 5초 (Vercel Instant Rollback) | 1분 | 실시간 alert |
+| **사용자 통지** | 없음 (베타 사용자 양해) | 미리 공지 | maintenance window 공지 |
+| **DB 변경 트랜잭션** | 단일 SQL 실행 | BEGIN/COMMIT 명시 | 트랜잭션 + savepoint + audit |
+| **백업 빈도** | Supabase 기본 (Pro 일 1회) | 일 2회 | 시간 단위 + replicate |
+
+**전환 트리거**:
+- 사용자 30명 도달 → "성장" 모드 (PR 머지 전 baseline 확인)
+- 사용자 100명 도달 → "프로덕션" 모드 (정식 운영 정책 적용)
+- 휴가/장기 미접속 예정 → 일시적으로 한 단계 위 모드 적용 (예: 베타 → 성장)
+
+**현재 상태 (2026-04-23 기준)**: **베타 (사용자 7명, 10명 확장 예정)**
+
+전환 시 변경할 곳:
+- 이 표만 업데이트 (코드 변경 없음 — 정책은 운영 가이드)
+- VALIDATE CONSTRAINT 시점은 Supabase MCP `SELECT count(*) FROM cat_behavior_events WHERE behavior_class NOT IN (12 화이트리스트)` 결과로 자동 판단 가능
+- Deploy 시간대는 사장님 작업 일정에 맞춰 조정
