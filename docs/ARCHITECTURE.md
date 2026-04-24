@@ -818,7 +818,68 @@ elimination, other
 
 향후 클래스 추가 시 **4곳 (TS / SQL helper / CHECK / SEMANTIC_MAP) 을 한 커밋**에 같이 수정한다.
 
-### 10.2 DB 스키마 변경 (Phase A 적용 완료)
+### 10.2 Phase B — 방송폰 온디바이스 추론 (R12 PR 준비 완료, 머지 대기)
+
+YOLOv8n ONNX 온디바이스 추론. 방송폰 단독 INSERT (뷰어 중복 차단 — 2026-04-22 장애 재발 방지). flag `NEXT_PUBLIC_CAT_YOLO_V2` 기본 OFF → 기존 Phase A 경로 무손상 (CLAUDE.md #13 원칙).
+
+**장착 위치 (R12 commit 3):**
+- Mount: `src/components/broadcast/CameraBroadcastYoloMount.tsx` (UI 없음). `src/app/camera/broadcast/CameraBroadcastClient.tsx` 에서 `{isYoloV2Enabled() && isBroadcasting && <CameraBroadcastYoloMount ... />}` 로 조건부 렌더.
+- 뷰어 게이트: `src/hooks/useBehaviorDetection.ts` (onBehaviorChange 발화 차단) + `src/components/catvisor/CameraSlot.tsx` (useBehaviorEventLogger homeId=null 게이트). flag ON 시 뷰어 INSERT = 0.
+
+#### 10.2.1 훅 합성 패턴
+
+driver (compose) = lifecycle (worker/retry) + sampling (tick) + driverHealth (5 영역 + isInferring) + Phase A logger 주입. 각 훅 단일 책임 (CLAUDE.md "100줄 이내" 정신, 단 lifecycle/sampling 은 Worker API 한계로 초과 허용).
+
+| 훅 | 책임 | LOC |
+|----|------|-----|
+| `useBroadcasterYoloDriver` | compose + handleResult 3상태 (pending/cleared/confirmed) + onBeforeInfer (30분 가드) + onHidden | 313 |
+| `useYoloWorkerLifecycle` | Worker 생성/dispose/retry/STABLE_READY_MS + inferStartRef latency stamp | 357 |
+| `useYoloSampling` | tick/visibility/postMessage + bitmap 누수 방지 try/finally | 235 |
+| `useDriverHealth` | health 5 영역 + isInferring + 4 콜백 (bumpSuccess/bumpFailure/bumpTick/markInferring) | 112 |
+| `useYoloLatencyTracker` | latency 링버퍼 + P50/P95 nearest-rank + 2초 flush | 139 |
+
+#### 10.2.2 ref-forward callback wrapper 패턴
+
+driver ↔ driverHealth ↔ lifecycle 간 순환 의존 해소용. driver 가 `bumpSuccess / bumpFailure / bumpTick / markInferring` 4 콜백을 `useRef(() => {})` 로 초기화한 stable wrapper 로 lifecycle/sampling 에 넘기고, effect 에서 `driverHealth.*` 로 ref 교체 동기화.
+
+```ts
+const bumpSuccessRef = useRef<() => void>(() => {});
+const onSuccess = useCallback(() => bumpSuccessRef.current(), []);
+// 이후 effect 에서: bumpSuccessRef.current = driverHealth.bumpSuccess;
+```
+
+**안전성:** `driverHealth.*` 는 deps `[]` 안정 (useCallback([], [])), 첫 effect 1회만 실행. sampling/lifecycle 의 effect 는 `onSuccess` identity 변화 없어 무회귀.
+
+전체 본문 + 적용 사례 + 안전성 분석: `staging/docs/phase_b_ref_forward_pattern.md` (R12 cross-reference 포함).
+
+#### 10.2.3 metadata freeze 약속 (Phase D 진입 전)
+
+`cat_behavior_events.metadata` JSONB 4 필드 — Phase D 라벨링 UI 가 본 스키마 기반. 변경 금지:
+
+| 필드 | 조건 |
+|------|------|
+| `model_version` | 항상 채움 (string, 현 `"v1"`). Phase E archive/active 분류 키. |
+| `top2_class` | `detection.top2Class !== undefined` 일 때만 |
+| `top2_confidence` | `Number.isFinite(...)` 통과 시만 (NaN/Infinity → key omit) |
+| `bbox_area_ratio` | `Number.isFinite(...)` 통과 시만 (NaN/Infinity → key omit) |
+
+**조립 위치 (R12 commit 3 R7-S 합치기 이후):**
+- helper: `src/lib/behavior/buildBehaviorEventMetadata.ts` (48 LOC, 순수 함수)
+- logger: `src/hooks/useBehaviorEventLogger.ts` 가 import 하여 `buildBehaviorEventMetadata(detection, BEHAVIOR_MODEL_VERSION)` 1줄로 조립.
+
+**mirror 검증 (`staging/tests/metadataFreezeMirror.test.ts`):** helper + logger 양쪽에 마커 `// metadata-freeze-spec: r10-1` 존재 필수. 부재 시 vitest R9 §3 strict 로 즉시 fail → drift 차단.
+
+#### 10.2.4 환경변수
+
+| ENV | scope | 값 | 의미 |
+|-----|-------|---|------|
+| `NEXT_PUBLIC_CAT_YOLO_V2` | Production | `0` (default) / `1` | Phase B flag. OFF 시 기존 Phase A 경로 무변화. |
+| `NEXT_PUBLIC_YOLO_MODEL_URL` | Production | Cloudflare R2 URL | ONNX 모델. flag ON 시 필수. 현재값: `https://pub-e5e4c245235e430f84f088febf07a0c0.r2.dev/cat_behavior_yolov8n.onnx` |
+| `NEXT_PUBLIC_YOLO_STABLE_READY_MS` | Production | `60000` (default) / `90000` (iOS 저사양) | ready 안정 유지 시간. retry 카운터 리셋 시점. |
+
+**주의:** `NEXT_PUBLIC_*` 는 빌드 타임 주입. Vercel ENV 변경 후 `git commit --allow-empty -m "..."` + push 로 강제 재빌드 필요 (CLAUDE.md #6 운영 교훈).
+
+### 10.3 DB 스키마 변경 (Phase A 적용 완료)
 
 **cat_behavior_events 새 컬럼:**
 
@@ -843,7 +904,7 @@ elimination, other
 
 - `behavior-snapshots` (private) — Phase E 에서 사용. `deny_all_snapshots` placeholder 정책 (TO public) 설치됨. Phase E 에서 owner-only policy 로 교체.
 
-### 10.3 SECURITY DEFINER RPC
+### 10.4 SECURITY DEFINER RPC
 
 모든 라벨링/export 는 `.from("cat_behavior_label_history")` 직접 금지 — RPC 경유.
 
@@ -859,7 +920,7 @@ elimination, other
 2. `user_label LIKE 'reclassified:<cls>'` → `is_valid_behavior_class(cls)` 통과 시 cls, 아니면 NULL
 3. 그 외 (NULL / correct / 알 수 없는 값) → `behavior_class` 화이트리스트 통과 시 원본, 아니면 NULL
 
-### 10.4 TS ↔ SQL 동치성 보장
+### 10.5 TS ↔ SQL 동치성 보장
 
 | 계층 | 파일 | 비고 |
 |------|------|------|
@@ -868,7 +929,7 @@ elimination, other
 | Test | `staging/tests/effectiveClass.parity.test.ts` | 60+ fixture 케이스로 TS↔SQL 동치 회귀 |
 | Test | `staging/tests/behaviorClasses.invariants.test.ts` | 12개 / 순차 id / SEMANTIC_MAP 완전성 자동 검증 (모듈 로드 시 IIFE) |
 
-### 10.5 Local-first 이벤트 큐
+### 10.6 Local-first 이벤트 큐
 
 `src/hooks/useBehaviorEventLogger.ts`:
 - 네트워크 단절 시 `localStorage` 큐 (최대 100개, FIFO, push 전 length 체크)
@@ -876,18 +937,18 @@ elimination, other
 - `onAuthStateChange(SIGNED_OUT)` 리스너 — 로그아웃 시 큐 clear (타 유저로 leak 방지)
 - useEffect 4개 (7개 한도 준수), 456 lines (파일 400라인 한도 근접 — 다음 refactor 대상)
 
-### 10.6 Phase 로드맵
+### 10.7 Phase 로드맵
 
 | Phase | 상태 | 내용 |
 |-------|------|------|
 | **A** | ✅ 2026-04-24 완료 | 12 클래스 매핑, metadata/user_label, Phase E 뼈대 (archive/history/bucket) |
-| **B** | 다음 단계 | YOLO 추론 파이프라인 (방송폰 온디바이스 ONNX) + 이벤트 배치 INSERT |
+| **B** | 🟡 R12 PR 준비 완료 (2026-04-24~), 머지 + ENV 등록 대기 | 방송폰 온디바이스 YOLO 추론 (14 파일 src/ 합치기 + Mount + 뷰어 게이트 + R7-S) |
 | **C** | 대기 | 다이어리 UI (12 클래스 집계, 일/주/월 리포트, scratching 빈도 기반 패턴) |
 | **D** | 대기 | 라벨링 UI (집사가 잘못된 추론 수정 → update RPC 경유) |
 | **E** | 대기 | 노이즈 archive 이관, snapshot 저장 (behavior-snapshots 버킷), storage.objects owner-only policy |
 | **F** | 대기 | SD카드 학습 영상 batch retraining (`export_behavior_dataset` 사용) |
 
-### 10.7 CLAUDE.md #14 예외 적용
+### 10.8 CLAUDE.md #14 예외 적용
 
 Phase A 는 **AI 모델 클래스 정의 변경** 에 해당 (12 클래스 신규 = 기존 arch/walk_run 구조와 호환 불가) → `src/` 직접 수정 허용.
 적용 조건 3가지 모두 충족:

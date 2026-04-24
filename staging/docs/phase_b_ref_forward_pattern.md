@@ -1,7 +1,9 @@
 # Phase B ref-forward callback wrapper 패턴
 
+> ⚠️ **R12 PR 통합 (2026-04-24):** 본 문서는 `docs/ARCHITECTURE.md §10.2.2` 로 요약 통합됨. staging archive 로 보존 (CLAUDE.md "파일 삭제 절대 금지") — Phase D/E 가 동일 패턴 적용 시 본 문서 참조.
+>
 > 작성: Phase B Arch/Dev Agent (R9 §2)
-> 적용: `staging/hooks/useBroadcasterYoloDriver.ts` 의 bump 3 + markInferring 4 콜백 / `staging/hooks/useYoloWorkerLifecycle.ts` 의 콜백 ref 동기화
+> 적용: `src/hooks/useBroadcasterYoloDriver.ts` 의 bump 3 + markInferring 4 콜백 / `src/hooks/useYoloWorkerLifecycle.ts` 의 콜백 ref 동기화 (R12 commit 3 이후 staging → src 이관 완료)
 > 근거: R8 MINOR-R8-NEW-1 발견 → R9 §2 정식 명세화
 
 ## §0 배경

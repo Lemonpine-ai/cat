@@ -595,3 +595,21 @@ R11 PASS 후 R12 src/ PR 진행 시 본 §9 의 7 commit 순서 + 각 commit 의
 - [ ] Vercel 에러 로그 12시간마다 0건 (Vercel MCP getDeploymentEvents)
 - [ ] 사용자 보고 수시 0건
 - [ ] 24시간 무이상 → commit 7 진행 / 이상 발견 → flag OFF 유지 + 원인 조사 + 추가 라운드
+
+---
+
+## §10. R12 PR 진행 기록 (commit 3 + 4 완료 시점)
+
+> R11 Arch §3.4 / §3.5 기반 atomic 7 commit 중 commit 0~4 완료. commit 5 (Vercel ENV) / commit 6 (머지 후 baseline) / commit 7 (실기기 테스트) 은 사장님 승인 후 push → PR → 머지 순서로 진행.
+
+| commit | hash | 내용 |
+|--------|------|------|
+| 0 | `ba2e4a0` | R12 PR 베이스 (Phase B staging 산출물 + 라운드 문서 + 테스트 의존성) |
+| 1 | `db26cbe` | mirror 마커 r7-1 → r10-1 (3 파일 동시) |
+| 2 | `71f5d24` | src/ logger 본체 NaN/Infinity 가드 (mirror 1:1 동치) |
+| 3 | `67e0275` | staging → src/ 14 파일 이관 + Mount + 뷰어 게이트 + R7-S |
+| 4 | (commit 4 생성 시 기록) | ARCHITECTURE.md §10.2 통합 + staging/docs cross-reference |
+
+**검증 (commit 3 시점):** `npx tsc --noEmit -p tsconfig.staging-check.json` = 0 / `npx vitest run` = 10 files / 109 passed / `pnpm build` = 성공 + Worker chunk emit 확인 / QA Agent 독립 검토 = PASS.
+
+**다음 단계:** 사장님 승인 → `git push -u origin feat/phase-b-src-r12` → `gh pr create` → Vercel 빌드 READY + PROMOTED 확인 → master 머지 → commit 5~7 진행.
