@@ -34,11 +34,12 @@ export function HomeProfileRow({
         <p className="text-sm font-medium text-[var(--color-text-sub)]">
           등록된 고양이가 없어요. 고양이를 추가해 주세요.
         </p>
+        {/* cat-identity Tier 1: 등록 화면 (/cats/new) 으로 직접 이동. 이전엔 /settings 로 갔으나 placeholder 였음. */}
         <Link
-          href="/settings"
+          href="/cats/new"
           className="mt-3 inline-flex items-center justify-center rounded-full bg-[var(--mint-500)] px-5 py-2 text-sm font-semibold text-white shadow-md transition hover:brightness-105"
         >
-          설정에서 추가하기
+          🐱 고양이 등록하기
         </Link>
       </div>
     );
@@ -85,8 +86,9 @@ export function HomeProfileRow({
             </button>
           );
         })}
+        {/* cat-identity Tier 1: + 추가 버튼이 /cats/new 등록 화면으로 직접 이동. 이전엔 /settings 였음. */}
         <Link
-          href="/settings"
+          href="/cats/new"
           className="flex shrink-0 flex-col items-center gap-1.5 rounded-3xl px-2 pt-1 pb-2 text-[var(--color-text-muted)] opacity-90 hover:opacity-100"
           aria-label="고양이 추가"
         >
