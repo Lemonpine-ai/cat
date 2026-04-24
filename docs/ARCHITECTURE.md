@@ -792,3 +792,107 @@ export default {
 - 수의사 원격 상담 연결
 - 커스텀 FGS 모델 (YOLOv8 + ResNet)
 - 온디바이스 추론 (TFLite)
+
+---
+
+## 10. YOLO 행동 분류 파이프라인 (Phase A~F, 2026-04-24~)
+
+> Phase A: 2026-04-24 atomic deploy 적용 완료 (commit `354f6dd` + DB 마이그 2건).
+
+### 10.1 12 클래스 단일 진실 원천
+
+YOLOv8n 학습 모델 (mAP50=0.994) 과 DB/TS 코드가 모두 아래 **12 클래스** 만 인정:
+
+```
+eating, drinking, grooming, sleeping, playing,
+walking, running, sitting, standing, scratching,
+elimination, other
+```
+
+| 위치 | 구현 |
+|------|------|
+| ONNX model | `public/models/cat_behavior_yolo.onnx` (12 class output) |
+| TS whitelist | `src/lib/ai/behaviorClasses.ts` (`BEHAVIOR_CLASSES`, `BEHAVIOR_SEMANTIC_MAP`) |
+| SQL whitelist | `public.is_valid_behavior_class(TEXT)` IMMUTABLE SQL 함수 |
+| CHECK constraint | `cat_behavior_events_behavior_class_check` (VALIDATED) |
+
+향후 클래스 추가 시 **4곳 (TS / SQL helper / CHECK / SEMANTIC_MAP) 을 한 커밋**에 같이 수정한다.
+
+### 10.2 DB 스키마 변경 (Phase A 적용 완료)
+
+**cat_behavior_events 새 컬럼:**
+
+| 컬럼 | 타입 | 용도 |
+|------|------|------|
+| `metadata` | JSONB DEFAULT `'{}'` | `{ top2_class, top2_confidence, bbox_area_ratio, model_version }` |
+| `user_label` | TEXT NULL | `NULL \| correct \| human \| shadow \| other_animal \| reclassified:<cls>` |
+| `snapshot_url` | TEXT NULL | Phase E 에서 사용 (현재 항상 NULL) |
+| `labeled_at` | TIMESTAMPTZ NULL | 집사가 라벨 수정한 시각 |
+| `labeled_by` | UUID NULL | auth.users(id) FK, `ON DELETE SET NULL` (탈퇴 시 audit 보존) |
+
+**신규 테이블 (Phase E 뼈대):**
+
+| 테이블 | 용도 | RLS |
+|--------|------|-----|
+| `cat_behavior_events_archive` | 노이즈/구버전 row 이관 (Phase E) | `deny_all` (TO public) |
+| `cat_behavior_label_history` | 집사 라벨 수정 audit log | `deny_all_history` (TO public) |
+
+`cat_behavior_label_history.event_id` 는 `ON DELETE SET NULL` — Phase E 가 events 를 archive 로 MOVE 할 때 audit log 는 보존.
+
+**신규 Storage 버킷:**
+
+- `behavior-snapshots` (private) — Phase E 에서 사용. `deny_all_snapshots` placeholder 정책 (TO public) 설치됨. Phase E 에서 owner-only policy 로 교체.
+
+### 10.3 SECURITY DEFINER RPC
+
+모든 라벨링/export 는 `.from("cat_behavior_label_history")` 직접 금지 — RPC 경유.
+
+| RPC | 서명 | 권한 모델 |
+|-----|------|-----------|
+| `update_behavior_user_label(event_id UUID, label TEXT)` | VOID | `homes.owner_id = auth.uid()` 체크 + audit 자동 INSERT |
+| `export_behavior_dataset(home_id UUID, since DATE, until DATE)` | TABLE | 기간 ≤ 366일 DoS 가드 + `effective_class` 계산 (TS effectiveClass.ts 와 1:1 동치) |
+
+**라벨 화이트리스트:** `correct / human / shadow / other_animal / reclassified:<12 클래스>` (64자 초과 거부)
+
+**effective_class 3분기 CASE:**
+1. `user_label IN ('human','shadow','other_animal')` → NULL (노이즈)
+2. `user_label LIKE 'reclassified:<cls>'` → `is_valid_behavior_class(cls)` 통과 시 cls, 아니면 NULL
+3. 그 외 (NULL / correct / 알 수 없는 값) → `behavior_class` 화이트리스트 통과 시 원본, 아니면 NULL
+
+### 10.4 TS ↔ SQL 동치성 보장
+
+| 계층 | 파일 | 비고 |
+|------|------|------|
+| TS | `src/lib/behavior/effectiveClass.ts` | `getEffectiveClass(row)` — SQL 3분기 CASE 와 1:1 |
+| TS | `src/lib/behavior/userLabelFilter.ts` | `NON_NOISE_FILTER` — PostgREST AND 조합 주의 JSDoc |
+| Test | `staging/tests/effectiveClass.parity.test.ts` | 60+ fixture 케이스로 TS↔SQL 동치 회귀 |
+| Test | `staging/tests/behaviorClasses.invariants.test.ts` | 12개 / 순차 id / SEMANTIC_MAP 완전성 자동 검증 (모듈 로드 시 IIFE) |
+
+### 10.5 Local-first 이벤트 큐
+
+`src/hooks/useBehaviorEventLogger.ts`:
+- 네트워크 단절 시 `localStorage` 큐 (최대 100개, FIFO, push 전 length 체크)
+- `flushInProgressRef` mutex — 중복 flush race 방어
+- `onAuthStateChange(SIGNED_OUT)` 리스너 — 로그아웃 시 큐 clear (타 유저로 leak 방지)
+- useEffect 4개 (7개 한도 준수), 456 lines (파일 400라인 한도 근접 — 다음 refactor 대상)
+
+### 10.6 Phase 로드맵
+
+| Phase | 상태 | 내용 |
+|-------|------|------|
+| **A** | ✅ 2026-04-24 완료 | 12 클래스 매핑, metadata/user_label, Phase E 뼈대 (archive/history/bucket) |
+| **B** | 다음 단계 | YOLO 추론 파이프라인 (방송폰 온디바이스 ONNX) + 이벤트 배치 INSERT |
+| **C** | 대기 | 다이어리 UI (12 클래스 집계, 일/주/월 리포트, scratching 빈도 기반 패턴) |
+| **D** | 대기 | 라벨링 UI (집사가 잘못된 추론 수정 → update RPC 경유) |
+| **E** | 대기 | 노이즈 archive 이관, snapshot 저장 (behavior-snapshots 버킷), storage.objects owner-only policy |
+| **F** | 대기 | SD카드 학습 영상 batch retraining (`export_behavior_dataset` 사용) |
+
+### 10.7 CLAUDE.md #14 예외 적용
+
+Phase A 는 **AI 모델 클래스 정의 변경** 에 해당 (12 클래스 신규 = 기존 arch/walk_run 구조와 호환 불가) → `src/` 직접 수정 허용.
+적용 조건 3가지 모두 충족:
+1. ✅ atomic deploy: commit `354f6dd` 단일 push
+2. ✅ Vercel READY + PROMOTED 확인 후 DB 마이그 적용 (`20260423_phase_a_behavior_full.sql` + `20260423_phase_a_validate_after_cleanup.sql`)
+3. ✅ Vercel Instant Rollback 경로 사전 확인 (이전 READY commit `5f6ee4b2` 메모)
+
+Phase B 이후 (신기능 = UI/훅 추가) 는 다시 `staging/` 원칙 복귀.

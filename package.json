@@ -8,6 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "postinstall": "node scripts/copy-onnx-wasm.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "test:playwright": "playwright test",
     "test:playwright:smoke": "playwright test tests/broadcast-smoke.spec.ts"
   },
@@ -33,6 +35,9 @@
     "eslint": "^9",
     "eslint-config-next": "16.1.7",
     "playwright": "^1.58.2",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^2.1.9",
+    "@testing-library/react": "^16.0.1",
+    "jsdom": "^25.0.1"
   }
 }
