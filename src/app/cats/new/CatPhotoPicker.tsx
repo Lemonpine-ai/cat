@@ -1,0 +1,114 @@
+/**
+ * cat-identity Tier 1 — 정면 사진 선택/촬영 컴포넌트.
+ *
+ * <input type=file accept="image/*" capture="environment">:
+ *  - iOS/Android 모바일: "카메라 / 라이브러리" 선택 시트 자동 노출
+ *  - PC: 파일 선택 대화상자
+ *
+ * 클라이언트 검증 (업로드 전 차단):
+ *  - 크기: 5MB 이하
+ *  - MIME: jpeg / png / webp / heic / heif
+ *
+ * 프리뷰 URL 은 URL.createObjectURL 로 생성 → 언마운트/재선택 시 revokeObjectURL 로 해제.
+ */
+
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import styles from "./CatRegistrationScreen.module.css";
+
+const MAX_FILE_BYTES = 5 * 1024 * 1024; // 5 MB
+const ALLOWED_MIME = [
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/heic",
+  "image/heif",
+];
+
+export type CatPhotoPickerProps = {
+  /** 현재 선택된 파일 (상위 state). null 이면 비어있음. */
+  file: File | null;
+  /** 사용자가 파일을 선택/제거할 때 호출. null = 제거. */
+  onChange: (file: File | null) => void;
+  /** 에러 메시지 (상위에서 주입 — validateCatDraft 나 MIME 거부). */
+  errorMessage?: string | null;
+};
+
+export function CatPhotoPicker({ file, onChange, errorMessage }: CatPhotoPickerProps) {
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [localError, setLocalError] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  /* 프리뷰 URL 생성/해제 — 파일 바뀔 때마다 구 URL revoke */
+  useEffect(() => {
+    if (!file) {
+      setPreviewUrl(null);
+      return;
+    }
+    const url = URL.createObjectURL(file);
+    setPreviewUrl(url);
+    return () => {
+      URL.revokeObjectURL(url);
+    };
+  }, [file]);
+
+  const handleFileSelect = (selected: File | null) => {
+    setLocalError(null);
+    if (!selected) {
+      onChange(null);
+      return;
+    }
+    // MIME 검증
+    if (!ALLOWED_MIME.includes(selected.type)) {
+      setLocalError("JPG / PNG / WebP / HEIC 형식만 가능해요");
+      return;
+    }
+    // 크기 검증
+    if (selected.size > MAX_FILE_BYTES) {
+      setLocalError("사진은 5MB 이하로 올려주세요");
+      return;
+    }
+    onChange(selected);
+  };
+
+  const displayError = localError ?? errorMessage ?? null;
+
+  return (
+    <div className={styles.photoPicker}>
+      <label className={styles.photoLabel}>정면 사진 (선택)</label>
+      {previewUrl ? (
+        <div className={styles.photoPreviewWrap}>
+          {/* eslint-disable-next-line @next/next/no-img-element -- 로컬 blob URL 은 next/image 가 처리 불가 */}
+          <img src={previewUrl} alt="선택한 고양이 사진 미리보기" className={styles.photoPreview} />
+          <button
+            type="button"
+            className={styles.photoRemoveBtn}
+            onClick={() => handleFileSelect(null)}
+            aria-label="사진 제거"
+          >
+            ✕ 사진 제거
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          className={styles.photoPlaceholder}
+          onClick={() => inputRef.current?.click()}
+        >
+          📷 사진 추가하기
+          <span className={styles.photoPlaceholderHint}>카메라 또는 갤러리</span>
+        </button>
+      )}
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className={styles.photoInput}
+        onChange={(e) => handleFileSelect(e.target.files?.[0] ?? null)}
+      />
+      {displayError && <div className={styles.fieldError}>{displayError}</div>}
+    </div>
+  );
+}

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { CatProfileRow } from "@/types/cat";
 import { CatCard } from "./CatCard";
 import styles from "./CatvisorHomeDashboard.module.css";
@@ -34,6 +35,10 @@ function CatRegistrationGuide() {
           <span>홈 화면을 새로고침하면 고양이 카드가 나타납니다 🎉</span>
         </li>
       </ol>
+      {/* cat-identity Tier 1: 앱 내 등록 화면 CTA (기존 3-step 운영자 안내는 참고용으로 유지) */}
+      <Link href="/cats/new" className={styles.catRegistrationCta}>
+        🐱 앱에서 바로 등록하기 →
+      </Link>
     </div>
   );
 }
@@ -75,6 +80,10 @@ export function HomeCatCards({
           <CatCard key={cat.id} cat={cat} homeId={cat.home_id} />
         ))}
       </div>
+      {/* cat-identity Tier 1: 다묘 추가 등록 CTA (이미 등록된 고양이가 있어도 새 고양이 추가 허용) */}
+      <Link href="/cats/new" className={styles.catAddCta} aria-label="고양이 추가 등록">
+        ＋ 고양이 추가하기
+      </Link>
     </section>
   );
 }
