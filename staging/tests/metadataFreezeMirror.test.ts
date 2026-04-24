@@ -4,7 +4,7 @@
  * 의도:
  *  - R7 §4 옵션 R 채택으로 staging mirror (`buildBehaviorEventMetadata.ts`) 와 src/ logger
  *    (`useBehaviorEventLogger.ts`) 의 metadata 조립 블록은 1:1 동치를 약속.
- *  - 본 테스트는 양쪽 파일에 동일 마커 `// metadata-freeze-spec: r7-1` 가 존재하는지
+ *  - 본 테스트는 양쪽 파일에 동일 마커 `// metadata-freeze-spec: r10-1` 가 존재하는지
  *    fs.readFileSync + includes 로 검증. 한쪽이라도 마커 부재 시 즉시 fail.
  *
  * R9 §3 strict 강화:
@@ -18,7 +18,7 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-const MARKER = "metadata-freeze-spec: r7-1";
+const MARKER = "metadata-freeze-spec: r10-1";
 const STAGING_MIRROR_PATH = path.resolve(
   __dirname,
   "../lib/behavior/buildBehaviorEventMetadata.ts",

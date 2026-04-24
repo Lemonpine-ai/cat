@@ -10,7 +10,7 @@
  *  - 본 함수의 코드는 `src/hooks/useBehaviorEventLogger.ts` line 225-236 의 metadata 조립
  *    블록과 1:1 동치이어야 한다. 변경 시 src/ 합치기 PR 까지 상시 정합성 유지.
  *  - 정합성 깨짐을 방지하기 위해 본 파일과 src/ logger 의 metadata 블록 양쪽에 동일 헤더
- *    `// metadata-freeze-spec: r7-1` 마커를 두고 grep 으로 자동 검증 권고 (R8 이월 가능).
+ *    `// metadata-freeze-spec: r10-1` 마커를 두고 grep 으로 자동 검증 권고 (R8 이월 가능).
  *
  * Phase D 착수 시점까지 freeze 대상 4 필드:
  *  · model_version    — string, 항상
@@ -19,7 +19,7 @@
  *  · bbox_area_ratio  — number, Number.isFinite 통과 시만 (R10 §2: NaN/Infinity → key omit)
  */
 
-// metadata-freeze-spec: r7-1
+// metadata-freeze-spec: r10-1
 import type { BehaviorDetection } from "../../types/behavior";
 
 /**

@@ -222,7 +222,7 @@ export function useBehaviorEventLogger({
         // Phase A: metadata JSONB 적재 (top2 / bbox_area_ratio / model_version)
         // - undefined 키는 명시적으로 제외 (DB JSONB 가 undefined 인식 못함).
         // - model_version 은 항상 채움 (Phase E export/archive 분류 키).
-        // metadata-freeze-spec: r7-1
+        // metadata-freeze-spec: r10-1
         const metadata: Record<string, unknown> = {
           model_version: BEHAVIOR_MODEL_VERSION,
         };
