@@ -1,29 +1,6 @@
-// ============================================================
-// Matcher 팩토리 — 전략 교체 진입점
-// v2/v3/v4 추가 시 case만 추가, v1 코드 수정 불필요
-// ============================================================
-
-import type { CatMatcher } from "./CatMatcher";
-import { HsvColorMatcher } from "./HsvColorMatcher";
-
-export type MatcherStrategy = "hsv_v1" | "hsv_size_v2" | "reid_v4";
-
 /**
- * 전략명으로 매처 인스턴스 생성.
- * @param strategy 기본값 "hsv_v1"
+ * cat-identity Tier 1 PR commit 1 적용 — 본 파일은 src/lib/cat-identity/matchers/index.ts 로 이관됨.
+ * staging/ 보존 정책 (CLAUDE.md "파일 삭제 절대 금지") 에 따라 re-export shim 유지.
+ * 신규 import 는 src/ 경로 권장.
  */
-export function createMatcher(
-  strategy: MatcherStrategy = "hsv_v1",
-): CatMatcher {
-  switch (strategy) {
-    case "hsv_v1":
-      return new HsvColorMatcher();
-    // v2/v3/v4 매처는 추후 추가
-    // case "hsv_size_v2": return new HsvSizeMatcher();
-    // case "reid_v4":    return new ReIdMatcher();
-    default:
-      throw new Error(`Unsupported matcher strategy: ${strategy}`);
-  }
-}
-
-export type { CatMatcher } from "./CatMatcher";
+export * from "../../../../src/lib/cat-identity/matchers";
