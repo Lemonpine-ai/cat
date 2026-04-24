@@ -18,6 +18,9 @@ import { BroadcastLoadingView } from "@/components/broadcast/BroadcastLoadingVie
 import { BroadcastUnpairedView } from "@/components/broadcast/BroadcastUnpairedView";
 import { BroadcastMainView } from "@/components/broadcast/BroadcastMainView";
 import { DebugLogOverlay } from "@/components/broadcast/DebugLogOverlay";
+// Phase B (R12 commit 3): 방송폰 YOLO 추론 mount + flag ON 시에만 렌더.
+import CameraBroadcastYoloMount from "@/components/broadcast/CameraBroadcastYoloMount";
+import { isYoloV2Enabled } from "@/lib/behavior/yoloV2Flag";
 
 /**
  * 남는 폰에서 실행하는 WebRTC 방송 클라이언트 (오케스트레이션 메인).
@@ -28,10 +31,9 @@ import { DebugLogOverlay } from "@/components/broadcast/DebugLogOverlay";
  *      → useThermalThrottle ({ isDimmed, hasMotion })
  *      → 트랙 applyConstraints (HIGH/LOW) + shouldInferYOLO 신호
  *
- * (참고) 방송측에는 현재 YOLO 진입점이 없다. viewer 측 useBehaviorDetection 이
- * 행동 추론을 담당하며, 방송측은 프로파일 전환만 수행한다. 향후 방송측에
- * YOLO 훅을 추가한다면 enabled 를 `isBroadcasting && thermal.shouldInferYOLO`
- * 로 바꿔 걸어야 한다.
+ * (R12 commit 3 이후) Phase B flag ON 시 방송측 YOLO 추론 진입점을 CameraBroadcastYoloMount 로 장착.
+ * flag OFF 시 기존 viewer 측 useBehaviorDetection 경로 그대로 유지 (CLAUDE.md #13 원칙).
+ * 뷰어 측 중복 INSERT 는 CameraSlot.tsx / useBehaviorDetection.ts 게이트로 차단 (2026-04-22 장애 재현 방지).
  *
  * 용어: thermal = 발열/온도. 프로파일은 기기 발열 완화 목적.
  */
@@ -192,6 +194,17 @@ export function CameraBroadcastClient() {
   return (
     <>
       <BroadcastMainView {...mainViewProps} />
+      {/* Phase B (R12 commit 3): flag ON + 방송 중 일 때만 YOLO driver 마운트.
+          UI 없음 (null 반환). homeId + cameraId(=activeSessionId) 모두 truthy 여야 내부 enabled. */}
+      {isYoloV2Enabled() && isBroadcasting && (
+        <CameraBroadcastYoloMount
+          videoRef={localVideoRef}
+          homeId={care.broadcastHomeId}
+          cameraId={signaling.activeSessionId}
+          supabaseClient={supabaseClient}
+          motionActive={hasMotion}
+        />
+      )}
       <DebugLogOverlay />
     </>
   );

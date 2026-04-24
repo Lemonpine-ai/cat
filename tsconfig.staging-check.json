@@ -3,6 +3,7 @@
   "compilerOptions": {
     "noEmit": true
   },
+  "_comment_r12": "R12 commit 3 (2026-04-24): Phase B 대상 14 파일이 src/ 로 이관됨. staging 에는 re-export shim 만 남고 본체는 src/**/*.ts(x) 에서 tsc 검증. 미이관된 staging 파일 (multi-viewer / Phase B tests) 만 명시 포함.",
   "include": [
     "next-env.d.ts",
     "src/**/*.ts",
@@ -16,19 +17,6 @@
     "staging/components/CameraLiveViewerMulti.tsx",
     "staging/components/catvisor/CameraSlotMulti.tsx",
     "staging/components/catvisor/MultiCameraGridMulti.tsx",
-    "staging/hooks/useBehaviorInferenceScheduler.ts",
-    "staging/hooks/useBroadcasterYoloDriver.ts",
-    "staging/hooks/useYoloWorkerLifecycle.ts",
-    "staging/hooks/useYoloLatencyTracker.ts",
-    "staging/hooks/useDriverHealth.ts",
-    "staging/hooks/useYoloSampling.ts",
-    "staging/lib/behavior/buildBehaviorEventMetadata.ts",
-    "staging/lib/behavior/confirmFrames.ts",
-    "staging/lib/behavior/maxDurationGuard.ts",
-    "staging/lib/behavior/yoloV2Flag.ts",
-    "staging/lib/behavior/yoloRetryPolicy.ts",
-    "staging/lib/behavior/loggerArmGuard.ts",
-    "staging/components/CameraBroadcastYoloMount.tsx",
     "staging/tests/confirmFrames.test.ts",
     "staging/tests/maxDurationGuard.test.ts",
     "staging/tests/inferenceScheduler.parity.test.ts",
@@ -39,8 +27,7 @@
     "staging/tests/metadataFreeze.test.ts",
     "staging/tests/metadataFreezeMirror.test.ts",
     "staging/tests/yoloLatencyTracker.test.ts",
-    "staging/tests/helpers/workerStubs.ts",
-    "staging/components/YoloDriverDiagBadge.tsx"
+    "staging/tests/helpers/workerStubs.ts"
   ],
   "exclude": ["node_modules", "tests"]
 }

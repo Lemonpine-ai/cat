@@ -12,6 +12,10 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import type { BehaviorDetection } from "@/types/behavior";
 import type { WorkerInMessage, WorkerOutMessage } from "@/types/behavior";
+// Phase B (R12 commit 3) 뷰어 게이트: flag ON 시 onBehaviorChange 발화를 차단.
+// - 방송폰이 Phase B driver 로 INSERT 를 독점 → 뷰어 측 중복 INSERT 차단.
+// - 2026-04-22 장애: 방송 1 + 뷰어 4 = 5 INSERT/전환 → Supabase Nano pool(15) 즉시 고갈.
+import { isYoloV2Enabled } from "@/lib/behavior/yoloV2Flag";
 
 const MODEL_URL = "/models/cat_behavior_yolov8n.onnx";
 const INFER_INTERVAL_MS = 500; // 2 FPS
@@ -94,7 +98,10 @@ export function useBehaviorDetection({
         // 전환 시점만 콜백 발화 (같은 행동 유지 중에는 미발화)
         if (key !== lastEmittedKeyRef.current) {
           lastEmittedKeyRef.current = key;
-          onBehaviorChangeRef.current?.(confirmed);
+          // Phase B 뷰어 게이트: flag ON 시 콜백 발화 차단 → 뷰어 INSERT 경로 차단.
+          if (!isYoloV2Enabled()) {
+            onBehaviorChangeRef.current?.(confirmed);
+          }
         }
       }
       return;
@@ -229,7 +236,10 @@ export function useBehaviorDetection({
         setCurrentBehavior(null);
         if (lastEmittedKeyRef.current !== "__none__") {
           lastEmittedKeyRef.current = "__none__";
-          onBehaviorChangeRef.current?.(null);
+          // Phase B 뷰어 게이트: flag ON 시 visibility 복귀 시 null 발화도 차단.
+          if (!isYoloV2Enabled()) {
+            onBehaviorChangeRef.current?.(null);
+          }
         }
         startInterval();
       }

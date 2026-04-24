@@ -20,6 +20,9 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 // Phase A: staging/types/behavior.ts 의 확장 타입 (top2/bboxAreaRatio 옵셔널) 사용.
 // (staging/hooks → staging/types)
 import type { BehaviorDetection } from "../types/behavior";
+// Phase B R7-S (R12 commit 3): metadata 조립 로직을 순수 함수로 추출.
+// - 동치 검증: staging/tests/metadataFreezeMirror.test.ts (양쪽 마커 r10-1 일치).
+import { buildBehaviorEventMetadata } from "../lib/behavior/buildBehaviorEventMetadata";
 
 /**
  * Phase A: 모델 버전 상수 — metadata.model_version 기록.
@@ -219,24 +222,15 @@ export function useBehaviorEventLogger({
         }
         const userId = userIdRef.current;
         if (!userId) return null;
-        // Phase A + R10 §2: metadata JSONB 적재 (top2 / bbox_area_ratio / model_version)
-        // - undefined 키는 명시적으로 제외 (DB JSONB 가 undefined 인식 못함).
-        // - model_version 은 항상 채움 (Phase E export/archive 분류 키).
-        // - top2_confidence / bbox_area_ratio: Number.isFinite 통과 시만 (R10 §2: NaN/Infinity → key omit).
-        //   JSONB INSERT 안전 + Phase D/E 통계 의미 명확 ("측정 불가" 자연 분류).
+        // Phase A + R10 §2 + R7-S (R12 commit 3): metadata JSONB 조립을 순수 함수로 위임.
+        // - buildBehaviorEventMetadata: staging mirror (R7 §4) 본체를 src/ 로 통합.
+        // - model_version 항상, top2_class는 undefined 체크, top2_confidence/bbox_area_ratio 는
+        //   Number.isFinite 통과 시만 키 포함 (NaN/Infinity → key omit, JSONB INSERT 안전).
         // metadata-freeze-spec: r10-1
-        const metadata: Record<string, unknown> = {
-          model_version: BEHAVIOR_MODEL_VERSION,
-        };
-        if (detection.top2Class !== undefined) {
-          metadata.top2_class = detection.top2Class;
-        }
-        if (Number.isFinite(detection.top2Confidence)) {
-          metadata.top2_confidence = detection.top2Confidence;
-        }
-        if (Number.isFinite(detection.bboxAreaRatio)) {
-          metadata.bbox_area_ratio = detection.bboxAreaRatio;
-        }
+        const metadata = buildBehaviorEventMetadata(
+          detection,
+          BEHAVIOR_MODEL_VERSION,
+        );
 
         // INSERT payload — 실패 시 localStorage 큐에 저장할 동일 객체.
         const insertPayload = {
