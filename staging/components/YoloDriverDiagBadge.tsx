@@ -1,0 +1,7 @@
+/**
+ * R12 PR commit 3 적용 — 본 파일은 src/components/broadcast/YoloDriverDiagBadge.tsx 로 이관됨.
+ * staging/ 보존 정책 (CLAUDE.md "파일 삭제 절대 금지") 에 따라 re-export shim 유지.
+ * 신규 import 는 src/ 경로 권장.
+ */
+export { default } from "../../src/components/broadcast/YoloDriverDiagBadge";
+export * from "../../src/components/broadcast/YoloDriverDiagBadge";

@@ -15,6 +15,8 @@ import { useZoneDetection } from "@/hooks/useZoneDetection";
 import { useGlobalMotion } from "@/hooks/useGlobalMotion";
 import { useBehaviorDetection } from "@/hooks/useBehaviorDetection";
 import { useBehaviorEventLogger } from "@/hooks/useBehaviorEventLogger";
+// Phase B (R12 commit 3): flag ON 시 뷰어 logger 경로 차단 (INSERT 중복 방지).
+import { isYoloV2Enabled } from "@/lib/behavior/yoloV2Flag";
 import { ZoneDisplayOverlay } from "@/components/zone/ZoneDisplayOverlay";
 import { BehaviorOverlay } from "@/components/catvisor/BehaviorOverlay";
 import type { SlotPhase } from "@/hooks/useWebRtcSlotConnection";
@@ -92,9 +94,11 @@ export function CameraSlot({
     enabled: phase === "connected",
   });
 
-  /* 행동 이벤트 DB 로거 — 전환 시점만 INSERT/UPDATE (fire-and-forget) */
+  /* 행동 이벤트 DB 로거 — 전환 시점만 INSERT/UPDATE (fire-and-forget).
+   * Phase B (R12 commit 3): flag ON 시 homeId=null 로 강제 → logger 내부 early return → INSERT 0.
+   * 방송폰 CameraBroadcastYoloMount 가 단독 INSERT 담당 (2026-04-22 장애 재발 방지). */
   useBehaviorEventLogger({
-    homeId,
+    homeId: isYoloV2Enabled() ? null : homeId,
     cameraId,
     currentBehavior,
     supabaseClient: supabase,

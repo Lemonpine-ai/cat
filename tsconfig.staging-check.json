@@ -1,0 +1,33 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true
+  },
+  "_comment_r12": "R12 commit 3 (2026-04-24): Phase B 대상 14 파일이 src/ 로 이관됨. staging 에는 re-export shim 만 남고 본체는 src/**/*.ts(x) 에서 tsc 검증. 미이관된 staging 파일 (multi-viewer / Phase B tests) 만 명시 포함.",
+  "include": [
+    "next-env.d.ts",
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "staging/hooks/useViewerPeerConnectionMulti.ts",
+    "staging/hooks/useWebRtcLiveConnectionMulti.ts",
+    "staging/hooks/useWebRtcSlotConnectionMulti.ts",
+    "staging/hooks/viewerPeerConnectionFlow.ts",
+    "staging/hooks/viewerPeerConnectionHelpers.ts",
+    "staging/lib/featureFlags.ts",
+    "staging/components/CameraLiveViewerMulti.tsx",
+    "staging/components/catvisor/CameraSlotMulti.tsx",
+    "staging/components/catvisor/MultiCameraGridMulti.tsx",
+    "staging/tests/confirmFrames.test.ts",
+    "staging/tests/maxDurationGuard.test.ts",
+    "staging/tests/inferenceScheduler.parity.test.ts",
+    "staging/tests/broadcasterYoloDriver.test.ts",
+    "staging/tests/yoloWorkerLifecycle.test.ts",
+    "staging/tests/yoloSampling.test.ts",
+    "staging/tests/broadcasterYoloDriver.renderHook.test.ts",
+    "staging/tests/metadataFreeze.test.ts",
+    "staging/tests/metadataFreezeMirror.test.ts",
+    "staging/tests/yoloLatencyTracker.test.ts",
+    "staging/tests/helpers/workerStubs.ts"
+  ],
+  "exclude": ["node_modules", "tests"]
+}
