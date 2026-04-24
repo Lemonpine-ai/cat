@@ -219,9 +219,11 @@ export function useBehaviorEventLogger({
         }
         const userId = userIdRef.current;
         if (!userId) return null;
-        // Phase A: metadata JSONB 적재 (top2 / bbox_area_ratio / model_version)
+        // Phase A + R10 §2: metadata JSONB 적재 (top2 / bbox_area_ratio / model_version)
         // - undefined 키는 명시적으로 제외 (DB JSONB 가 undefined 인식 못함).
         // - model_version 은 항상 채움 (Phase E export/archive 분류 키).
+        // - top2_confidence / bbox_area_ratio: Number.isFinite 통과 시만 (R10 §2: NaN/Infinity → key omit).
+        //   JSONB INSERT 안전 + Phase D/E 통계 의미 명확 ("측정 불가" 자연 분류).
         // metadata-freeze-spec: r10-1
         const metadata: Record<string, unknown> = {
           model_version: BEHAVIOR_MODEL_VERSION,
@@ -229,10 +231,10 @@ export function useBehaviorEventLogger({
         if (detection.top2Class !== undefined) {
           metadata.top2_class = detection.top2Class;
         }
-        if (typeof detection.top2Confidence === "number") {
+        if (Number.isFinite(detection.top2Confidence)) {
           metadata.top2_confidence = detection.top2Confidence;
         }
-        if (typeof detection.bboxAreaRatio === "number") {
+        if (Number.isFinite(detection.bboxAreaRatio)) {
           metadata.bbox_area_ratio = detection.bboxAreaRatio;
         }
 
