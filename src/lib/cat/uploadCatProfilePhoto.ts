@@ -1,0 +1,100 @@
+/**
+ * cat-identity Tier 1 — 고양이 프로필 사진 Supabase Storage 업로드.
+ *
+ * 경로 규칙: cat-moments/{home_id}/profiles/{cat_id}_{timestamp}.{ext}
+ * - profiles/ 서브폴더로 일반 snapshot (cat_logs) 과 분리.
+ * - upsert: false — timestamp 로 충돌 없음, 덮어쓰기 방지.
+ * - cacheControl: "3600" — 1시간 CDN 캐시.
+ */
+
+"use client";
+
+import type { SupabaseClient } from "@supabase/supabase-js";
+
+/** 허용 MIME 타입 (호출자 가드 외 2차 방어). */
+const ALLOWED_MIME = [
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/heic",
+  "image/heif",
+];
+
+/** 파일명 안전 문자만 허용 (영숫자/하이픈/언더스코어). 나머지는 _ 로 치환. */
+function sanitizeForPath(name: string): string {
+  return name.replace(/[^a-zA-Z0-9_.-]/g, "_").slice(0, 50);
+}
+
+/** MIME → 확장자 매핑 (없으면 jpg 기본). */
+function extFromMime(mime: string): string {
+  if (mime === "image/jpeg") return "jpg";
+  if (mime === "image/png") return "png";
+  if (mime === "image/webp") return "webp";
+  if (mime === "image/heic" || mime === "image/heif") return "heic";
+  return "jpg";
+}
+
+export type UploadResult =
+  | { kind: "ok"; publicUrl: string; path: string }
+  | { kind: "error"; code: "INVALID_MIME" | "UPLOAD_FAILED" | "NO_PUBLIC_URL"; message: string };
+
+/**
+ * 프로필 사진 업로드 + publicUrl 반환.
+ * - 호출자: useCatRegistration (INSERT 후 사진 업로드 단계)
+ * - 실패 시 업로드 안 된 상태로 error 반환 — catId 는 이미 INSERT 됐으므로
+ *   호출자는 "등록은 됐지만 사진은 저장 안 됐어요" 안내만 필요.
+ */
+export async function uploadCatProfilePhoto(args: {
+  supabase: SupabaseClient;
+  homeId: string;
+  catId: string;
+  file: File;
+}): Promise<UploadResult> {
+  const { supabase, homeId, catId, file } = args;
+
+  // 1) MIME 2차 가드
+  if (!ALLOWED_MIME.includes(file.type)) {
+    return {
+      kind: "error",
+      code: "INVALID_MIME",
+      message: `지원하지 않는 파일 형식이에요 (${file.type}). JPG/PNG/WebP/HEIC 만 가능.`,
+    };
+  }
+
+  // 2) Storage 경로 생성
+  const timestamp = Date.now();
+  const ext = extFromMime(file.type);
+  const safeId = sanitizeForPath(catId);
+  const path = `${homeId}/profiles/${safeId}_${timestamp}.${ext}`;
+
+  // 3) 업로드
+  const { error: uploadError } = await supabase.storage
+    .from("cat-moments")
+    .upload(path, file, {
+      cacheControl: "3600",
+      upsert: false,
+      contentType: file.type,
+    });
+  if (uploadError) {
+    return {
+      kind: "error",
+      code: "UPLOAD_FAILED",
+      message: `사진 업로드에 실패했어요. (${uploadError.message})`,
+    };
+  }
+
+  // 4) publicUrl 조회
+  const { data: urlData } = supabase.storage
+    .from("cat-moments")
+    .getPublicUrl(path);
+  const publicUrl = urlData?.publicUrl;
+  if (!publicUrl) {
+    return {
+      kind: "error",
+      code: "NO_PUBLIC_URL",
+      message: "사진 업로드는 성공했지만 URL을 받지 못했어요.",
+    };
+  }
+
+  return { kind: "ok", publicUrl, path };
+}

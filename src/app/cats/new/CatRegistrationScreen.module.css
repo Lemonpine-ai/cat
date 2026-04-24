@@ -1,0 +1,283 @@
+/* cat-identity Tier 1 — 등록 화면 스타일.
+ * OnboardingClient.module.css 톤 재사용 (pastel mint, rounded 12).
+ * 모바일 우선 레이아웃 — 폭 100% / max-width 480px 중앙 정렬. */
+
+.root {
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 24px 16px 96px;
+  min-height: 100vh;
+  background: #f0fdfa;
+  color: #0f172a;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.header {
+  text-align: center;
+  margin-bottom: 8px;
+}
+
+.title {
+  font-size: 22px;
+  font-weight: 700;
+  color: #0f766e;
+  margin: 0 0 6px;
+}
+
+.subtitle {
+  font-size: 13px;
+  color: #475569;
+  margin: 0;
+}
+
+/* ── 섹션 박스 ── */
+.section {
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 20px 16px;
+  box-shadow: 0 2px 8px rgba(15, 118, 110, 0.06);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.sectionTitle {
+  font-size: 15px;
+  font-weight: 600;
+  color: #0f766e;
+  margin: 0;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #ccfbf1;
+}
+
+.sectionHelp {
+  font-size: 12px;
+  color: #64748b;
+  margin: -8px 0 0;
+  line-height: 1.5;
+}
+
+/* ── 필드 ── */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #334155;
+}
+
+.required {
+  color: #dc2626;
+  margin-left: 2px;
+}
+
+.input,
+.textarea {
+  width: 100%;
+  padding: 10px 14px;
+  font-size: 14px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #0f172a;
+  outline: none;
+  transition: border-color 0.15s;
+  font-family: inherit;
+}
+
+.input:focus,
+.textarea:focus {
+  border-color: #34d399;
+}
+
+.textarea {
+  resize: vertical;
+  min-height: 60px;
+  line-height: 1.5;
+}
+
+/* ── 라디오 그룹 ── */
+.radioGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.radioLabel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: #334155;
+  padding: 6px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.radioLabel:hover {
+  background: #f0fdfa;
+}
+
+.radioLabel input[type="radio"] {
+  accent-color: #34d399;
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+/* ── 사진 선택 ── */
+.photoPicker {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.photoLabel {
+  font-size: 13px;
+  font-weight: 500;
+  color: #334155;
+}
+
+.photoInput {
+  display: none;
+}
+
+.photoPlaceholder {
+  width: 100%;
+  padding: 32px 16px;
+  background: #f0fdfa;
+  border: 2px dashed #5eead4;
+  border-radius: 12px;
+  font-size: 14px;
+  color: #0f766e;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.photoPlaceholder:hover {
+  background: #ccfbf1;
+}
+
+.photoPlaceholderHint {
+  font-size: 11px;
+  color: #64748b;
+}
+
+.photoPreviewWrap {
+  position: relative;
+  width: 100%;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #e2e8f0;
+}
+
+.photoPreview {
+  width: 100%;
+  height: auto;
+  max-height: 240px;
+  object-fit: cover;
+  display: block;
+}
+
+.photoRemoveBtn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: rgba(15, 23, 42, 0.75);
+  color: #ffffff;
+  border: none;
+  padding: 6px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+/* ── 옵션 아코디언 토글 ── */
+.optionalToggle {
+  background: #ffffff;
+  border: 1.5px dashed #5eead4;
+  color: #0f766e;
+  padding: 12px 16px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s;
+}
+
+.optionalToggle:hover {
+  background: #ccfbf1;
+}
+
+/* ── 에러 ── */
+.fieldError {
+  font-size: 12px;
+  color: #dc2626;
+  margin-top: 2px;
+}
+
+.errorBanner {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #991b1b;
+  padding: 12px 14px;
+  border-radius: 10px;
+  font-size: 13px;
+}
+
+/* ── 하단 버튼 영역 ── */
+.footer {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.btnSecondary,
+.btnPrimary {
+  flex: 1;
+  padding: 14px 16px;
+  border-radius: 12px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, opacity 0.15s;
+  border: none;
+  font-family: inherit;
+}
+
+.btnSecondary {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.btnSecondary:hover:not(:disabled) {
+  background: #e2e8f0;
+}
+
+.btnPrimary {
+  background: linear-gradient(135deg, #34d399, #14b8a6);
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(20, 184, 166, 0.25);
+}
+
+.btnPrimary:hover:not(:disabled) {
+  filter: brightness(1.05);
+}
+
+.btnSecondary:disabled,
+.btnPrimary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
