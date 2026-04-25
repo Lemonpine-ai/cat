@@ -58,6 +58,31 @@ function lengthError(
 }
 
 /**
+ * 숫자 범위 검증 헬퍼 (fix R2 R3-1 단순화).
+ *  - 의도: 체중 같은 옵션 숫자 입력값을 한 줄로 검증해 분기 흐름을 단순화.
+ *  - parseFloat 결과가 NaN/Infinity → "숫자 아님" 에러 메시지 (NUMBER_NOT_VALID 와 분리되지 않음 — 호출자 메시지 책임).
+ *  - 범위 외 → 동일 message 반환 (위/아래 구분은 UI 가 알릴 필요 없음).
+ *  - 빈 문자열은 호출자 책임 (옵션이면 통과).
+ */
+function numberRangeError(
+  field: CatDraftField,
+  value: string,
+  min: number,
+  max: number,
+  rangeMessage: string,
+  notNumberMessage: string,
+): ValidationError | null {
+  const n = parseFloat(value);
+  if (!Number.isFinite(n)) {
+    return { field, message: notNumberMessage };
+  }
+  if (n < min || n > max) {
+    return { field, message: rangeMessage };
+  }
+  return null;
+}
+
+/**
  * CatDraft → 에러 배열. 빈 배열 = 유효.
  * - 필수 4: name / breed / birthDate / sex
  * - 사진: 선택 (null 허용 — 에러 아님)
@@ -98,18 +123,18 @@ export function validateCatDraft(draft: CatDraft): ValidationError[] {
 
   // 4) 성별 — 3상태 라디오, "unknown" 기본값이라 항상 유효 (에러 없음)
 
-  // 5) 체중 (옵션) — 입력됐을 때만 범위 체크
+  // 5) 체중 (옵션) — 입력됐을 때만 범위 체크 (R3-1 fix: numberRangeError 헬퍼 사용)
   const weightTrimmed = draft.weightKg.trim();
   if (weightTrimmed) {
-    const w = parseFloat(weightTrimmed);
-    if (!Number.isFinite(w)) {
-      errors.push({ field: "weightKg", message: CAT_MESSAGES.weightNotNumber });
-    } else if (w < WEIGHT_MIN || w > WEIGHT_MAX) {
-      errors.push({
-        field: "weightKg",
-        message: CAT_MESSAGES.weightOutOfRange,
-      });
-    }
+    const e = numberRangeError(
+      "weightKg",
+      weightTrimmed,
+      WEIGHT_MIN,
+      WEIGHT_MAX,
+      CAT_MESSAGES.weightOutOfRange,
+      CAT_MESSAGES.weightNotNumber,
+    );
+    if (e) errors.push(e);
   }
 
   return errors;

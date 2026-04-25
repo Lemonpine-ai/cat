@@ -99,6 +99,9 @@ function isTimeoutError(err: { code?: string; message?: string } | null | undefi
 
 const TIMEOUT_MESSAGE = CAT_MESSAGES.timeout;
 
+/* RegistrationResult.error.code 타입 별칭 (R3-2 헬퍼에서 재사용). */
+type ErrorCode = Exclude<RegistrationResult, { kind: "ok" }>["code"];
+
 export function useCatRegistration(
   args: UseCatRegistrationArgs,
 ): UseCatRegistrationResult {
@@ -115,9 +118,30 @@ export function useCatRegistration(
   const state = status.kind;
   const errorMessage = status.kind === "error" ? status.message : null;
 
-  const reset = useCallback(() => {
-    setStatus({ kind: "idle" });
+  /**
+   * R3-2 fix — Status 전환 헬퍼.
+   *  - transitionTo: 단순 상태 전환 (idle/submitting/success). setStatus 직접 호출보다 의도가 분명.
+   *  - failWith: 에러 상태 + RegistrationResult.error 객체 동시 생성. 분기마다 set+return 두 줄을 한 줄로.
+   * 효과: setStatus 호출 12회 → 4회 이하 (각 result 패턴이 헬퍼 안에서 처리).
+   */
+  const transitionTo = useCallback((next: RegistrationStatus) => {
+    setStatus(next);
   }, []);
+
+  const failWith = useCallback(
+    (
+      code: ErrorCode,
+      message: string,
+    ): Extract<RegistrationResult, { kind: "error" }> => {
+      setStatus({ kind: "error", message });
+      return { kind: "error", code, message };
+    },
+    [],
+  );
+
+  const reset = useCallback(() => {
+    transitionTo({ kind: "idle" });
+  }, [transitionTo]);
 
   const submit = useCallback(
     async (draft: CatDraft): Promise<RegistrationResult> => {
@@ -125,11 +149,10 @@ export function useCatRegistration(
       const errors = validateCatDraft(draft);
       if (errors.length > 0) {
         const msg = errors[0]?.message ?? "입력값을 확인해 주세요";
-        setStatus({ kind: "error", message: msg });
-        return { kind: "error", code: "VALIDATION", message: msg };
+        return failWith("VALIDATION", msg);
       }
 
-      setStatus({ kind: "submitting" });
+      transitionTo({ kind: "submitting" });
 
       /* 2) cats INSERT (photo_url=null) — Orphan 방지 위해 사진 전 먼저 INSERT */
       const insertPayload = catDraftToInsertPayload(draft, homeId, null);
@@ -154,7 +177,7 @@ export function useCatRegistration(
           if (existing?.id) {
             // 본인 home 의 동명 row — 사실상 등록 완료. 사진 업로드는 안 함 (일관성).
             // success 는 message 미동봉 — UI 는 별도 안내 (router.replace 직후 토스트).
-            setStatus({ kind: "success" });
+            transitionTo({ kind: "success" });
             return {
               kind: "ok",
               catId: existing.id as string,
@@ -162,29 +185,25 @@ export function useCatRegistration(
             };
           }
           // 그 외 — 정말 중복.
-          const message = CAT_MESSAGES.duplicateName;
-          setStatus({ kind: "error", message });
-          return { kind: "error", code: "DUPLICATE_NAME", message };
+          return failWith("DUPLICATE_NAME", CAT_MESSAGES.duplicateName);
         }
 
         // 2) 네트워크/DB timeout
         if (isTimeoutError(insertError)) {
-          setStatus({ kind: "error", message: TIMEOUT_MESSAGE });
-          return { kind: "error", code: "TIMEOUT", message: TIMEOUT_MESSAGE };
+          return failWith("TIMEOUT", TIMEOUT_MESSAGE);
         }
 
         // 3) 그 외 INSERT 실패
         logger.error("useCatRegistration.insert", insertError, { homeId });
         const message = `등록에 실패했어요. ${insertError?.message ?? ""}`.trim();
-        setStatus({ kind: "error", message });
-        return { kind: "error", code: "INSERT_FAILED", message };
+        return failWith("INSERT_FAILED", message);
       }
 
       const catId = insertData.id as string;
 
       /* 3) 사진 없으면 바로 성공 반환 */
       if (!draft.photoFile) {
-        setStatus({ kind: "success" });
+        transitionTo({ kind: "success" });
         return { kind: "ok", catId, photoUploaded: false };
       }
 
@@ -207,12 +226,7 @@ export function useCatRegistration(
          * fix R1 #3: 사용자가 정확히 인지하도록 error 상태로 (이전엔 success 였음).
          * UI 측에서 "사진은 못 올렸지만 등록은 됐어요" 안내 + 재업로드 옵션. */
         logger.warn("useCatRegistration.upload", uploadResult.message, { catId });
-        setStatus({ kind: "error", message: uploadResult.message });
-        return {
-          kind: "error",
-          code: "UPLOAD_FAILED",
-          message: uploadResult.message,
-        };
+        return failWith("UPLOAD_FAILED", uploadResult.message);
       }
 
       /* 6) UPDATE cats — photo_front_url + color_profile */
@@ -232,18 +246,13 @@ export function useCatRegistration(
          * fix R1 #3: 사용자에게 정확히 안내 (error 상태). */
         logger.error("useCatRegistration.update", updateError, { catId });
         const message = `사진은 올렸지만 프로필에 반영하지 못했어요. (${updateError.message})`;
-        setStatus({ kind: "error", message });
-        return {
-          kind: "error",
-          code: "UPLOAD_FAILED",
-          message,
-        };
+        return failWith("UPLOAD_FAILED", message);
       }
 
-      setStatus({ kind: "success" });
+      transitionTo({ kind: "success" });
       return { kind: "ok", catId, photoUploaded: true };
     },
-    [homeId, supabase],
+    [homeId, supabase, transitionTo, failWith],
   );
 
   return { state, errorMessage, submit, reset };
