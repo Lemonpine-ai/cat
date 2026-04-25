@@ -13,7 +13,7 @@
 
 "use client";
 
-import { memo, useCallback } from "react";
+import { memo, useCallback, type Dispatch, type SetStateAction } from "react";
 import type { CatDraft, CatNeuteredStatus } from "@/types/cat";
 import {
   getFieldError,
@@ -21,9 +21,10 @@ import {
 } from "@/lib/cat/validateCatDraft";
 import styles from "./CatRegistrationScreen.module.css";
 
+/* fix R3 R5-E3 — 부모 setDraft 와 호환되는 시그니처. */
 export type CatHealthFieldsProps = {
   draft: CatDraft;
-  onChange: (next: CatDraft) => void;
+  onChange: Dispatch<SetStateAction<CatDraft>>;
   errors: ValidationError[];
 };
 

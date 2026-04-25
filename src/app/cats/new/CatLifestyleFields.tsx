@@ -8,16 +8,17 @@
 
 "use client";
 
-import { memo, useCallback } from "react";
+import { memo, useCallback, type Dispatch, type SetStateAction } from "react";
 import type { CatDraft } from "@/types/cat";
 import type { ValidationError } from "@/lib/cat/validateCatDraft";
 import { LITTER_TYPES_KO } from "@/lib/cat/litterTypes";
 import { CAT_FOODS_KO } from "@/lib/cat/foodList";
 import styles from "./CatRegistrationScreen.module.css";
 
+/* fix R3 R5-E3 — 부모 setDraft 와 호환되는 시그니처. */
 export type CatLifestyleFieldsProps = {
   draft: CatDraft;
-  onChange: (next: CatDraft) => void;
+  onChange: Dispatch<SetStateAction<CatDraft>>;
   /** 향후 lifestyle 관련 validation 추가 시 사용 (현재는 미사용 — props 시그니처 통일). */
   errors: ValidationError[];
 };

@@ -66,6 +66,8 @@ export type RegistrationResult =
         | "TIMEOUT"        // 네트워크 timeout — fix R1 #3 (PostgREST PGRST301 / message timeout)
         | "UNKNOWN";
       message: string;
+      /* fix R3 R5-E1 — UPLOAD_FAILED 시 catId 회수 (호출자가 사진 재업로드 옵션 제공 가능). */
+      catId?: string;
     };
 
 export type UseCatRegistrationArgs = {
@@ -132,9 +134,11 @@ export function useCatRegistration(
     (
       code: ErrorCode,
       message: string,
+      extra?: { catId?: string },
     ): Extract<RegistrationResult, { kind: "error" }> => {
       setStatus({ kind: "error", message });
-      return { kind: "error", code, message };
+      /* fix R3 R5-E1 — UPLOAD_FAILED 처럼 catId 회수가 필요한 경우 extra.catId 동봉. */
+      return { kind: "error", code, message, ...(extra?.catId ? { catId: extra.catId } : {}) };
     },
     [],
   );
@@ -167,13 +171,22 @@ export function useCatRegistration(
         //    같은 home + name 으로 이미 등록된 row 가 있으면 본인 등록 → success 처리.
         //    없으면 (= 다른 home 에서 등록한 경우?) DUPLICATE_NAME 안내.
         if (insertError?.code === PG_UNIQUE_VIOLATION) {
-          const { data: existing } = await supabase
+          const { data: existing, error: lookupError } = await supabase
             .from("cats")
             .select("id")
             .eq("home_id", homeId)
             .eq("name", draft.name.trim())
             .limit(1)
             .maybeSingle();
+          /* fix R3 R5-E2 — 23505 recheck SELECT 자체가 실패할 수 있음 (timeout / RLS 등).
+           * 이전엔 lookupError 무시 → existing=null 로 떨어져 잘못된 DUPLICATE_NAME 반환 가능. */
+          if (lookupError) {
+            if (isTimeoutError(lookupError)) return failWith("TIMEOUT", CAT_MESSAGES.timeout);
+            return failWith(
+              "INSERT_FAILED",
+              `${CAT_MESSAGES.insertFailedPrefix}${lookupError.message}`,
+            );
+          }
           if (existing?.id) {
             // 본인 home 의 동명 row — 사실상 등록 완료. 사진 업로드는 안 함 (일관성).
             // success 는 message 미동봉 — UI 는 별도 안내 (router.replace 직후 토스트).
@@ -224,9 +237,9 @@ export function useCatRegistration(
       if (uploadResult.kind === "error") {
         /* 업로드 실패 — cats row 는 이미 INSERT 됐으나 사진 미반영.
          * fix R1 #3: 사용자가 정확히 인지하도록 error 상태로 (이전엔 success 였음).
-         * UI 측에서 "사진은 못 올렸지만 등록은 됐어요" 안내 + 재업로드 옵션. */
+         * fix R3 R5-E1: catId 회수 → 호출자가 사진 재업로드 옵션 제공 가능. */
         logger.warn("useCatRegistration.upload", uploadResult.message, { catId });
-        return failWith("UPLOAD_FAILED", uploadResult.message);
+        return failWith("UPLOAD_FAILED", uploadResult.message, { catId });
       }
 
       /* 6) UPDATE cats — photo_front_url + color_profile */
@@ -243,10 +256,11 @@ export function useCatRegistration(
 
       if (updateError) {
         /* UPDATE 실패 — Storage 에는 올라갔으나 cats row 에 photo_front_url 미반영.
-         * fix R1 #3: 사용자에게 정확히 안내 (error 상태). */
+         * fix R1 #3: 사용자에게 정확히 안내 (error 상태).
+         * fix R3 R5-E1: catId 회수 → 호출자가 재시도 옵션 제공 가능. */
         logger.error("useCatRegistration.update", updateError, { catId });
         const message = `${CAT_MESSAGES.photoUpdateFailedPrefix} (${updateError.message})`;
-        return failWith("UPLOAD_FAILED", message);
+        return failWith("UPLOAD_FAILED", message, { catId });
       }
 
       transitionTo({ kind: "success" });

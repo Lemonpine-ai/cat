@@ -13,7 +13,7 @@
 
 "use client";
 
-import { memo, useCallback } from "react";
+import { memo, useCallback, type Dispatch, type SetStateAction } from "react";
 import type { CatDraft, CatSex } from "@/types/cat";
 import {
   getFieldError,
@@ -24,9 +24,11 @@ import { NAME_MAX, BREED_MAX } from "@/lib/cat/constants";
 import { CatPhotoPicker } from "./CatPhotoPicker";
 import styles from "./CatRegistrationScreen.module.css";
 
+/* fix R3 R5-E3 — onChange 시그니처를 React.Dispatch<SetStateAction<CatDraft>> 로 확장.
+ * 함수형 updater 를 받아 update 의 deps 에서 draft 를 제거 → React.memo 효과 회복. */
 export type CatProfileFormProps = {
   draft: CatDraft;
-  onChange: (next: CatDraft) => void;
+  onChange: Dispatch<SetStateAction<CatDraft>>;
   errors: ValidationError[];
 };
 
@@ -42,16 +44,18 @@ function CatProfileFormImpl({ draft, onChange, errors }: CatProfileFormProps) {
   const breedError = getFieldError(errors, "breed");
   const birthError = getFieldError(errors, "birthDate");
 
-  /* fix R1 #2 — useCallback 으로 자식 input onChange 핸들러 안정화. */
+  /* fix R3 R5-E3 — 함수형 setter 패턴.
+   * 이전엔 deps 가 [draft, onChange] 라 draft 가 바뀔 때마다 update 가 재생성 → 자식 React.memo 깨짐.
+   * 이제 prev 기반 onChange((p) => ...) 로 update 의 deps 에서 draft 제거 → 최초 1회 생성. */
   const update = useCallback(
     <K extends keyof CatDraft>(key: K, value: CatDraft[K]) => {
-      onChange({ ...draft, [key]: value });
+      onChange((prev) => ({ ...prev, [key]: value }));
     },
-    [draft, onChange],
+    [onChange],
   );
 
   /* fix R2 R6-1 — CatPhotoPicker (React.memo) 가 매 렌더 onChange ref 변동으로 깨지지 않도록
-   * useCallback 으로 안정화. update 자체가 [draft, onChange] 의존이라 두 값 모두 안정해야 효과 최대. */
+   * useCallback 으로 안정화. fix R3 R5-E3 효과로 update 도 안정 → handlePhotoChange 도 1회만 생성. */
   const handlePhotoChange = useCallback(
     (file: File | null) => {
       update("photoFile", file);

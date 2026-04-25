@@ -10,16 +10,18 @@
 
 "use client";
 
-import { memo } from "react";
+import { memo, type Dispatch, type SetStateAction } from "react";
 import type { CatDraft } from "@/types/cat";
 import type { ValidationError } from "@/lib/cat/validateCatDraft";
 import { CatHealthFields } from "./CatHealthFields";
 import { CatLifestyleFields } from "./CatLifestyleFields";
 import styles from "./CatRegistrationScreen.module.css";
 
+/* fix R3 R5-E3 — onChange 를 setDraft (Dispatch<SetStateAction<CatDraft>>) 와 호환되게 확장.
+ * 자식 자체는 값 형태로만 호출 — 양쪽 모두 정상 작동. */
 export type CatOptionalFieldsProps = {
   draft: CatDraft;
-  onChange: (next: CatDraft) => void;
+  onChange: Dispatch<SetStateAction<CatDraft>>;
   errors: ValidationError[];
 };
 
