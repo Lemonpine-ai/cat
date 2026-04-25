@@ -119,24 +119,47 @@ export function useCatRegistration(
         .single();
 
       if (insertError || !insertData) {
-        // 1) 이름 중복 (UNIQUE 위반)
-        // 2) 네트워크/DB timeout
-        // 3) 그 외 INSERT 실패
-        let code: "DUPLICATE_NAME" | "INSERT_FAILED" | "TIMEOUT";
-        let message: string;
+        // 1) UNIQUE 위반 — 본인 row 가 이미 있는지 (race / 새로고침) 한 번 더 확인.
+        //    같은 home + name 으로 이미 등록된 row 가 있으면 본인 등록 → success 처리.
+        //    없으면 (= 다른 home 에서 등록한 경우?) DUPLICATE_NAME 안내.
         if (insertError?.code === PG_UNIQUE_VIOLATION) {
-          code = "DUPLICATE_NAME";
-          message = "이미 같은 이름의 고양이가 등록되어 있어요";
-        } else if (isTimeoutError(insertError)) {
-          code = "TIMEOUT";
-          message = TIMEOUT_MESSAGE;
-        } else {
-          code = "INSERT_FAILED";
-          message = `등록에 실패했어요. ${insertError?.message ?? ""}`.trim();
+          const { data: existing } = await supabase
+            .from("cats")
+            .select("id")
+            .eq("home_id", homeId)
+            .eq("name", draft.name.trim())
+            .limit(1)
+            .maybeSingle();
+          if (existing?.id) {
+            // 본인 home 의 동명 row — 사실상 등록 완료. 사진 업로드는 안 함 (일관성).
+            const successMsg = "이미 등록되어 있어요. 홈으로 이동해요.";
+            setState("success");
+            setErrorMessage(successMsg);
+            return {
+              kind: "ok",
+              catId: existing.id as string,
+              photoUploaded: false,
+            };
+          }
+          // 그 외 — 정말 중복.
+          const message = "이미 같은 이름의 고양이가 등록되어 있어요";
+          setState("error");
+          setErrorMessage(message);
+          return { kind: "error", code: "DUPLICATE_NAME", message };
         }
+
+        // 2) 네트워크/DB timeout
+        if (isTimeoutError(insertError)) {
+          setState("error");
+          setErrorMessage(TIMEOUT_MESSAGE);
+          return { kind: "error", code: "TIMEOUT", message: TIMEOUT_MESSAGE };
+        }
+
+        // 3) 그 외 INSERT 실패
+        const message = `등록에 실패했어요. ${insertError?.message ?? ""}`.trim();
         setState("error");
         setErrorMessage(message);
-        return { kind: "error", code, message };
+        return { kind: "error", code: "INSERT_FAILED", message };
       }
 
       const catId = insertData.id as string;
@@ -162,8 +185,10 @@ export function useCatRegistration(
       });
 
       if (uploadResult.kind === "error") {
-        /* 업로드 실패 — cats row 는 이미 INSERT 됐으므로 catId 유지하고 soft error */
-        setState("success"); // 등록 자체는 성공
+        /* 업로드 실패 — cats row 는 이미 INSERT 됐으나 사진 미반영.
+         * fix R1 #3: 사용자가 정확히 인지하도록 error 상태로 (이전엔 success 였음).
+         * UI 측에서 "사진은 못 올렸지만 등록은 됐어요" 안내 + 재업로드 옵션. */
+        setState("error");
         setErrorMessage(uploadResult.message);
         return {
           kind: "error",
@@ -185,15 +210,15 @@ export function useCatRegistration(
         .eq("id", catId);
 
       if (updateError) {
-        /* UPDATE 실패도 soft error — Storage 에는 이미 올라갔고 cats row 도 있음 */
-        setState("success");
-        setErrorMessage(
-          `사진은 올렸지만 프로필에 반영하지 못했어요. (${updateError.message})`,
-        );
+        /* UPDATE 실패 — Storage 에는 올라갔으나 cats row 에 photo_front_url 미반영.
+         * fix R1 #3: 사용자에게 정확히 안내 (error 상태). */
+        const message = `사진은 올렸지만 프로필에 반영하지 못했어요. (${updateError.message})`;
+        setState("error");
+        setErrorMessage(message);
         return {
           kind: "error",
           code: "UPLOAD_FAILED",
-          message: updateError.message,
+          message,
         };
       }
 

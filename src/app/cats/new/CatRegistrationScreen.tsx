@@ -15,7 +15,7 @@
 
 "use client";
 
-import { useState, useCallback } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { CatDraft } from "@/types/cat";
 import { useCatRegistration } from "@/hooks/useCatRegistration";
@@ -26,6 +26,9 @@ import {
 import { CatProfileForm } from "./CatProfileForm";
 import { CatOptionalFields } from "./CatOptionalFields";
 import styles from "./CatRegistrationScreen.module.css";
+
+/** 등록 직후 홈에서 환영 토스트 띄우기 위한 sessionStorage 키 (HomeProfileRow 와 공유). */
+const WELCOME_TOAST_KEY = "cat-welcome-name";
 
 /** 옵션 섹션 transition 클래스 결합 헬퍼 (open/closed). */
 function optionalClass(open: boolean): string {
@@ -65,6 +68,38 @@ export function CatRegistrationScreen({ homeId }: CatRegistrationScreenProps) {
     setDraftRaw(next);
   }, []);
 
+  /* fix R1 #3 — 에러 배너 자동 스크롤 (모바일 키보드 위로 가려지는 케이스 방지). */
+  const errorBannerRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (errorMessage && errorBannerRef.current) {
+      errorBannerRef.current.scrollIntoView({ block: "start", behavior: "smooth" });
+    }
+  }, [errorMessage]);
+
+  /* fix R1 #3 — 입력값 더티 여부 (취소 confirm 판단). */
+  const isDirty =
+    draft.name.trim() !== "" ||
+    draft.breed.trim() !== "" ||
+    draft.birthDate !== "" ||
+    draft.photoFile !== null ||
+    draft.weightKg.trim() !== "" ||
+    draft.medicalNotes.trim() !== "" ||
+    draft.medications.trim() !== "" ||
+    draft.supplements.trim() !== "" ||
+    draft.litterType !== "" ||
+    draft.foodType.trim() !== "";
+
+  const onCancel = useCallback(() => {
+    if (
+      isDirty &&
+      typeof window !== "undefined" &&
+      !window.confirm("입력한 내용이 사라져요. 정말 취소할까요?")
+    ) {
+      return;
+    }
+    router.back();
+  }, [isDirty, router]);
+
   const onSubmit = useCallback(async () => {
     /* 제출 직전 validation — 훅 안에서도 다시 돌지만 UI 에러 표시는 여기가 담당 */
     const errs = validateCatDraft(draft);
@@ -73,7 +108,12 @@ export function CatRegistrationScreen({ homeId }: CatRegistrationScreenProps) {
 
     const result = await submit(draft);
     if (result.kind === "ok") {
-      /* 성공: 홈 복귀. newCatId 쿼리는 Tier 4 에서 활용 예정 (현재는 안 함) */
+      /* fix R1 #3 — 성공: sessionStorage 에 이름 저장 → 홈에서 환영 토스트 표시.
+       *             router.refresh() 로 서버 컴포넌트 cats 목록 재조회 후 replace 로 stack pollution 방지. */
+      if (typeof window !== "undefined") {
+        window.sessionStorage.setItem(WELCOME_TOAST_KEY, draft.name.trim());
+      }
+      router.refresh();
       router.replace("/");
     }
     /* 실패 시 errorMessage 가 자동으로 배너에 표시됨 (훅이 setState) */
@@ -107,7 +147,7 @@ export function CatRegistrationScreen({ homeId }: CatRegistrationScreenProps) {
       </div>
 
       {errorMessage && (
-        <div role="alert" className={styles.errorBanner}>
+        <div role="alert" ref={errorBannerRef} className={styles.errorBanner}>
           {errorMessage}
         </div>
       )}
@@ -115,7 +155,7 @@ export function CatRegistrationScreen({ homeId }: CatRegistrationScreenProps) {
       <div className={styles.footer}>
         <button
           type="button"
-          onClick={() => router.back()}
+          onClick={onCancel}
           className={styles.btnSecondary}
           disabled={submitting}
         >

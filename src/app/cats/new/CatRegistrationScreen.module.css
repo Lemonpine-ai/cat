@@ -248,6 +248,10 @@
 }
 
 .errorBanner {
+  /* fix R1 #3 — 에러 배너 sticky (모바일에서 키보드/스크롤 시에도 가시). */
+  position: sticky;
+  top: 0;
+  z-index: 10;
   background: #fef2f2;
   border: 1px solid #fecaca;
   color: #991b1b;
