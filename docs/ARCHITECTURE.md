@@ -1064,17 +1064,39 @@ Tier 1 STRICT QA R7 에서 발견된 보안 결함 + fix R4-1 4건 (HEIC EXIF / 
 - `cats_update_by_home_owner` — UPDATE USING + WITH CHECK
 - `cats_delete_by_home_owner` — DELETE
 
-운영 절차 (CLAUDE.md #14 atomic deploy, fix R4-1 6단계):
+운영 절차 (CLAUDE.md #14 atomic deploy, fix R4-1 + R5-3 R8-1 — 5단계 → 5a~5e 분할):
   1) PR 머지 (단일 커밋, 단일 PR — sql/* 와 src/* 동시).
   2) Vercel `getDeployments` 로 production READY+PROMOTED 확인 (commit ID 메모).
   3) homes RLS 사전 검증 4건 (A/B/C/D — sql/20260425b_cats_rls_policies.sql 헤더 참조)
      모두 PASS 확인. 실패 시 STOP, PR revert 후 사장님 보고.
   4) Supabase MCP `apply_migration` 으로 sql/20260425b_cats_rls_policies.sql 적용
      (단일 트랜잭션 — 부분 적용 불가).
-  5) 적용 후 검증 SELECT — `SELECT count(*) FROM public.cats;` 가 사장님 본인 home 기준
-     0 이 아니어야 함 (RLS 의도 작동 확인). 0 이면 즉시 6) rollback.
-  6) 실패 시 즉시 sql/20260425b_cats_rls_policies_rollback.sql 적용 +
-     Vercel Instant Rollback (2단계 commit ID).
+
+  5a) SELECT smoke — `SELECT id, home_id FROM public.cats LIMIT 1;`
+      사장님 본인 home (homes.owner_id = auth.uid()) 의 row 만 반환되어야 한다.
+      다른 home_id 의 row 가 노출되면 정책 위반 — 즉시 STOP → 5e rollback.
+
+  5b) INSERT smoke — test row INSERT (사장님 home 으로):
+      `INSERT INTO public.cats(home_id, name) VALUES ('<my-home-id>', '__rls_test__') RETURNING id;`
+      성공 시 다음 단계. WITH CHECK 위반 (다른 home_id 시도) 차단도 별도 verify
+      — staging 환경에서 다른 user 로 INSERT 시도 → 거부 확인 (가능한 경우).
+
+  5c) UPDATE smoke — 5b 의 test row 를 UPDATE:
+      `UPDATE public.cats SET name='__rls_test_updated__' WHERE id='<test-id>' RETURNING id;`
+      내 home 의 row 만 UPDATE 가능. 다른 home 시도 시 0 row 갱신 확인 (RLS USING 차단).
+
+  5d) DELETE smoke — 5b 의 test row 를 DELETE (5c 통과 후 정리):
+      `DELETE FROM public.cats WHERE id='<test-id>' RETURNING id;`
+      내 home → 1 row 삭제, 다른 home → 0 row 확인.
+
+  5e) 모두 통과 시 commit (BEGIN/COMMIT 사용 시 COMMIT). 하나라도 실패 시:
+      - BEGIN 안에 있으면 ROLLBACK.
+      - 이미 COMMIT 됐으면 sql/20260425b_cats_rls_policies_rollback.sql 적용 +
+        Vercel Instant Rollback (직전 production commit ID, .github/PULL_REQUEST_TEMPLATE.md
+        베이스라인 메모 라인 참조).
+
+  6) 5e 통과 후 5분 모니터링 — Vercel `getDeployments` + Supabase MCP `list_tables` 로
+     error rate / row 수 추세 관찰. 이상 시 즉시 5e 의 rollback 절차 실행.
 
 #### 11.6.2 EXIF strip — 사용자 사진 GPS leak 방지
 

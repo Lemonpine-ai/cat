@@ -26,6 +26,23 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+      - name: Verify lockfile (R5-3 R8-2 — npm 단독 강제)
+        # package.json packageManager: "npm@11.9.0" 와 정합성 보장.
+        # pnpm-lock.yaml / yarn.lock 가 실수로 commit 되면 CI silent drift → 즉시 fail.
+        run: |
+          if [ ! -f package-lock.json ]; then
+            echo "ERROR: package-lock.json 부재 — npm 기반 CI 인데 lockfile 없음"
+            exit 1
+          fi
+          if [ -f pnpm-lock.yaml ]; then
+            echo "ERROR: pnpm-lock.yaml 발견 — 본 프로젝트는 npm 단독 (package.json packageManager: npm)"
+            exit 1
+          fi
+          if [ -f yarn.lock ]; then
+            echo "ERROR: yarn.lock 발견 — 본 프로젝트는 npm 단독"
+            exit 1
+          fi
+          echo "OK: package-lock.json 단독 확인"
       - uses: actions/setup-node@v4
         with:
           node-version: 20
