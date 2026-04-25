@@ -27,6 +27,11 @@ import { CatProfileForm } from "./CatProfileForm";
 import { CatOptionalFields } from "./CatOptionalFields";
 import styles from "./CatRegistrationScreen.module.css";
 
+/** 옵션 섹션 transition 클래스 결합 헬퍼 (open/closed). */
+function optionalClass(open: boolean): string {
+  return open ? `${styles.optionalSection} ${styles.open}` : styles.optionalSection;
+}
+
 /** 폼 초기 draft — 사용자 처음 진입 시 화면 값. */
 const INITIAL_DRAFT: CatDraft = {
   name: "",
@@ -50,10 +55,15 @@ export type CatRegistrationScreenProps = {
 
 export function CatRegistrationScreen({ homeId }: CatRegistrationScreenProps) {
   const router = useRouter();
-  const [draft, setDraft] = useState<CatDraft>(INITIAL_DRAFT);
+  const [draft, setDraftRaw] = useState<CatDraft>(INITIAL_DRAFT);
   const [showOptional, setShowOptional] = useState(false);
   const [errors, setErrors] = useState<ValidationError[]>([]);
   const { submit, state, errorMessage } = useCatRegistration({ homeId });
+
+  /* fix R1 #2 — setDraft 안정화 (자식 React.memo 가 ref 변동으로 깨지는 것 방지). */
+  const setDraft = useCallback<typeof setDraftRaw>((next) => {
+    setDraftRaw(next);
+  }, []);
 
   const onSubmit = useCallback(async () => {
     /* 제출 직전 validation — 훅 안에서도 다시 돌지만 UI 에러 표시는 여기가 담당 */
@@ -91,9 +101,10 @@ export function CatRegistrationScreen({ homeId }: CatRegistrationScreenProps) {
         {showOptional ? "▼ 추가 정보 접기" : "▶ 더 자세히 입력하기 (선택)"}
       </button>
 
-      {showOptional && (
+      {/* fix R1 #2 — 항상 렌더 + max-height transition (재마운트 비용 제거). */}
+      <div className={optionalClass(showOptional)} aria-hidden={!showOptional}>
         <CatOptionalFields draft={draft} onChange={setDraft} errors={errors} />
-      )}
+      </div>
 
       {errorMessage && (
         <div role="alert" className={styles.errorBanner}>

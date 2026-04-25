@@ -13,6 +13,7 @@
 
 "use client";
 
+import { memo, useCallback } from "react";
 import type { CatDraft, CatSex } from "@/types/cat";
 import {
   getFieldError,
@@ -35,14 +36,18 @@ const SEX_OPTIONS: ReadonlyArray<{ value: CatSex; label: string }> = [
   { value: "unknown", label: "모름" },
 ];
 
-export function CatProfileForm({ draft, onChange, errors }: CatProfileFormProps) {
+function CatProfileFormImpl({ draft, onChange, errors }: CatProfileFormProps) {
   const nameError = getFieldError(errors, "name");
   const breedError = getFieldError(errors, "breed");
   const birthError = getFieldError(errors, "birthDate");
 
-  const update = <K extends keyof CatDraft>(key: K, value: CatDraft[K]) => {
-    onChange({ ...draft, [key]: value });
-  };
+  /* fix R1 #2 — useCallback 으로 자식 input onChange 핸들러 안정화. */
+  const update = useCallback(
+    <K extends keyof CatDraft>(key: K, value: CatDraft[K]) => {
+      onChange({ ...draft, [key]: value });
+    },
+    [draft, onChange],
+  );
 
   return (
     <div className={styles.section}>
@@ -135,3 +140,6 @@ export function CatProfileForm({ draft, onChange, errors }: CatProfileFormProps)
     </div>
   );
 }
+
+/* fix R1 #2 — React.memo 로 감싸 draft/errors 미변경 시 리렌더 회피. */
+export const CatProfileForm = memo(CatProfileFormImpl);

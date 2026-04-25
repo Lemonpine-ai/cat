@@ -15,6 +15,7 @@
 
 "use client";
 
+import { memo, useCallback } from "react";
 import type { CatDraft, CatNeuteredStatus } from "@/types/cat";
 import {
   getFieldError,
@@ -36,16 +37,20 @@ const NEUTERED_OPTIONS: ReadonlyArray<{ value: CatNeuteredStatus; label: string 
   { value: "unknown", label: "모름" },
 ];
 
-export function CatOptionalFields({
+function CatOptionalFieldsImpl({
   draft,
   onChange,
   errors,
 }: CatOptionalFieldsProps) {
   const weightError = getFieldError(errors, "weightKg");
 
-  const update = <K extends keyof CatDraft>(key: K, value: CatDraft[K]) => {
-    onChange({ ...draft, [key]: value });
-  };
+  /* fix R1 #2 — useCallback 안정화. */
+  const update = useCallback(
+    <K extends keyof CatDraft>(key: K, value: CatDraft[K]) => {
+      onChange({ ...draft, [key]: value });
+    },
+    [draft, onChange],
+  );
 
   return (
     <div className={styles.section}>
@@ -186,3 +191,6 @@ export function CatOptionalFields({
     </div>
   );
 }
+
+/* fix R1 #2 — React.memo 로 감싸 옵션 토글 시 리렌더 절감. */
+export const CatOptionalFields = memo(CatOptionalFieldsImpl);

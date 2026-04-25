@@ -28,7 +28,7 @@ import type { CatDraft } from "@/types/cat";
 import { catDraftToInsertPayload } from "@/types/cat";
 import { validateCatDraft } from "@/lib/cat/validateCatDraft";
 import { uploadCatProfilePhoto } from "@/lib/cat/uploadCatProfilePhoto";
-import { extractHsvFromPhoto } from "@/lib/cat/extractHsvFromPhoto";
+import { extractHsvFromPhoto, emptyHsvProfile } from "@/lib/cat/extractHsvFromPhoto";
 
 export type RegistrationState = "idle" | "submitting" | "success" | "error";
 
@@ -147,8 +147,11 @@ export function useCatRegistration(
         return { kind: "ok", catId, photoUploaded: false };
       }
 
-      /* 4) 사진 있음 → HSV 추출 (실패해도 업로드는 시도) */
-      const colorProfile = await extractHsvFromPhoto(draft.photoFile);
+      /* 4) 사진 있음 → HSV 추출 (실패해도 업로드는 시도)
+       *    fix R1 #2: extractHsvFromPhoto 가 union 반환 — error 면 emptyProfile 폴백. */
+      const hsvResult = await extractHsvFromPhoto(draft.photoFile);
+      const colorProfile =
+        hsvResult.kind === "ok" ? hsvResult.profile : emptyHsvProfile();
 
       /* 5) Storage 업로드 */
       const uploadResult = await uploadCatProfilePhoto({

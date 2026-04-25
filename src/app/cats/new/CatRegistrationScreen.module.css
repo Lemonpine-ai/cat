@@ -149,8 +149,11 @@
   display: none;
 }
 
+/* fix R1 #2 CLS 방지 — placeholder 와 preview 가 동일 비율 사전 예약. */
 .photoPlaceholder {
   width: 100%;
+  aspect-ratio: 4 / 3;
+  min-height: 240px;
   padding: 32px 16px;
   background: #f0fdfa;
   border: 2px dashed #5eead4;
@@ -160,6 +163,7 @@
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   gap: 4px;
   cursor: pointer;
   transition: background 0.15s;
@@ -177,6 +181,9 @@
 .photoPreviewWrap {
   position: relative;
   width: 100%;
+  /* fix R1 #2 CLS 방지 — placeholder 와 동일 비율 사전 예약. */
+  aspect-ratio: 4 / 3;
+  min-height: 240px;
   border-radius: 12px;
   overflow: hidden;
   background: #e2e8f0;
@@ -184,8 +191,7 @@
 
 .photoPreview {
   width: 100%;
-  height: auto;
-  max-height: 240px;
+  height: 100%;
   object-fit: cover;
   display: block;
 }
@@ -201,6 +207,19 @@
   border-radius: 20px;
   font-size: 12px;
   cursor: pointer;
+}
+
+/* fix R1 #2 — 옵션 섹션 transition (재마운트 비용 절감 + 자연스러운 펼침). */
+.optionalSection {
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  transition: max-height 0.25s ease, opacity 0.2s ease;
+}
+
+.optionalSection.open {
+  max-height: 2000px;
+  opacity: 1;
 }
 
 /* ── 옵션 아코디언 토글 ── */
