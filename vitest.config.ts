@@ -45,6 +45,8 @@ export default defineConfig({
       "staging/tests/yoloLatencyTracker.test.ts",
       // R8 §2 (metadata mirror 마커 자동 검증 — staging + src/ 양쪽 grep):
       "staging/tests/metadataFreezeMirror.test.ts",
+      // ICE timeout LTE 마진 (NEXT_PUBLIC_ICE_TIMEOUT_MS ENV 검증 단위 테스트):
+      "src/lib/webrtc/__tests__/iceConnectionTimeoutMs.test.ts",
     ],
     exclude: ["node_modules", "tests", "staging/tests/node_modules"],
     // jsdom 으로 전환: sampling 테스트가 document.hidden / visibilitychange / setInterval 을 사용.
