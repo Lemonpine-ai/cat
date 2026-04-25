@@ -1,19 +1,35 @@
--- cat-identity Tier 1 fix R1 — cats 테이블 RLS 정책 4개.
+-- cat-identity Tier 1 fix R4-1 C4 / C5 — cats 테이블 RLS 정책 4개 (idempotent + atomic).
+--
 -- homes.owner_id = auth.uid() 기반 — 가족 외 사용자 차단.
--- 베타 모드 (사용자 7명) — 기존 row 영향 없음 (사전 SELECT 확인 필요).
+-- 베타 모드 (사용자 7명) — 기존 row 영향 없음 (사전 SELECT 4건 확인 필수).
 --
--- Apply: PR 머지 직후 동일 deploy 윈도우에 apply (CLAUDE.md #14 atomic deploy 조건).
+-- fix R4-1 C4 — 본 파일은 idempotent (DROP IF EXISTS → CREATE) — 두 번 적용 가능.
+--               BEGIN/COMMIT 단일 트랜잭션 — 4개 정책 중 하나라도 실패하면 전부 rollback.
+--               DOWN 마이그: sql/20260425b_cats_rls_policies_rollback.sql.
 --
--- fix R3 R8 — atomic deploy 5단계 명세:
---   1) PR 머지 (단일 커밋, 단일 PR)
---   2) Vercel `getDeployments` 로 production READY+PROMOTED 확인
---   3) `SELECT count(*) FROM cats WHERE home_id IS NULL` = 0 사전 확인
---      (RLS 정책이 home_id IN (...) 기반 → home_id NULL row 가 있으면 모두 차단됨)
---   4) Supabase MCP `apply_migration` 으로 본 SQL 적용 (서비스 롤로 ALTER TABLE)
---   5) Vercel Instant Rollback 후보 commit ID 메모 (앞선 production READY commit)
---      → 정책 적용 후 SELECT/INSERT 실패 폭증하면 즉시 롤백 가능
+-- fix R4-1 C5 — 사전 검증 절차 (apply 전 Supabase SQL Editor 또는 MCP execute_sql 로 4건 모두 PASS 확인):
+--   A) SELECT relrowsecurity FROM pg_class WHERE relname = 'homes';
+--      → 결과 t (true). f 면 STOP — homes RLS 먼저 활성화 필요.
+--   B) SELECT count(*) FROM public.homes WHERE owner_id IS NULL;
+--      → 결과 0. > 0 면 STOP — owner_id NULL row 존재 → cats RLS 가 해당 home 차단.
+--   C) SELECT count(*) FROM public.cats WHERE home_id IS NULL;
+--      → 결과 0. > 0 면 STOP — home_id NULL cats row 가 RLS 적용 후 영구 차단됨.
+--   D) SELECT count(*) FROM public.cats c
+--      LEFT JOIN public.homes h ON c.home_id = h.id WHERE h.id IS NULL;
+--      → 결과 0. > 0 면 STOP — orphan cats row (home 삭제됨) 가 RLS 후 영구 차단됨.
+-- 4건 모두 PASS 후 본 마이그 적용. 실패 시 sql/20260425b_cats_rls_policies_rollback.sql 즉시 적용.
+--
+-- ARCHITECTURE.md §11.6.1 atomic deploy 6단계 (fix R4-1) 참조.
+
+BEGIN;
 
 ALTER TABLE public.cats ENABLE ROW LEVEL SECURITY;
+
+-- 두 번 적용 가능하도록 DROP IF EXISTS — fix R4-1 C4 idempotent.
+DROP POLICY IF EXISTS cats_select_by_home_owner ON public.cats;
+DROP POLICY IF EXISTS cats_insert_by_home_owner ON public.cats;
+DROP POLICY IF EXISTS cats_update_by_home_owner ON public.cats;
+DROP POLICY IF EXISTS cats_delete_by_home_owner ON public.cats;
 
 -- 1) SELECT — 본인이 owner 인 home 의 cats 만 조회.
 CREATE POLICY cats_select_by_home_owner ON public.cats
@@ -40,3 +56,5 @@ CREATE POLICY cats_delete_by_home_owner ON public.cats
   FOR DELETE USING (
     home_id IN (SELECT id FROM public.homes WHERE owner_id = auth.uid())
   );
+
+COMMIT;

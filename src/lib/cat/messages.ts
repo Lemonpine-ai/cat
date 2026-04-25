@@ -23,6 +23,18 @@ export const CAT_MESSAGES = {
   timeout: "네트워크가 불안정해요. 잠시 후 다시 시도해 주세요.",
   unknownError: "알 수 없는 오류가 발생했어요",
   validationGeneric: "입력값을 확인해 주세요",
+  /** fix R4-2 M4 — Prefix + raw 패턴 폐기. user-friendly 한국어 단일 문장으로 통일. */
+  insertFailedGeneric: "등록에 실패했어요. 잠시 후 다시 시도해 주세요.",
+  photoUpdateFailedGeneric:
+    "사진은 올렸지만 프로필에 반영하지 못했어요. 잠시 후 다시 시도해 주세요.",
+  photoUploadFailedGeneric:
+    "사진 업로드에 실패했어요. 다른 사진으로 다시 시도해 주세요.",
+  /** fix R4-1 C1 — HEIC 등 디코드 실패 시 사용자 안내. */
+  photoFormatUnsupported:
+    "이 사진은 처리할 수 없어요. JPG/PNG/WebP 사진으로 다시 시도해 주세요.",
+  /** fix R4-3 M6 — Picker 단일 출처 정리 시 사용. */
+  photoSizeTooLarge: "사진은 5MB 이하로 올려주세요.",
+  /** fix R4-2 M4 호환용 — 기존 키 유지하지만 본 fix 후 호출자는 모두 generic 으로 전환. */
   insertFailedPrefix: "등록에 실패했어요. ",
   photoUpdateFailedPrefix: "사진은 올렸지만 프로필에 반영하지 못했어요.",
   // photo

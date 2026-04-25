@@ -1051,9 +1051,9 @@ R12 PR 와 동일 패턴. staging/{components,hooks,lib}/cat-identity 는 re-exp
 
 cat_behavior_events.cat_id 는 nullable. Tier 1 등록 후에도 자동 매칭 안 됨 — Tier 2 식별 도입 후 매칭 시점에 채움. 즉 cat-identity 머지가 Phase B (행동) 머지를 막거나 깨지 않음 (orthogonal).
 
-### 11.6 보안 정책 (Tier 1 fix R1)
+### 11.6 보안 정책 (Tier 1 fix R1 / R4)
 
-Tier 1 STRICT QA R7 에서 발견된 보안 결함 4건의 정책 정리.
+Tier 1 STRICT QA R7 에서 발견된 보안 결함 + fix R4-1 4건 (HEIC EXIF / RLS idempotent / homes 사전 검증 / magic byte) 의 정책 정리.
 
 #### 11.6.1 RLS — cats 테이블 4개 정책
 
@@ -1064,11 +1064,23 @@ Tier 1 STRICT QA R7 에서 발견된 보안 결함 4건의 정책 정리.
 - `cats_update_by_home_owner` — UPDATE USING + WITH CHECK
 - `cats_delete_by_home_owner` — DELETE
 
-운영 절차 (CLAUDE.md #14 atomic deploy): PR 머지 → Vercel READY+PROMOTED 확인 → `cats.home_id IS NULL` count=0 확인 → Supabase MCP `apply_migration` → Instant Rollback commit ID 메모. (자세한 5단계는 SQL 헤더 주석 참조.)
+운영 절차 (CLAUDE.md #14 atomic deploy, fix R4-1 6단계):
+  1) PR 머지 (단일 커밋, 단일 PR — sql/* 와 src/* 동시).
+  2) Vercel `getDeployments` 로 production READY+PROMOTED 확인 (commit ID 메모).
+  3) homes RLS 사전 검증 4건 (A/B/C/D — sql/20260425b_cats_rls_policies.sql 헤더 참조)
+     모두 PASS 확인. 실패 시 STOP, PR revert 후 사장님 보고.
+  4) Supabase MCP `apply_migration` 으로 sql/20260425b_cats_rls_policies.sql 적용
+     (단일 트랜잭션 — 부분 적용 불가).
+  5) 적용 후 검증 SELECT — `SELECT count(*) FROM public.cats;` 가 사장님 본인 home 기준
+     0 이 아니어야 함 (RLS 의도 작동 확인). 0 이면 즉시 6) rollback.
+  6) 실패 시 즉시 sql/20260425b_cats_rls_policies_rollback.sql 적용 +
+     Vercel Instant Rollback (2단계 commit ID).
 
 #### 11.6.2 EXIF strip — 사용자 사진 GPS leak 방지
 
-`src/lib/cat/stripExifFromImage.ts` — Canvas 재인코딩 (JPEG 0.92) 으로 EXIF 메타데이터 제거 후 Storage 업로드. HEIC 디코드 실패 시 원본 폴백 (Tier 2 에서 HEIC strip 추가).
+`src/lib/cat/stripExifFromImage.ts` — Canvas 재인코딩 (JPEG 0.92) 으로 EXIF 메타데이터 제거 후 Storage 업로드. fix R4-1 C1 — 디코드 실패 시 union error (`{ kind: "error", code: "EXIF_STRIP_FAILED" }`) 반환. 호출자 (`uploadCatProfilePhoto`) 가 `INVALID_FORMAT` 으로 변환해 사용자에게 "JPG/PNG/WebP 로 다시 시도해 주세요" 안내. 원본 fallback 금지 (HEIC 의 EXIF 가 살아있는 채로 Storage 로 흘러가는 경로 차단).
+
+`src/lib/cat/detectImageMagic.ts` (fix R4-1 C6) — 파일 첫 12 byte 의 magic 비교로 MIME 위조 차단. JPEG/PNG/WebP 만 통과, HEIC/HEIF 는 null → 거부.
 
 #### 11.6.3 dangerouslySetInnerHTML 금지
 

@@ -49,6 +49,10 @@ export default defineConfig({
       "src/lib/cat/__tests__/catDraftValidation.test.ts",
       "src/lib/cat/__tests__/useCatRegistration.test.ts",
       "src/lib/cat/__tests__/extractHsvFromPhoto.test.ts",
+      // cat-identity Tier 1 fix R4-1 (보안 — magic byte / strip union / upload INVALID_FORMAT):
+      "src/lib/cat/__tests__/detectImageMagic.test.ts",
+      "src/lib/cat/__tests__/stripExifFromImage.test.ts",
+      "src/lib/cat/__tests__/uploadCatProfilePhoto.test.ts",
     ],
     exclude: ["node_modules", "tests", "staging/tests/node_modules"],
     // jsdom 으로 전환: sampling 테스트가 document.hidden / visibilitychange / setInterval 을 사용.
