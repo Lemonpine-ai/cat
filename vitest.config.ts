@@ -45,6 +45,10 @@ export default defineConfig({
       "staging/tests/yoloLatencyTracker.test.ts",
       // R8 §2 (metadata mirror 마커 자동 검증 — staging + src/ 양쪽 grep):
       "staging/tests/metadataFreezeMirror.test.ts",
+      // cat-identity Tier 1 fix R1 #5 (validate / hook / hsv 단위):
+      "src/lib/cat/__tests__/catDraftValidation.test.ts",
+      "src/lib/cat/__tests__/useCatRegistration.test.ts",
+      "src/lib/cat/__tests__/extractHsvFromPhoto.test.ts",
     ],
     exclude: ["node_modules", "tests", "staging/tests/node_modules"],
     // jsdom 으로 전환: sampling 테스트가 document.hidden / visibilitychange / setInterval 을 사용.

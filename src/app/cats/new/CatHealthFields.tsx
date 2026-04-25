@@ -80,8 +80,14 @@ function CatHealthFieldsImpl({ draft, onChange, errors }: CatHealthFieldsProps) 
           onChange={(e) => update("weightKg", e.target.value)}
           placeholder="예: 4.5"
           className={styles.input}
+          aria-invalid={!!weightError}
+          aria-describedby={weightError ? "error-cat-weight" : undefined}
         />
-        {weightError && <div className={styles.fieldError}>{weightError}</div>}
+        {weightError && (
+          <div id="error-cat-weight" role="alert" className={styles.fieldError}>
+            {weightError}
+          </div>
+        )}
       </div>
 
       {/* 기저질환 */}

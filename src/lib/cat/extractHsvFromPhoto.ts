@@ -22,6 +22,8 @@
  *   const result = await extractHsvFromPhoto(file);
  *   if (result.kind === "ok") {
  *     await supabase.from("cats").update({ color_profile: result.profile });
+ *   } else {
+ *     // logger.warn 자동, 호출자는 emptyHsvProfile() 사용 가능
  *   }
  */
 
@@ -32,6 +34,7 @@ import type {
   WorkerInMessage,
   WorkerOutMessage,
 } from "@/workers/extractHsv.worker";
+import { logger } from "@/lib/observability/logger";
 
 export type { HsvColorProfile } from "@/workers/extractHsv.worker";
 
@@ -187,11 +190,9 @@ export async function extractHsvFromPhoto(file: File): Promise<ExtractHsvResult>
       return { kind: "ok", profile };
     } catch (err) {
       // Worker 인스턴스 생성 실패 (Next 빌드에서 worker chunk 누락 등) → idle 폴백.
-      const message = err instanceof Error ? err.message : "worker-failed";
-      // 콘솔만 남기고 폴백 시도. (logger 는 fix-5 에서 도입.)
-      if (typeof console !== "undefined") {
-        console.warn("[extractHsvFromPhoto] worker failed, fallback to idle:", message);
-      }
+      logger.warn("extractHsvFromPhoto", "worker failed, fallback to idle", {
+        message: err instanceof Error ? err.message : String(err),
+      });
     }
   }
 
@@ -200,6 +201,7 @@ export async function extractHsvFromPhoto(file: File): Promise<ExtractHsvResult>
     const profile = await computeOnMainThreadIdle(imageData);
     return { kind: "ok", profile };
   } catch (err) {
+    logger.error("extractHsvFromPhoto.idle", err);
     return {
       kind: "error",
       reason: "compute-failed",

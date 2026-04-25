@@ -11,15 +11,8 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { stripExifFromImage } from "./stripExifFromImage";
-
-/** 허용 MIME 타입 (호출자 가드 외 2차 방어). */
-const ALLOWED_MIME = [
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-  "image/heic",
-  "image/heif",
-];
+import { ALLOWED_MIME } from "./constants";
+import { logger } from "@/lib/observability/logger";
 
 /** 파일명 안전 문자만 허용 (영숫자/하이픈/언더스코어). 나머지는 _ 로 치환. */
 function sanitizeForPath(name: string): string {
@@ -44,6 +37,12 @@ export type UploadResult =
  * - 호출자: useCatRegistration (INSERT 후 사진 업로드 단계)
  * - 실패 시 업로드 안 된 상태로 error 반환 — catId 는 이미 INSERT 됐으므로
  *   호출자는 "등록은 됐지만 사진은 저장 안 됐어요" 안내만 필요.
+ *
+ * @example
+ *   const result = await uploadCatProfilePhoto({ supabase, homeId, catId, file });
+ *   if (result.kind === "ok") {
+ *     await supabase.from("cats").update({ photo_front_url: result.publicUrl }).eq("id", catId);
+ *   }
  */
 export async function uploadCatProfilePhoto(args: {
   supabase: SupabaseClient;
@@ -54,7 +53,8 @@ export async function uploadCatProfilePhoto(args: {
   const { supabase, homeId, catId, file } = args;
 
   // 1) MIME 2차 가드
-  if (!ALLOWED_MIME.includes(file.type)) {
+  if (!ALLOWED_MIME.includes(file.type as (typeof ALLOWED_MIME)[number])) {
+    logger.warn("uploadCatProfilePhoto.mime", "rejected mime", { type: file.type });
     return {
       kind: "error",
       code: "INVALID_MIME",
@@ -81,6 +81,7 @@ export async function uploadCatProfilePhoto(args: {
       contentType: stripped.type,
     });
   if (uploadError) {
+    logger.error("uploadCatProfilePhoto.storage", uploadError, { path });
     return {
       kind: "error",
       code: "UPLOAD_FAILED",

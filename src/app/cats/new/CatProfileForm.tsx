@@ -63,12 +63,18 @@ function CatProfileFormImpl({ draft, onChange, errors }: CatProfileFormProps) {
           type="text"
           value={draft.name}
           onChange={(e) => update("name", e.target.value)}
-          maxLength={30}
           placeholder="예: 나비"
           className={styles.input}
           autoComplete="off"
+          aria-required="true"
+          aria-invalid={!!nameError}
+          aria-describedby={nameError ? "error-cat-name" : undefined}
         />
-        {nameError && <div className={styles.fieldError}>{nameError}</div>}
+        {nameError && (
+          <div id="error-cat-name" role="alert" className={styles.fieldError}>
+            {nameError}
+          </div>
+        )}
       </div>
 
       {/* 품종 — datalist 자동완성 */}
@@ -82,17 +88,23 @@ function CatProfileFormImpl({ draft, onChange, errors }: CatProfileFormProps) {
           list="breed-list"
           value={draft.breed}
           onChange={(e) => update("breed", e.target.value)}
-          maxLength={30}
           placeholder="예: 코리안 숏헤어"
           className={styles.input}
           autoComplete="off"
+          aria-required="true"
+          aria-invalid={!!breedError}
+          aria-describedby={breedError ? "error-cat-breed" : undefined}
         />
         <datalist id="breed-list">
           {CAT_BREEDS_KO.map((b) => (
             <option key={b} value={b} />
           ))}
         </datalist>
-        {breedError && <div className={styles.fieldError}>{breedError}</div>}
+        {breedError && (
+          <div id="error-cat-breed" role="alert" className={styles.fieldError}>
+            {breedError}
+          </div>
+        )}
       </div>
 
       {/* 생년월일 */}
@@ -107,8 +119,15 @@ function CatProfileFormImpl({ draft, onChange, errors }: CatProfileFormProps) {
           onChange={(e) => update("birthDate", e.target.value)}
           max={new Date().toISOString().slice(0, 10)}
           className={styles.input}
+          aria-required="true"
+          aria-invalid={!!birthError}
+          aria-describedby={birthError ? "error-cat-birth" : undefined}
         />
-        {birthError && <div className={styles.fieldError}>{birthError}</div>}
+        {birthError && (
+          <div id="error-cat-birth" role="alert" className={styles.fieldError}>
+            {birthError}
+          </div>
+        )}
       </div>
 
       {/* 성별 라디오 */}

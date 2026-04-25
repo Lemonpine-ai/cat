@@ -5,18 +5,23 @@
  *  1) CatDraft validation (validateCatDraft)
  *  2) cats INSERT (photo_url=null) → catId 확보
  *  3) 사진 있으면: HSV 추출 + Storage 업로드 + UPDATE cats (photo + color_profile)
- *  4) 에러 분류: DUPLICATE_NAME / INSERT_FAILED / UPLOAD_FAILED / VALIDATION
+ *  4) 에러 분류: DUPLICATE_NAME / INSERT_FAILED / UPLOAD_FAILED / TIMEOUT / VALIDATION
  *
  * 설계 원칙 (B-1 Arch 결정):
  *  - Try A (Orphan 방지): INSERT 먼저, 업로드 나중. 실패해도 cats row 는 남음.
- *  - 사진 업로드 실패 = soft error (catId 는 유지, photoUploaded=false 로 성공 반환).
+ *  - 사진 업로드 실패 = error 상태 (catId 는 유지, fix R1 #3 후 사용자 정확 인지).
  *  - HSV 추출 실패 = 조용히 빈 프로파일 (등록 자체 막지 않음).
- *  - RLS: homes.owner_id = auth.uid() 이미 cats 테이블에 정책 적용됨 (별도 조치 불필요).
+ *  - RLS: sql/20260425b_cats_rls_policies.sql 4개 정책 (fix R1 #1).
  *
  * CLAUDE.md 준수:
  *  - useEffect 0개 (submit 함수 기반, 컴포넌트 effect 책임 아님)
- *  - useState 2개 (state, errorMessage) — 한도 8 내
+ *  - useState 1개 (RegistrationStatus union — fix R1 #4 단순화)
  *  - 한국어 주석 필수
+ *
+ * @example
+ *   const { state, errorMessage, submit, reset } = useCatRegistration({ homeId });
+ *   const result = await submit(draft);
+ *   if (result.kind === "ok") router.replace("/");
  */
 
 "use client";
@@ -29,6 +34,8 @@ import { catDraftToInsertPayload } from "@/types/cat";
 import { validateCatDraft } from "@/lib/cat/validateCatDraft";
 import { uploadCatProfilePhoto } from "@/lib/cat/uploadCatProfilePhoto";
 import { extractHsvFromPhoto, emptyHsvProfile } from "@/lib/cat/extractHsvFromPhoto";
+import { CAT_MESSAGES } from "@/lib/cat/messages";
+import { logger } from "@/lib/observability/logger";
 
 /**
  * 등록 진행 상태 — fix R1 #4 단순화: 단일 union 으로 message 까지 묶음.
@@ -90,7 +97,7 @@ function isTimeoutError(err: { code?: string; message?: string } | null | undefi
   return msg.includes("timeout") || msg.includes("timed out");
 }
 
-const TIMEOUT_MESSAGE = "네트워크가 불안정해요. 잠시 후 다시 시도해 주세요.";
+const TIMEOUT_MESSAGE = CAT_MESSAGES.timeout;
 
 export function useCatRegistration(
   args: UseCatRegistrationArgs,
@@ -155,7 +162,7 @@ export function useCatRegistration(
             };
           }
           // 그 외 — 정말 중복.
-          const message = "이미 같은 이름의 고양이가 등록되어 있어요";
+          const message = CAT_MESSAGES.duplicateName;
           setStatus({ kind: "error", message });
           return { kind: "error", code: "DUPLICATE_NAME", message };
         }
@@ -167,6 +174,7 @@ export function useCatRegistration(
         }
 
         // 3) 그 외 INSERT 실패
+        logger.error("useCatRegistration.insert", insertError, { homeId });
         const message = `등록에 실패했어요. ${insertError?.message ?? ""}`.trim();
         setStatus({ kind: "error", message });
         return { kind: "error", code: "INSERT_FAILED", message };
@@ -198,6 +206,7 @@ export function useCatRegistration(
         /* 업로드 실패 — cats row 는 이미 INSERT 됐으나 사진 미반영.
          * fix R1 #3: 사용자가 정확히 인지하도록 error 상태로 (이전엔 success 였음).
          * UI 측에서 "사진은 못 올렸지만 등록은 됐어요" 안내 + 재업로드 옵션. */
+        logger.warn("useCatRegistration.upload", uploadResult.message, { catId });
         setStatus({ kind: "error", message: uploadResult.message });
         return {
           kind: "error",
@@ -221,6 +230,7 @@ export function useCatRegistration(
       if (updateError) {
         /* UPDATE 실패 — Storage 에는 올라갔으나 cats row 에 photo_front_url 미반영.
          * fix R1 #3: 사용자에게 정확히 안내 (error 상태). */
+        logger.error("useCatRegistration.update", updateError, { catId });
         const message = `사진은 올렸지만 프로필에 반영하지 못했어요. (${updateError.message})`;
         setStatus({ kind: "error", message });
         return {
