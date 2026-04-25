@@ -169,4 +169,30 @@ describe("useCatPhotoUpload fix R5-2 R3-4", () => {
     /* UPDATE 호출은 emptyHsvProfile 로 일어나야 함 (등록 자체 막지 않음 정책). */
     expect(updateChain.update).toHaveBeenCalled();
   });
+
+  /*
+   * fix R6-2 회귀 — return 객체 referential identity 가 호출 사이 안정.
+   *
+   * 이슈 (R6-1): 기존 코드 `return { uploadAndExtract, retryUpload, cleanupOrphan }` 는
+   *   매 렌더 새 객체 리터럴 → 호출자 `useCatRegistration.submit` (deps `[..., photo, ...]`)
+   *   가 매 렌더 재생성 → useCallback 무력화 → 하위 onSubmit / onRetryPhoto 까지 재생성 폭포.
+   * fix: useMemo 로 묶어 deps (세 콜백) 변동 없을 때 동일 참조 유지.
+   * 검증: rerender 후 result.current === 이전 참조.
+   */
+  it("5) fix R6-2 — return 객체 reference identity 가 rerender 사이 안정 (deps 변동 없을 때)", () => {
+    const { supabase } = makeSupabase({});
+    const { result, rerender } = renderHook(
+      ({ homeId }: { homeId: string }) =>
+        useCatPhotoUpload({ supabase, homeId }),
+      { initialProps: { homeId: "home-1" } },
+    );
+    const firstReturn = result.current;
+    /* 동일 props 로 rerender — deps (supabase / homeId) 동일 → useMemo 가 같은 참조 보존. */
+    rerender({ homeId: "home-1" });
+    expect(result.current).toBe(firstReturn);
+    /* 콜백 메서드 자체도 동일 참조 (useCallback 보존). */
+    expect(result.current.uploadAndExtract).toBe(firstReturn.uploadAndExtract);
+    expect(result.current.retryUpload).toBe(firstReturn.retryUpload);
+    expect(result.current.cleanupOrphan).toBe(firstReturn.cleanupOrphan);
+  });
 });

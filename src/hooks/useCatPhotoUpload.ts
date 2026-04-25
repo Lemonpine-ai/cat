@@ -24,7 +24,7 @@
 
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { uploadCatProfilePhoto } from "@/lib/cat/uploadCatProfilePhoto";
 import {
@@ -207,5 +207,17 @@ export function useCatPhotoUpload(
     [supabase, homeId, cleanupOrphan],
   );
 
-  return { uploadAndExtract, retryUpload, cleanupOrphan };
+  /*
+   * fix R6-2 — return 객체 referential identity 안정화.
+   *
+   * 기존: 매 렌더 새 객체 리터럴 `{ uploadAndExtract, retryUpload, cleanupOrphan }` 생성 →
+   *   호출자 (useCatRegistration.submit / useCatSubmitFlow.onSubmit) 의 useCallback deps
+   *   `[..., photo, ...]` 가 매 렌더 깨져 콜백 재생성 → memo 무력화.
+   * 수정: useMemo 로 묶어 deps (uploadAndExtract / retryUpload / cleanupOrphan) 변동 없을 때
+   *   동일 참조 유지. 세 콜백은 이미 useCallback 으로 안정화 → 입력 deps 안정 시 photo 안정.
+   */
+  return useMemo(
+    () => ({ uploadAndExtract, retryUpload, cleanupOrphan }),
+    [uploadAndExtract, retryUpload, cleanupOrphan],
+  );
 }
