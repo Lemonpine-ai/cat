@@ -20,6 +20,7 @@ import {
   type ValidationError,
 } from "@/lib/cat/validateCatDraft";
 import { CAT_BREEDS_KO } from "@/lib/cat/breedList";
+import { NAME_MAX, BREED_MAX } from "@/lib/cat/constants";
 import { CatPhotoPicker } from "./CatPhotoPicker";
 import styles from "./CatRegistrationScreen.module.css";
 
@@ -70,6 +71,10 @@ function CatProfileFormImpl({ draft, onChange, errors }: CatProfileFormProps) {
           aria-invalid={!!nameError}
           aria-describedby={nameError ? "error-cat-name" : undefined}
         />
+        {/* fix R1 #6 — trim 길이 카운터 (HTML maxLength 제거, validation 책임). */}
+        <div className={styles.charCounter} aria-hidden>
+          {Math.max(0, NAME_MAX - draft.name.trim().length)}자 남음
+        </div>
         {nameError && (
           <div id="error-cat-name" role="alert" className={styles.fieldError}>
             {nameError}
@@ -95,6 +100,9 @@ function CatProfileFormImpl({ draft, onChange, errors }: CatProfileFormProps) {
           aria-invalid={!!breedError}
           aria-describedby={breedError ? "error-cat-breed" : undefined}
         />
+        <div className={styles.charCounter} aria-hidden>
+          {Math.max(0, BREED_MAX - draft.breed.trim().length)}자 남음
+        </div>
         <datalist id="breed-list">
           {CAT_BREEDS_KO.map((b) => (
             <option key={b} value={b} />

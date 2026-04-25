@@ -4,6 +4,7 @@
     "noEmit": true
   },
   "_comment_r12": "R12 commit 3 (2026-04-24): Phase B 대상 14 파일이 src/ 로 이관됨. staging 에는 re-export shim 만 남고 본체는 src/**/*.ts(x) 에서 tsc 검증. 미이관된 staging 파일 (multi-viewer / Phase B tests) 만 명시 포함.",
+  "_comment_fix_r1": "cat-identity Tier 1 fix R1 #6 (2026-04-25): include 항목 grep 검증 완료 — 모든 staging 파일 실재 (사용 중). 제거 대상 없음. cat-identity 테스트 (src/lib/cat/__tests__/) 는 src/**/*.ts 에 자동 포함됨.",
   "include": [
     "next-env.d.ts",
     "src/**/*.ts",

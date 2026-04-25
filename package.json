@@ -11,7 +11,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:playwright": "playwright test",
-    "test:playwright:smoke": "playwright test tests/broadcast-smoke.spec.ts"
+    "test:playwright:smoke": "playwright test tests/broadcast-smoke.spec.ts",
+    "verify:routes": "node scripts/verify-routes-manifest.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.88.0",
