@@ -22,6 +22,9 @@ export const CAT_MESSAGES = {
   alreadyRegistered: "이미 등록되어 있어요. 홈으로 이동해요.",
   timeout: "네트워크가 불안정해요. 잠시 후 다시 시도해 주세요.",
   unknownError: "알 수 없는 오류가 발생했어요",
+  validationGeneric: "입력값을 확인해 주세요",
+  insertFailedPrefix: "등록에 실패했어요. ",
+  photoUpdateFailedPrefix: "사진은 올렸지만 프로필에 반영하지 못했어요.",
   // photo
   photoDecodeFailed: "사진을 읽지 못했어요. 다른 사진으로 시도해 주세요.",
   photoMimeInvalid: "지원하지 않는 파일 형식이에요. JPG/PNG/WebP/HEIC 만 가능합니다.",

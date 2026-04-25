@@ -35,6 +35,14 @@ import type {
   WorkerOutMessage,
 } from "@/workers/extractHsv.worker";
 import { logger } from "@/lib/observability/logger";
+import {
+  HSV_TARGET,
+  HSV_CROP_RATIO,
+  HSV_BIN_COUNT,
+  HSV_SAT_THRESHOLD,
+  HSV_VAL_THRESHOLD,
+} from "./constants";
+import { CAT_MESSAGES } from "./messages";
 
 export type { HsvColorProfile } from "@/workers/extractHsv.worker";
 
@@ -42,22 +50,17 @@ export type ExtractHsvResult =
   | { kind: "ok"; profile: HsvColorProfile }
   | { kind: "error"; reason: string; message: string };
 
-/** 다운샘플 타깃 해상도. 256×256 = 65k 픽셀 (모바일 한도 내). */
-const TARGET = 256;
-/** 중앙 crop 비율. 0.5 = 가운데 50% 만 사용. */
-const CROP_RATIO = 0.5;
-
 /** 빈 프로파일 (실패 폴백용). */
 function emptyProfile(): HsvColorProfile {
   return { dominant_hues: [], sample_count: 0, version: "v1" };
 }
 
 /** Worker 사용 가능 여부 (ssr 안전). */
-function workerSupported(): boolean {
+function isWorkerSupported(): boolean {
   return typeof Worker !== "undefined";
 }
 
-/** File → ImageData (TARGET×TARGET, 중앙 crop). 실패 시 null. */
+/** File → ImageData (HSV_TARGET × HSV_TARGET, 중앙 crop). 실패 시 null. */
 async function fileToImageData(file: File): Promise<ImageData | null> {
   try {
     const bitmap = await createImageBitmap(file);
@@ -68,17 +71,17 @@ async function fileToImageData(file: File): Promise<ImageData | null> {
       return null;
     }
 
-    const cropW = Math.floor(width * CROP_RATIO);
-    const cropH = Math.floor(height * CROP_RATIO);
+    const cropW = Math.floor(width * HSV_CROP_RATIO);
+    const cropH = Math.floor(height * HSV_CROP_RATIO);
     const cropX = Math.floor((width - cropW) / 2);
     const cropY = Math.floor((height - cropH) / 2);
 
     const canvas: OffscreenCanvas | HTMLCanvasElement =
       typeof OffscreenCanvas !== "undefined"
-        ? new OffscreenCanvas(TARGET, TARGET)
+        ? new OffscreenCanvas(HSV_TARGET, HSV_TARGET)
         : Object.assign(document.createElement("canvas"), {
-            width: TARGET,
-            height: TARGET,
+            width: HSV_TARGET,
+            height: HSV_TARGET,
           });
     const ctx = canvas.getContext("2d") as
       | CanvasRenderingContext2D
@@ -88,8 +91,8 @@ async function fileToImageData(file: File): Promise<ImageData | null> {
       bitmap.close?.();
       return null;
     }
-    ctx.drawImage(bitmap, cropX, cropY, cropW, cropH, 0, 0, TARGET, TARGET);
-    const imageData = ctx.getImageData(0, 0, TARGET, TARGET);
+    ctx.drawImage(bitmap, cropX, cropY, cropW, cropH, 0, 0, HSV_TARGET, HSV_TARGET);
+    const imageData = ctx.getImageData(0, 0, HSV_TARGET, HSV_TARGET);
     bitmap.close?.();
     return imageData;
   } catch {
@@ -99,10 +102,8 @@ async function fileToImageData(file: File): Promise<ImageData | null> {
 
 /** Worker 미지원 환경 — requestIdleCallback 으로 chunked 처리 (4096 픽셀씩). */
 async function computeOnMainThreadIdle(imageData: ImageData): Promise<HsvColorProfile> {
-  const BIN_COUNT = 18;
-  const SAT_THRESHOLD = 0.2;
-  const VAL_THRESHOLD = 0.15;
-  const hist = new Array<number>(BIN_COUNT).fill(0);
+  /* fix R3 R4-1 — 로컬 재정의 제거. constants.ts 의 HSV_* 단일 출처. */
+  const hist = new Array<number>(HSV_BIN_COUNT).fill(0);
   const data = imageData.data;
   const CHUNK_PIXELS = 4096; // 4096 픽셀 = 16384 bytes (RGBA)
   const CHUNK_BYTES = CHUNK_PIXELS * 4;
@@ -130,8 +131,8 @@ async function computeOnMainThreadIdle(imageData: ImageData): Promise<HsvColorPr
       }
       const s = max === 0 ? 0 : delta / max;
       const v = max;
-      if (s < SAT_THRESHOLD || v < VAL_THRESHOLD) continue;
-      const bin = Math.min(BIN_COUNT - 1, Math.floor(h / 20));
+      if (s < HSV_SAT_THRESHOLD || v < HSV_VAL_THRESHOLD) continue;
+      const bin = Math.min(HSV_BIN_COUNT - 1, Math.floor(h / 20));
       hist[bin] = (hist[bin] ?? 0) + 1;
     }
     // chunk 사이에 idle yield — 메인 스레드 양보.
@@ -165,12 +166,12 @@ export async function extractHsvFromPhoto(file: File): Promise<ExtractHsvResult>
     return {
       kind: "error",
       reason: "decode-failed",
-      message: "사진을 읽지 못했어요. 다른 사진으로 시도해 주세요.",
+      message: CAT_MESSAGES.photoDecodeFailed,
     };
   }
 
   // Worker 경로 우선.
-  if (workerSupported()) {
+  if (isWorkerSupported()) {
     let worker: Worker | null = null;
     let workerSucceeded = false;
     try {
@@ -197,7 +198,7 @@ export async function extractHsvFromPhoto(file: File): Promise<ExtractHsvResult>
     } catch (err) {
       // Worker 인스턴스 생성/실행 실패 → idle 폴백.
       // 단, postMessage transfer 이후라면 imageData 는 detached — 아래 폴백에서 file 재디코딩.
-      logger.warn("extractHsvFromPhoto", "worker failed, fallback to idle", {
+      logger.warn("extractHsvFromPhoto", "워커 실패 — 메인 스레드 폴백", {
         message: err instanceof Error ? err.message : String(err),
       });
     } finally {
@@ -217,7 +218,7 @@ export async function extractHsvFromPhoto(file: File): Promise<ExtractHsvResult>
         return {
           kind: "error",
           reason: "decode-failed",
-          message: "사진을 읽지 못했어요. 다른 사진으로 시도해 주세요.",
+          message: CAT_MESSAGES.photoDecodeFailed,
         };
       }
       try {
@@ -228,7 +229,7 @@ export async function extractHsvFromPhoto(file: File): Promise<ExtractHsvResult>
         return {
           kind: "error",
           reason: "compute-failed",
-          message: err instanceof Error ? err.message : "알 수 없는 오류",
+          message: err instanceof Error ? err.message : CAT_MESSAGES.unknownError,
         };
       }
     }
@@ -243,7 +244,7 @@ export async function extractHsvFromPhoto(file: File): Promise<ExtractHsvResult>
     return {
       kind: "error",
       reason: "compute-failed",
-      message: err instanceof Error ? err.message : "알 수 없는 오류",
+      message: err instanceof Error ? err.message : CAT_MESSAGES.unknownError,
     };
   }
 }

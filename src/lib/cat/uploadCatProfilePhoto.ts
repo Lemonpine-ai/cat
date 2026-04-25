@@ -12,6 +12,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { stripExifFromImage } from "./stripExifFromImage";
 import { ALLOWED_MIME } from "./constants";
+import { CAT_MESSAGES } from "./messages";
 import { logger } from "@/lib/observability/logger";
 
 /** 파일명 안전 문자만 허용 (영숫자/하이픈/언더스코어). 나머지는 _ 로 치환. */
@@ -54,11 +55,11 @@ export async function uploadCatProfilePhoto(args: {
 
   // 1) MIME 2차 가드
   if (!ALLOWED_MIME.includes(file.type as (typeof ALLOWED_MIME)[number])) {
-    logger.warn("uploadCatProfilePhoto.mime", "rejected mime", { type: file.type });
+    logger.warn("uploadCatProfilePhoto.mime", "허용되지 않는 MIME 거부됨", { type: file.type });
     return {
       kind: "error",
       code: "INVALID_MIME",
-      message: `지원하지 않는 파일 형식이에요 (${file.type}). JPG/PNG/WebP/HEIC 만 가능.`,
+      message: CAT_MESSAGES.photoMimeInvalid,
     };
   }
 

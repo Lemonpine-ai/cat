@@ -148,7 +148,7 @@ export function useCatRegistration(
       /* 1) 클라이언트 validation */
       const errors = validateCatDraft(draft);
       if (errors.length > 0) {
-        const msg = errors[0]?.message ?? "입력값을 확인해 주세요";
+        const msg = errors[0]?.message ?? CAT_MESSAGES.validationGeneric;
         return failWith("VALIDATION", msg);
       }
 
@@ -195,7 +195,7 @@ export function useCatRegistration(
 
         // 3) 그 외 INSERT 실패
         logger.error("useCatRegistration.insert", insertError, { homeId });
-        const message = `등록에 실패했어요. ${insertError?.message ?? ""}`.trim();
+        const message = `${CAT_MESSAGES.insertFailedPrefix}${insertError?.message ?? ""}`.trim();
         return failWith("INSERT_FAILED", message);
       }
 
@@ -245,7 +245,7 @@ export function useCatRegistration(
         /* UPDATE 실패 — Storage 에는 올라갔으나 cats row 에 photo_front_url 미반영.
          * fix R1 #3: 사용자에게 정확히 안내 (error 상태). */
         logger.error("useCatRegistration.update", updateError, { catId });
-        const message = `사진은 올렸지만 프로필에 반영하지 못했어요. (${updateError.message})`;
+        const message = `${CAT_MESSAGES.photoUpdateFailedPrefix} (${updateError.message})`;
         return failWith("UPLOAD_FAILED", message);
       }
 

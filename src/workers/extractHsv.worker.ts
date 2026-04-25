@@ -13,7 +13,16 @@
  *
  * 메인 코드 (extractHsvFromPhoto.ts) 가 ImageData 만 캡처해서 postMessage —
  * Worker 가 hue 히스토그램 계산 후 dominant_hues 반환.
+ *
+ * fix R3 R4-1: BIN_COUNT / SAT_THRESHOLD / VAL_THRESHOLD 로컬 재정의 제거 →
+ *              constants.ts 의 HSV_* 단일 출처 사용 (worker 도 ES module 빌드).
  */
+
+import {
+  HSV_BIN_COUNT,
+  HSV_SAT_THRESHOLD,
+  HSV_VAL_THRESHOLD,
+} from "../lib/cat/constants";
 
 export type HsvColorProfile = {
   /** 상위 hue (0~360). 최대 3개. */
@@ -28,13 +37,6 @@ export type WorkerInMessage = { imageData: ImageData };
 export type WorkerOutMessage =
   | { kind: "ok"; profile: HsvColorProfile }
   | { kind: "error"; reason: string };
-
-/** Hue bin 개수 — 18 bin × 20도. */
-const BIN_COUNT = 18;
-/** 채도 컷오프 (이하 무채색 제외). */
-const SAT_THRESHOLD = 0.2;
-/** 명도 컷오프 (이하 너무 어두움 제외). */
-const VAL_THRESHOLD = 0.15;
 
 /** RGB (0..255) → HSV (h: 0..360, s: 0..1, v: 0..1). */
 function rgbToHsv(r: number, g: number, b: number): [number, number, number] {
@@ -59,7 +61,7 @@ function rgbToHsv(r: number, g: number, b: number): [number, number, number] {
 
 /** ImageData → 상위 3 hue. 비어있으면 빈 배열. */
 function computeDominantHues(imageData: ImageData): number[] {
-  const hist = new Array<number>(BIN_COUNT).fill(0);
+  const hist = new Array<number>(HSV_BIN_COUNT).fill(0);
   const data = imageData.data;
   for (let i = 0; i < data.length; i += 4) {
     const r = data[i];
@@ -67,8 +69,8 @@ function computeDominantHues(imageData: ImageData): number[] {
     const b = data[i + 2];
     if (r === undefined || g === undefined || b === undefined) continue;
     const [h, s, v] = rgbToHsv(r, g, b);
-    if (s < SAT_THRESHOLD || v < VAL_THRESHOLD) continue;
-    const bin = Math.min(BIN_COUNT - 1, Math.floor(h / 20));
+    if (s < HSV_SAT_THRESHOLD || v < HSV_VAL_THRESHOLD) continue;
+    const bin = Math.min(HSV_BIN_COUNT - 1, Math.floor(h / 20));
     hist[bin] = (hist[bin] ?? 0) + 1;
   }
 

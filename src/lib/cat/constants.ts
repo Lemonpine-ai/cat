@@ -19,6 +19,9 @@ export const WEIGHT_MAX = 30;
 /** HSV 추출 다운샘플 타깃 해상도 (TARGET × TARGET). */
 export const HSV_TARGET = 256;
 
+/** HSV 추출 시 중앙 crop 비율 (0.5 = 중앙 50% 만 사용 — 배경 제외). */
+export const HSV_CROP_RATIO = 0.5;
+
 /** Hue 히스토그램 bin 개수 (18 × 20도). */
 export const HSV_BIN_COUNT = 18;
 
