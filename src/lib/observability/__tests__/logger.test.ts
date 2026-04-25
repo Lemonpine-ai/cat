@@ -5,9 +5,18 @@
  *  - owner_id / email / home_id 등 PII 키 자동 마스킹 (앞 4자 + ***).
  *  - 비-PII 키는 그대로 출력.
  *  - SENTRY_DSN 미설정 시 emitToSentry noop.
+ *
+ * fix R7-1 (QA-6차 R1 후속):
+ *  vitest.setup.ts 에서 logger 모듈을 글로벌 noop mock 으로 등록한다 (다른 테스트의
+ *  의도된 stderr noise 차단 목적). 본 파일은 logger 의 PII 마스킹 동작 자체를 검증하므로
+ *  파일 진입 직후 vi.unmock 으로 mock 을 해제하고 실제 logger 를 import 해야 한다.
+ *  (console.warn / console.error 자체는 아래 beforeEach 에서 spyOn 으로 흡수하여 stderr 0 유지)
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+
+vi.unmock("@/lib/observability/logger");
+
 import { logger } from "@/lib/observability/logger";
 
 describe("logger PII 마스킹 (fix R4-4 m11)", () => {

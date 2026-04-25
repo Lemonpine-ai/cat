@@ -78,5 +78,10 @@ export default defineConfig({
     // Phase A 레거시 + 기존 R2 테스트가 `declare const describe: any` 패턴으로 전역 API 기대 →
     // vitest `globals: true` 로 inject. 신규 R3 테스트도 import 로 쓰지만 양립 가능.
     globals: true,
+    // fix R7-1 — QA-6차 R1 후속: 글로벌 logger noop mock 으로 stderr noise 0 보장.
+    //   상세 배경 / 채택 사유 / 후보 비교는 ./vitest.setup.ts JSDoc 참조.
+    //   logger 자체 PII 마스킹 검증은 src/lib/observability/__tests__/logger.test.ts 가
+    //   vi.unmock 으로 모듈 단위로 mock 을 해제하여 보존한다.
+    setupFiles: ["./vitest.setup.ts"],
   },
 });
