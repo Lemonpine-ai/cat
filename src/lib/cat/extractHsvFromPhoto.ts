@@ -35,14 +35,9 @@ import type {
   WorkerOutMessage,
 } from "@/workers/extractHsv.worker";
 import { logger } from "@/lib/observability/logger";
-import {
-  HSV_TARGET,
-  HSV_CROP_RATIO,
-  HSV_BIN_COUNT,
-  HSV_SAT_THRESHOLD,
-  HSV_VAL_THRESHOLD,
-} from "./constants";
+import { HSV_TARGET, HSV_CROP_RATIO } from "./constants";
 import { CAT_MESSAGES } from "./messages";
+import { computeDominantHuesFromImageData } from "./computeDominantHues";
 
 export type { HsvColorProfile } from "@/workers/extractHsv.worker";
 
@@ -50,10 +45,8 @@ export type ExtractHsvResult =
   | { kind: "ok"; profile: HsvColorProfile }
   | { kind: "error"; reason: string; message: string };
 
-/** 빈 프로파일 (실패 폴백용). */
-function emptyProfile(): HsvColorProfile {
-  return { dominant_hues: [], sample_count: 0, version: "v1" };
-}
+/* fix R4-3 m16 — emptyProfile / emptyHsvProfile 두 wrapper 가 같은 객체 생성.
+ * 한 함수만 남기고 호출자는 `emptyHsvProfile` 만 사용 (export 노출). */
 
 /** Worker 사용 가능 여부 (ssr 안전). */
 function isWorkerSupported(): boolean {
@@ -100,57 +93,24 @@ async function fileToImageData(file: File): Promise<ImageData | null> {
   }
 }
 
-/** Worker 미지원 환경 — requestIdleCallback 으로 chunked 처리 (4096 픽셀씩). */
+/**
+ * Worker 미지원 환경 — single yield + 단일 sync 계산 (fix R4-3 m15 단순화).
+ *
+ * 이전: chunked yield + inline hist 루프 (Worker 본체와 중복).
+ * 이후: 호출 전 1회 idle yield → computeDominantHuesFromImageData 단일 호출.
+ *  - 65k 픽셀 모바일 ~80ms (chunked 보다 살짝 느리지만 메인 스레드 1회 점유).
+ *  - 알고리즘 본체는 Worker 와 동일 (단일 출처 → 임계값 변경 시 한 곳만 수정).
+ */
 async function computeOnMainThreadIdle(imageData: ImageData): Promise<HsvColorProfile> {
-  /* fix R3 R4-1 — 로컬 재정의 제거. constants.ts 의 HSV_* 단일 출처. */
-  const hist = new Array<number>(HSV_BIN_COUNT).fill(0);
-  const data = imageData.data;
-  const CHUNK_PIXELS = 4096; // 4096 픽셀 = 16384 bytes (RGBA)
-  const CHUNK_BYTES = CHUNK_PIXELS * 4;
-
-  for (let start = 0; start < data.length; start += CHUNK_BYTES) {
-    const end = Math.min(start + CHUNK_BYTES, data.length);
-    for (let i = start; i < end; i += 4) {
-      const r = data[i];
-      const g = data[i + 1];
-      const b = data[i + 2];
-      if (r === undefined || g === undefined || b === undefined) continue;
-      const rn = r / 255;
-      const gn = g / 255;
-      const bn = b / 255;
-      const max = Math.max(rn, gn, bn);
-      const min = Math.min(rn, gn, bn);
-      const delta = max - min;
-      let h = 0;
-      if (delta > 0) {
-        if (max === rn) h = ((gn - bn) / delta) % 6;
-        else if (max === gn) h = (bn - rn) / delta + 2;
-        else h = (rn - gn) / delta + 4;
-        h *= 60;
-        if (h < 0) h += 360;
-      }
-      const s = max === 0 ? 0 : delta / max;
-      const v = max;
-      if (s < HSV_SAT_THRESHOLD || v < HSV_VAL_THRESHOLD) continue;
-      const bin = Math.min(HSV_BIN_COUNT - 1, Math.floor(h / 20));
-      hist[bin] = (hist[bin] ?? 0) + 1;
-    }
-    // chunk 사이에 idle yield — 메인 스레드 양보.
-    await new Promise<void>((resolve) => {
-      const ric = (
-        globalThis as unknown as { requestIdleCallback?: (cb: () => void) => number }
-      ).requestIdleCallback;
-      if (typeof ric === "function") ric(() => resolve());
-      else setTimeout(resolve, 0);
-    });
-  }
-
-  const indexed = hist.map((count, idx) => ({ count, idx }));
-  indexed.sort((a, b) => b.count - a.count);
-  const top3 = indexed
-    .filter((e) => e.count > 0)
-    .slice(0, 3)
-    .map((e) => e.idx * 20 + 10);
+  /* 메인 스레드 양보 — UI 입력 대기 중인 경우 우선 처리. */
+  await new Promise<void>((resolve) => {
+    const ric = (
+      globalThis as unknown as { requestIdleCallback?: (cb: () => void) => number }
+    ).requestIdleCallback;
+    if (typeof ric === "function") ric(() => resolve());
+    else setTimeout(resolve, 0);
+  });
+  const top3 = computeDominantHuesFromImageData(imageData);
   return { dominant_hues: top3, sample_count: 1, version: "v1" };
 }
 
@@ -251,5 +211,5 @@ export async function extractHsvFromPhoto(file: File): Promise<ExtractHsvResult>
 
 /** 호출자가 빈 프로파일이 필요한 경우 (error 분기에서 폴백 저장용). */
 export function emptyHsvProfile(): HsvColorProfile {
-  return emptyProfile();
+  return { dominant_hues: [], sample_count: 0, version: "v1" };
 }

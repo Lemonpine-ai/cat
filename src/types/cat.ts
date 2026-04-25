@@ -95,7 +95,14 @@ export type CatPhotoUpdatePayload = {
  * - weightKg → Number.isFinite 통과 시 number, 아니면 null
  * - isNeutered "unknown" → null (DB BOOLEAN 3상태 mapping)
  * - sex "unknown" → null (Phase A CatProfileRow 규약 유지)
+ *
+ * fix R4-3 M7 — WEIGHT_MIN/MAX 상수 사용 (validate 와 동일 임계값).
+ *  이전: > 0 && <= 30 → 0.05 같은 값이 validate 통과 (WEIGHT_MIN=0.1) ↔
+ *        payload 통과 (>0) 모순.
+ *  이후: WEIGHT_MIN (0.1) ~ WEIGHT_MAX (30) 단일 임계값. 두 곳 일치.
  */
+import { WEIGHT_MIN, WEIGHT_MAX } from "@/lib/cat/constants";
+
 export function catDraftToInsertPayload(
   draft: CatDraft,
   homeId: string,
@@ -103,7 +110,9 @@ export function catDraftToInsertPayload(
 ): CatInsertPayload {
   const weightParsed = parseFloat(draft.weightKg);
   const weightValid =
-    Number.isFinite(weightParsed) && weightParsed > 0 && weightParsed <= 30;
+    Number.isFinite(weightParsed) &&
+    weightParsed >= WEIGHT_MIN &&
+    weightParsed <= WEIGHT_MAX;
   return {
     home_id: homeId,
     name: draft.name.trim(),

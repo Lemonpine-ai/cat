@@ -980,7 +980,7 @@ Phase B 이후 (신기능 = UI/훅 추가) 는 다시 `staging/` 원칙 복귀.
 | 필수 | 성별 | 3 라디오 (남/여/모름) |
 | 사진 (옵션) | 정면 사진 | `<input type=file accept=image/* capture=environment>` (5MB / JPEG/PNG/WebP/HEIC) |
 | 옵션 | 중성화 | 3 라디오 (예/아니오/모름) |
-| 옵션 | 체중 (kg) | `<input type=number>` (0~30 CHECK) |
+| 옵션 | 체중 (kg) | `<input type=number>` (0.1~30 CHECK, fix R1 #6 강화) |
 | 옵션 | 기저질환 | textarea |
 | 옵션 | 복용약 | textarea |
 | 옵션 | 영양제 | textarea |
@@ -990,7 +990,7 @@ Phase B 이후 (신기능 = UI/훅 추가) 는 다시 `staging/` 원칙 복귀.
 #### 11.1.1 색상 calibration 옵션 B (Tier 1 자동 추출)
 
 사용자 인지 X. 등록 사진 1장에서 자동으로 HSV 색상 프로파일 추출 → `cats.color_profile` JSONB.
-- 알고리즘: 중앙 50% 영역 샘플링 → RGB→HSV → 채도 0.2 이상 픽셀만 → Hue 18 bin 히스토그램 → 상위 3 hue 반환
+- 알고리즘: 중앙 50% 영역 샘플링 → RGB→HSV → 채도 0.2 이상 + 명도 0.15 이상 픽셀만 → Hue 18 bin 히스토그램 → 상위 3 hue 반환
 - Tier 2 에서 카메라 스트림 20장 기반 정교화로 대체 (sample_count 증가)
 
 #### 11.1.2 Try A — Orphan 방지 순서
@@ -1013,7 +1013,7 @@ useCatRegistration.submit():
 `sql/20260425_cats_tier1_fields.sql`:
 - ALTER TABLE cats ADD COLUMN × 9 (모두 nullable)
 - 기존 재사용: `birth_date`, `medical_notes`, `photo_front_url`
-- 신규 옵션: `is_neutered`, `weight_kg` + CHECK(0..30), `medications`, `supplements`, `litter_type`, `food_type`
+- 신규 옵션: `is_neutered`, `weight_kg` + CHECK(0.1..30) (fix R1 #6 강화), `medications`, `supplements`, `litter_type`, `food_type`
 - 신규 색상: `color_profile` JSONB, `color_sample_count` INTEGER, `color_updated_at` TIMESTAMPTZ
 - CLAUDE.md #14 트리거 X (단순 nullable 추가).
 
@@ -1089,3 +1089,18 @@ cat-identity 화면 어디서도 `dangerouslySetInnerHTML` 사용 금지. 사용
 #### 11.6.4 의료 정보 암호화 (후속 PR)
 
 `medical_notes` / `medications` / `supplements` 컬럼은 평문 저장. Tier 3 다묘 관리 PR 에서 client-side AES 암호화 + 사용자 비공개 키 도입 계획 (FR HIPAA 수준은 아님 — 가족 공유 의료 메모 수준).
+
+#### 11.6.5 체중 최소값 0.1 — 입력 실수 차단
+
+`cats.weight_kg` 의 CHECK 가 `>= 0.1` (sql/20260425c_cats_weight_min.sql).
+0kg 입력은 사용자 실수 (단위 혼동, 0 자릿수 누락) 가 대부분 — 의미 있는 데이터 없음.
+0.1 미만은 신생아도 200g (= 0.2kg) 초과이므로 현실적 하한.
+
+코드 단일 출처: `src/lib/cat/constants.ts` 의 `WEIGHT_MIN = 0.1`.
+- `validateCatDraft` (fix R1)
+- `catDraftToInsertPayload` (fix R4-3 M7)
+- `messages.ts.weightOutOfRange`
+- ARCHITECTURE §11.1 표
+- sql/20260425c_cats_weight_min.sql CHECK
+
+모두 0.1 사용. 임계값 변경 시 본 5곳 동시 갱신 필요 (그러지 않으면 validate 통과 ↔ payload null 모순 재발).

@@ -55,6 +55,11 @@ export default defineConfig({
       "src/lib/cat/__tests__/uploadCatProfilePhoto.test.ts",
       // cat-identity Tier 1 fix R4-2 (사용자 흐름 — submittingRef / alreadyExisted / UPLOAD_FAILED 액션):
       "src/app/cats/new/__tests__/CatRegistrationScreen.test.tsx",
+      // cat-identity Tier 1 fix R4-3 (단순화 — useCatDraftUpdater / computeDominantHues / payload weight / CatTextField):
+      "src/hooks/__tests__/useCatDraftUpdater.test.ts",
+      "src/lib/cat/__tests__/computeDominantHues.test.ts",
+      "src/lib/cat/__tests__/catDraftToInsertPayload.test.ts",
+      "src/app/cats/new/__tests__/CatTextField.test.tsx",
     ],
     exclude: ["node_modules", "tests", "staging/tests/node_modules"],
     // jsdom 으로 전환: sampling 테스트가 document.hidden / visibilitychange / setInterval 을 사용.

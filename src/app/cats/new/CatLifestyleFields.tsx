@@ -8,11 +8,12 @@
 
 "use client";
 
-import { memo, useCallback, type Dispatch, type SetStateAction } from "react";
+import { memo, type Dispatch, type SetStateAction } from "react";
 import type { CatDraft } from "@/types/cat";
 import type { ValidationError } from "@/lib/cat/validateCatDraft";
 import { LITTER_TYPES_KO } from "@/lib/cat/litterTypes";
 import { CAT_FOODS_KO } from "@/lib/cat/foodList";
+import { useCatDraftUpdater } from "@/hooks/useCatDraftUpdater";
 import styles from "./CatRegistrationScreen.module.css";
 
 /* fix R3 R5-E3 — 부모 setDraft 와 호환되는 시그니처. */
@@ -24,12 +25,9 @@ export type CatLifestyleFieldsProps = {
 };
 
 function CatLifestyleFieldsImpl({ draft, onChange }: CatLifestyleFieldsProps) {
-  const update = useCallback(
-    <K extends keyof CatDraft>(key: K, value: CatDraft[K]) => {
-      onChange({ ...draft, [key]: value });
-    },
-    [draft, onChange],
-  );
+  /* fix R4-3 M1 — useCatDraftUpdater 헬퍼로 deps=[onChange] 만 (이전 [draft, onChange] → memo 무효).
+   * 함수형 setter (prev => ...) 패턴 강제. */
+  const update = useCatDraftUpdater(onChange);
 
   return (
     <>

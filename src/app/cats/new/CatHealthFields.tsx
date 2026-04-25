@@ -13,12 +13,13 @@
 
 "use client";
 
-import { memo, useCallback, type Dispatch, type SetStateAction } from "react";
+import { memo, type Dispatch, type SetStateAction } from "react";
 import type { CatDraft, CatNeuteredStatus } from "@/types/cat";
 import {
   getFieldError,
   type ValidationError,
 } from "@/lib/cat/validateCatDraft";
+import { useCatDraftUpdater } from "@/hooks/useCatDraftUpdater";
 import styles from "./CatRegistrationScreen.module.css";
 
 /* fix R3 R5-E3 — 부모 setDraft 와 호환되는 시그니처. */
@@ -37,12 +38,9 @@ const NEUTERED_OPTIONS: ReadonlyArray<{ value: CatNeuteredStatus; label: string 
 function CatHealthFieldsImpl({ draft, onChange, errors }: CatHealthFieldsProps) {
   const weightError = getFieldError(errors, "weightKg");
 
-  const update = useCallback(
-    <K extends keyof CatDraft>(key: K, value: CatDraft[K]) => {
-      onChange({ ...draft, [key]: value });
-    },
-    [draft, onChange],
-  );
+  /* fix R4-3 M1 — useCatDraftUpdater 헬퍼로 deps=[onChange] 만 (이전 [draft, onChange] → memo 무효).
+   * 함수형 setter (prev => ...) 패턴 강제. */
+  const update = useCatDraftUpdater(onChange);
 
   return (
     <>
