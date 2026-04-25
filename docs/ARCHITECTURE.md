@@ -1064,6 +1064,8 @@ Tier 1 STRICT QA R7 에서 발견된 보안 결함 4건의 정책 정리.
 - `cats_update_by_home_owner` — UPDATE USING + WITH CHECK
 - `cats_delete_by_home_owner` — DELETE
 
+운영 절차 (CLAUDE.md #14 atomic deploy): PR 머지 → Vercel READY+PROMOTED 확인 → `cats.home_id IS NULL` count=0 확인 → Supabase MCP `apply_migration` → Instant Rollback commit ID 메모. (자세한 5단계는 SQL 헤더 주석 참조.)
+
 #### 11.6.2 EXIF strip — 사용자 사진 GPS leak 방지
 
 `src/lib/cat/stripExifFromImage.ts` — Canvas 재인코딩 (JPEG 0.92) 으로 EXIF 메타데이터 제거 후 Storage 업로드. HEIC 디코드 실패 시 원본 폴백 (Tier 2 에서 HEIC strip 추가).

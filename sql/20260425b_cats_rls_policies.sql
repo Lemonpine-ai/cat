@@ -2,7 +2,16 @@
 -- homes.owner_id = auth.uid() 기반 — 가족 외 사용자 차단.
 -- 베타 모드 (사용자 7명) — 기존 row 영향 없음 (사전 SELECT 확인 필요).
 --
--- Apply: 팀장이 Supabase MCP `apply_migration` 으로 별도 (사장님 승인 후).
+-- Apply: PR 머지 직후 동일 deploy 윈도우에 apply (CLAUDE.md #14 atomic deploy 조건).
+--
+-- fix R3 R8 — atomic deploy 5단계 명세:
+--   1) PR 머지 (단일 커밋, 단일 PR)
+--   2) Vercel `getDeployments` 로 production READY+PROMOTED 확인
+--   3) `SELECT count(*) FROM cats WHERE home_id IS NULL` = 0 사전 확인
+--      (RLS 정책이 home_id IN (...) 기반 → home_id NULL row 가 있으면 모두 차단됨)
+--   4) Supabase MCP `apply_migration` 으로 본 SQL 적용 (서비스 롤로 ALTER TABLE)
+--   5) Vercel Instant Rollback 후보 commit ID 메모 (앞선 production READY commit)
+--      → 정책 적용 후 SELECT/INSERT 실패 폭증하면 즉시 롤백 가능
 
 ALTER TABLE public.cats ENABLE ROW LEVEL SECURITY;
 
