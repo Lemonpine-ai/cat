@@ -1104,3 +1104,5 @@ cat-identity 화면 어디서도 `dangerouslySetInnerHTML` 사용 금지. 사용
 - sql/20260425c_cats_weight_min.sql CHECK
 
 모두 0.1 사용. 임계값 변경 시 본 5곳 동시 갱신 필요 (그러지 않으면 validate 통과 ↔ payload null 모순 재발).
+
+롤백 SQL: `sql/20260425c_cats_weight_min_rollback.sql` (CHECK 0..30 원복).
