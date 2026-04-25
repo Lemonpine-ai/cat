@@ -196,6 +196,22 @@
   display: block;
 }
 
+/* fix R2 R6-6 — aspect-ratio 미지원 브라우저 (iOS Safari ≤ 14, 구형 Android) 폴백.
+ * padding-bottom 트릭으로 4:3 비율 사전 예약 — CLS 차단. */
+@supports not (aspect-ratio: 1) {
+  .photoPlaceholder,
+  .photoPreviewWrap {
+    position: relative;
+  }
+
+  .photoPlaceholder::before,
+  .photoPreviewWrap::before {
+    content: "";
+    display: block;
+    padding-bottom: 75%; /* 4:3 비율 → 3/4 = 0.75 */
+  }
+}
+
 .photoRemoveBtn {
   position: absolute;
   top: 8px;
@@ -218,7 +234,9 @@
 }
 
 .optionalSection.open {
-  max-height: 2000px;
+  /* fix R2 R6-5 — 2000px 고정 → 200vh.
+   * 모바일 글꼴 확대 / 긴 콘텐츠 (옵션 7 필드 모두 펼침) 시 잘리는 문제 방지. */
+  max-height: 200vh;
   opacity: 1;
 }
 

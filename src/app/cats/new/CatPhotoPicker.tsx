@@ -14,7 +14,7 @@
 
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import styles from "./CatRegistrationScreen.module.css";
 
 const MAX_FILE_BYTES = 5 * 1024 * 1024; // 5 MB
@@ -35,7 +35,9 @@ export type CatPhotoPickerProps = {
   errorMessage?: string | null;
 };
 
-export function CatPhotoPicker({ file, onChange, errorMessage }: CatPhotoPickerProps) {
+/* fix R2 R6-1 — React.memo 로 props 변경 없을 때 리렌더 차단.
+ * 부모 (CatProfileForm) 가 onChange 를 useCallback 으로 안정화해야 효과 발생. */
+function CatPhotoPickerImpl({ file, onChange, errorMessage }: CatPhotoPickerProps) {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -112,3 +114,6 @@ export function CatPhotoPicker({ file, onChange, errorMessage }: CatPhotoPickerP
     </div>
   );
 }
+
+/* fix R2 R6-1 — memo 래핑 export. */
+export const CatPhotoPicker = memo(CatPhotoPickerImpl);

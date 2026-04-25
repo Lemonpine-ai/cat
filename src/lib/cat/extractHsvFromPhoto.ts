@@ -171,32 +171,70 @@ export async function extractHsvFromPhoto(file: File): Promise<ExtractHsvResult>
 
   // Worker 경로 우선.
   if (workerSupported()) {
+    let worker: Worker | null = null;
+    let workerSucceeded = false;
     try {
-      const worker = new Worker(
+      worker = new Worker(
         new URL("../../workers/extractHsv.worker.ts", import.meta.url),
         { type: "module" },
       );
+      /* fix R2 R6-3 — try/finally 로 reject/error 경로에서도 worker.terminate() 보장.
+       * fix R2 R6-2 — postMessage 의 transfer list 로 ImageData 의 ArrayBuffer 소유권 이전 (65KB 복제 회피).
+       *               주의: transfer 후 imageData.data 는 이 스레드에서 더 이상 사용 불가 (소유권 이전됨).
+       *               워커 실패로 폴백 가는 경우 imageData 재사용 금지 — file 에서 다시 디코딩. */
       const profile = await new Promise<HsvColorProfile>((resolve, reject) => {
-        worker.onmessage = (e: MessageEvent<WorkerOutMessage>) => {
+        worker!.onmessage = (e: MessageEvent<WorkerOutMessage>) => {
           const msg = e.data;
           if (msg.kind === "ok") resolve(msg.profile);
           else reject(new Error(msg.reason));
         };
-        worker.onerror = (err) => reject(new Error(err.message || "worker-error"));
+        worker!.onerror = (err) => reject(new Error(err.message || "worker-error"));
         const inMsg: WorkerInMessage = { imageData };
-        worker.postMessage(inMsg);
+        worker!.postMessage(inMsg, [imageData.data.buffer]);
       });
-      worker.terminate();
+      workerSucceeded = true;
       return { kind: "ok", profile };
     } catch (err) {
-      // Worker 인스턴스 생성 실패 (Next 빌드에서 worker chunk 누락 등) → idle 폴백.
+      // Worker 인스턴스 생성/실행 실패 → idle 폴백.
+      // 단, postMessage transfer 이후라면 imageData 는 detached — 아래 폴백에서 file 재디코딩.
       logger.warn("extractHsvFromPhoto", "worker failed, fallback to idle", {
         message: err instanceof Error ? err.message : String(err),
       });
+    } finally {
+      // 정상/실패 모두 worker 인스턴스 정리 (R6-3).
+      if (worker) {
+        try {
+          worker.terminate();
+        } catch {
+          /* terminate 자체 실패는 무시 — 메인 스레드 다운 방지가 우선. */
+        }
+      }
+    }
+    if (!workerSucceeded) {
+      // 폴백: 메인 스레드 idle. transfer 로 detached 됐으므로 imageData 재추출.
+      const reImageData = await fileToImageData(file);
+      if (!reImageData) {
+        return {
+          kind: "error",
+          reason: "decode-failed",
+          message: "사진을 읽지 못했어요. 다른 사진으로 시도해 주세요.",
+        };
+      }
+      try {
+        const profile = await computeOnMainThreadIdle(reImageData);
+        return { kind: "ok", profile };
+      } catch (err) {
+        logger.error("extractHsvFromPhoto.idle", err);
+        return {
+          kind: "error",
+          reason: "compute-failed",
+          message: err instanceof Error ? err.message : "알 수 없는 오류",
+        };
+      }
     }
   }
 
-  // 폴백: 메인 스레드 idle chunked.
+  // Worker 미지원 환경: 메인 스레드 idle chunked.
   try {
     const profile = await computeOnMainThreadIdle(imageData);
     return { kind: "ok", profile };

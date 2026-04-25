@@ -30,10 +30,8 @@ import styles from "./CatRegistrationScreen.module.css";
 /** 등록 직후 홈에서 환영 토스트 띄우기 위한 sessionStorage 키 (HomeProfileRow 와 공유). */
 const WELCOME_TOAST_KEY = "cat-welcome-name";
 
-/** 옵션 섹션 transition 클래스 결합 헬퍼 (open/closed). */
-function optionalClass(open: boolean): string {
-  return open ? `${styles.optionalSection} ${styles.open}` : styles.optionalSection;
-}
+/* fix R2 R6-4 — optionalClass 헬퍼 제거.
+ * 매 렌더 함수 호출 + 새 문자열 생성 비용을 inline 으로 단순화. */
 
 /** 폼 초기 draft — 사용자 처음 진입 시 화면 값. */
 const INITIAL_DRAFT: CatDraft = {
@@ -141,8 +139,16 @@ export function CatRegistrationScreen({ homeId }: CatRegistrationScreenProps) {
         {showOptional ? "▼ 추가 정보 접기" : "▶ 더 자세히 입력하기 (선택)"}
       </button>
 
-      {/* fix R1 #2 — 항상 렌더 + max-height transition (재마운트 비용 제거). */}
-      <div className={optionalClass(showOptional)} aria-hidden={!showOptional}>
+      {/* fix R1 #2 — 항상 렌더 + max-height transition (재마운트 비용 제거).
+       * fix R2 R6-4 — optionalClass 헬퍼 제거 후 inline 클래스 결합. */}
+      <div
+        className={
+          showOptional
+            ? `${styles.optionalSection} ${styles.open}`
+            : styles.optionalSection
+        }
+        aria-hidden={!showOptional}
+      >
         <CatOptionalFields draft={draft} onChange={setDraft} errors={errors} />
       </div>
 

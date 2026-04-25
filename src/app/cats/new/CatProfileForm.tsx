@@ -50,6 +50,15 @@ function CatProfileFormImpl({ draft, onChange, errors }: CatProfileFormProps) {
     [draft, onChange],
   );
 
+  /* fix R2 R6-1 — CatPhotoPicker (React.memo) 가 매 렌더 onChange ref 변동으로 깨지지 않도록
+   * useCallback 으로 안정화. update 자체가 [draft, onChange] 의존이라 두 값 모두 안정해야 효과 최대. */
+  const handlePhotoChange = useCallback(
+    (file: File | null) => {
+      update("photoFile", file);
+    },
+    [update],
+  );
+
   return (
     <div className={styles.section}>
       <h2 className={styles.sectionTitle}>기본 정보 (필수)</h2>
@@ -159,10 +168,10 @@ function CatProfileFormImpl({ draft, onChange, errors }: CatProfileFormProps) {
         </div>
       </div>
 
-      {/* 사진 */}
+      {/* 사진 (R6-1: 안정화된 handlePhotoChange 전달 — memo + useCallback 조합) */}
       <CatPhotoPicker
         file={draft.photoFile}
-        onChange={(file) => update("photoFile", file)}
+        onChange={handlePhotoChange}
       />
     </div>
   );
