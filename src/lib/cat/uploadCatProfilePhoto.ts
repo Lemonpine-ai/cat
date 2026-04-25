@@ -10,6 +10,7 @@
 "use client";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { stripExifFromImage } from "./stripExifFromImage";
 
 /** 허용 MIME 타입 (호출자 가드 외 2차 방어). */
 const ALLOWED_MIME = [
@@ -61,19 +62,23 @@ export async function uploadCatProfilePhoto(args: {
     };
   }
 
-  // 2) Storage 경로 생성
+  // 2) EXIF 제거 — GPS 좌표·기기 정보 leak 방지 (fix R1 #1 보안).
+  //    HEIC 등 디코드 실패 시 stripExifFromImage 가 원본 fallback 반환.
+  const stripped = await stripExifFromImage(file);
+
+  // 3) Storage 경로 생성
   const timestamp = Date.now();
-  const ext = extFromMime(file.type);
+  const ext = extFromMime(stripped.type);
   const safeId = sanitizeForPath(catId);
   const path = `${homeId}/profiles/${safeId}_${timestamp}.${ext}`;
 
-  // 3) 업로드
+  // 4) 업로드
   const { error: uploadError } = await supabase.storage
     .from("cat-moments")
-    .upload(path, file, {
+    .upload(path, stripped, {
       cacheControl: "3600",
       upsert: false,
-      contentType: file.type,
+      contentType: stripped.type,
     });
   if (uploadError) {
     return {
@@ -83,7 +88,7 @@ export async function uploadCatProfilePhoto(args: {
     };
   }
 
-  // 4) publicUrl 조회
+  // 5) publicUrl 조회
   const { data: urlData } = supabase.storage
     .from("cat-moments")
     .getPublicUrl(path);

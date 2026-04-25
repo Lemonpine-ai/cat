@@ -1043,3 +1043,28 @@ R12 PR 와 동일 패턴. staging/{components,hooks,lib}/cat-identity 는 re-exp
 ### 11.5 cat_behavior_events 와의 연결
 
 cat_behavior_events.cat_id 는 nullable. Tier 1 등록 후에도 자동 매칭 안 됨 — Tier 2 식별 도입 후 매칭 시점에 채움. 즉 cat-identity 머지가 Phase B (행동) 머지를 막거나 깨지 않음 (orthogonal).
+
+### 11.6 보안 정책 (Tier 1 fix R1)
+
+Tier 1 STRICT QA R7 에서 발견된 보안 결함 4건의 정책 정리.
+
+#### 11.6.1 RLS — cats 테이블 4개 정책
+
+`sql/20260425b_cats_rls_policies.sql` 적용 후 모든 CRUD 가 `homes.owner_id = auth.uid()` 조건을 통과해야 한다. 가족 외 사용자가 다른 home 의 cats 를 조회/수정/삭제하지 못한다.
+
+- `cats_select_by_home_owner` — SELECT
+- `cats_insert_by_home_owner` — INSERT WITH CHECK
+- `cats_update_by_home_owner` — UPDATE USING + WITH CHECK
+- `cats_delete_by_home_owner` — DELETE
+
+#### 11.6.2 EXIF strip — 사용자 사진 GPS leak 방지
+
+`src/lib/cat/stripExifFromImage.ts` — Canvas 재인코딩 (JPEG 0.92) 으로 EXIF 메타데이터 제거 후 Storage 업로드. HEIC 디코드 실패 시 원본 폴백 (Tier 2 에서 HEIC strip 추가).
+
+#### 11.6.3 dangerouslySetInnerHTML 금지
+
+cat-identity 화면 어디서도 `dangerouslySetInnerHTML` 사용 금지. 사용자 입력 (이름/품종/메모) 은 React 의 기본 텍스트 escape 만 사용. 추가 sanitize 라이브러리도 도입하지 않음 (XSS surface 자체를 만들지 않는다).
+
+#### 11.6.4 의료 정보 암호화 (후속 PR)
+
+`medical_notes` / `medications` / `supplements` 컬럼은 평문 저장. Tier 3 다묘 관리 PR 에서 client-side AES 암호화 + 사용자 비공개 키 도입 계획 (FR HIPAA 수준은 아님 — 가족 공유 의료 메모 수준).

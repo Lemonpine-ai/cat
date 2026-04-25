@@ -41,6 +41,7 @@ export type RegistrationResult =
         | "DUPLICATE_NAME"
         | "INSERT_FAILED"
         | "UPLOAD_FAILED"  // photo-only soft error — 호출자는 여전히 홈으로 이동 가능
+        | "TIMEOUT"        // 네트워크 timeout — fix R1 #3 (PostgREST PGRST301 / message timeout)
         | "UNKNOWN";
       message: string;
     };
@@ -61,6 +62,20 @@ export type UseCatRegistrationResult = {
  * Postgres UNIQUE violation code. cats_unique_name_per_home_idx 등 제약 위반 시 반환.
  */
 const PG_UNIQUE_VIOLATION = "23505";
+
+/**
+ * PostgREST timeout / 네트워크 timeout 분류 헬퍼 (fix R1 #3).
+ * - PostgREST `PGRST301` 코드 = statement timeout
+ * - message 에 "timeout" 포함 = fetch/connection timeout
+ */
+function isTimeoutError(err: { code?: string; message?: string } | null | undefined): boolean {
+  if (!err) return false;
+  if (err.code === "PGRST301") return true;
+  const msg = (err.message ?? "").toLowerCase();
+  return msg.includes("timeout") || msg.includes("timed out");
+}
+
+const TIMEOUT_MESSAGE = "네트워크가 불안정해요. 잠시 후 다시 시도해 주세요.";
 
 export function useCatRegistration(
   args: UseCatRegistrationArgs,
@@ -104,14 +119,21 @@ export function useCatRegistration(
         .single();
 
       if (insertError || !insertData) {
-        const code =
-          insertError?.code === PG_UNIQUE_VIOLATION
-            ? "DUPLICATE_NAME"
-            : "INSERT_FAILED";
-        const message =
-          code === "DUPLICATE_NAME"
-            ? "이미 같은 이름의 고양이가 등록되어 있어요"
-            : `등록에 실패했어요. ${insertError?.message ?? ""}`.trim();
+        // 1) 이름 중복 (UNIQUE 위반)
+        // 2) 네트워크/DB timeout
+        // 3) 그 외 INSERT 실패
+        let code: "DUPLICATE_NAME" | "INSERT_FAILED" | "TIMEOUT";
+        let message: string;
+        if (insertError?.code === PG_UNIQUE_VIOLATION) {
+          code = "DUPLICATE_NAME";
+          message = "이미 같은 이름의 고양이가 등록되어 있어요";
+        } else if (isTimeoutError(insertError)) {
+          code = "TIMEOUT";
+          message = TIMEOUT_MESSAGE;
+        } else {
+          code = "INSERT_FAILED";
+          message = `등록에 실패했어요. ${insertError?.message ?? ""}`.trim();
+        }
         setState("error");
         setErrorMessage(message);
         return { kind: "error", code, message };
