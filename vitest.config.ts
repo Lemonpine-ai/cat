@@ -69,6 +69,8 @@ export default defineConfig({
       "src/app/cats/new/__tests__/CatTextArea.test.tsx",
       "src/lib/cat/__tests__/messages.test.ts",
       "src/lib/cat/__tests__/constants.test.ts",
+      // ICE timeout LTE 마진 (NEXT_PUBLIC_ICE_TIMEOUT_MS ENV 검증 단위 테스트 — PR #4 회복):
+      "src/lib/webrtc/__tests__/iceConnectionTimeoutMs.test.ts",
     ],
     exclude: ["node_modules", "tests", "staging/tests/node_modules"],
     // jsdom 으로 전환: sampling 테스트가 document.hidden / visibilitychange / setInterval 을 사용.
