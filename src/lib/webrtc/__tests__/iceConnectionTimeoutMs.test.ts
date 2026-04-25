@@ -95,4 +95,37 @@ describe("getIceConnectionTimeoutMs", () => {
     expect(result).toBe(30000);
     expect(warnSpy).toHaveBeenCalledTimes(0);
   });
+
+  it("T9: 인자 없이 호출 (process.env literal access) — ENV 미설정 시 15000ms", () => {
+    /* process.env.NEXT_PUBLIC_ICE_TIMEOUT_MS 를 직접 read 하는 경로 검증.
+     * Next.js DefinePlugin inline 정책에 맞춘 literal access 가 동작하는지 확인. */
+    const original = process.env.NEXT_PUBLIC_ICE_TIMEOUT_MS;
+    delete process.env.NEXT_PUBLIC_ICE_TIMEOUT_MS;
+    try {
+      expect(getIceConnectionTimeoutMs()).toBe(15000);
+      expect(warnSpy).toHaveBeenCalledTimes(0);
+    } finally {
+      /* 다른 테스트 오염 방지: 원본 복원 */
+      if (original !== undefined) {
+        process.env.NEXT_PUBLIC_ICE_TIMEOUT_MS = original;
+      }
+    }
+  });
+
+  it("T10: 인자 없이 호출 — process.env literal access ENV 설정 시 그 값", () => {
+    /* ENV 설정 시 literal access 경로가 실제 값을 읽어오는지 검증. */
+    const original = process.env.NEXT_PUBLIC_ICE_TIMEOUT_MS;
+    process.env.NEXT_PUBLIC_ICE_TIMEOUT_MS = "30000";
+    try {
+      expect(getIceConnectionTimeoutMs()).toBe(30000);
+      expect(warnSpy).toHaveBeenCalledTimes(0);
+    } finally {
+      /* 원본 복원 — 설정값 없었으면 delete, 있었으면 restore */
+      if (original !== undefined) {
+        process.env.NEXT_PUBLIC_ICE_TIMEOUT_MS = original;
+      } else {
+        delete process.env.NEXT_PUBLIC_ICE_TIMEOUT_MS;
+      }
+    }
+  });
 });

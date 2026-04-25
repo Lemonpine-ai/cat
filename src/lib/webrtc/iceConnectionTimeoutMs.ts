@@ -15,6 +15,7 @@
  * Fallback 정책:
  *   - 미설정 / 빈 문자열 → 15000ms (warn 없음, CLAUDE.md #13 무손상 원칙)
  *   - NaN / 음수 / 0 / 범위 초과 → 15000ms + console.warn (clamp 아님)
+ *   - 인자 없이 호출 (process.env literal access) → ENV 값 그대로 / 미설정 시 15000ms
  *
  * 의존성: 없음 (Pure TS, no React, no Supabase, no DOM).
  */
@@ -35,9 +36,18 @@ const ENV_NAME = "NEXT_PUBLIC_ICE_TIMEOUT_MS";
  * @returns 검증 통과한 타임아웃 ms (실패 시 15000ms fallback)
  */
 export function getIceConnectionTimeoutMs(env?: NodeJS.ProcessEnv): number {
-  /* STEP 1: env 인자 또는 process.env 에서 raw 값 추출 */
-  const source = env ?? process.env;
-  const raw = source[ENV_NAME];
+  /* STEP 1: ENV 값 추출 — Next.js webpack DefinePlugin 호환 LITERAL access.
+   *
+   * 중요: Next.js 는 process.env.NEXT_PUBLIC_FOO (literal property access) 만
+   * 빌드타임에 client bundle 로 inline 한다. 동적 indexing (source[varName])
+   * 은 process polyfill ({}) 로 fallback 되어 client 측에서 항상 undefined.
+   *
+   * → 인자 (env) 가 주어지면 그쪽 우선 (단위 테스트 주입 용도).
+   * → 인자 없으면 process.env.NEXT_PUBLIC_ICE_TIMEOUT_MS 를 LITERAL 로 access
+   *   (Next.js DefinePlugin 이 빌드타임에 실제 ENV 값으로 치환). */
+  const raw = env !== undefined
+    ? env[ENV_NAME]
+    : process.env.NEXT_PUBLIC_ICE_TIMEOUT_MS;
 
   /* STEP 2: 미설정/undefined/null → DEFAULT 반환 (warn 없음) */
   if (raw === undefined || raw === null) {
