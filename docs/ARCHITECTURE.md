@@ -1019,9 +1019,16 @@ useCatRegistration.submit():
 
 #### 11.1.4 홈 진입점 (CTA)
 
-`src/components/catvisor/HomeCatCards.tsx`:
-- cats=0 인 빈 상태: 기존 3-step 안내(운영자 참고용) 유지 + 하단 "🐱 앱에서 바로 등록하기 →" CTA 추가
-- cats>0: 카드 그리드 하단 "＋ 고양이 추가하기" CTA (다묘 등록 허용)
+진입점 표 (fix R1 #7 갱신):
+
+| 위치 | 컴포넌트 | 동작 |
+|---|---|---|
+| 홈 상단 cat 프로필 row | `src/components/home/HomeProfileRow.tsx` | cats=0 → "🐱 고양이 등록하기" / cats>0 → 우측 끝 "＋ 추가" → `/cats/new` 직접 이동 |
+| 홈 카드 그리드 (옵션) | `src/components/catvisor/HomeCatCards.tsx` | "＋ 고양이 추가하기" CTA → `/cats/new` |
+
+이전엔 `/settings` 우회 경로였으나 Tier 1 이후 `/cats/new` 직접 이동으로 통일.
+
+추가 기능 (fix R1 #3): 등록 성공 시 `sessionStorage["cat-welcome-name"]` 설정 → `HomeProfileRow` `useEffect` 가 환영 토스트 3.5초 표시 후 자동 제거.
 
 ### 11.2 Tier 2 — 식별 + 정교한 calibration (예정)
 
