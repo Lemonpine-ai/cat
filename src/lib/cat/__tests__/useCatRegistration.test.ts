@@ -83,7 +83,7 @@ describe("useCatRegistration", () => {
     }
   });
 
-  it("2) INSERT 23505 + 본인 row 존재 → ok (이미 등록됨 케이스)", async () => {
+  it("2) INSERT 23505 + 본인 row 존재 → ok (이미 등록됨, alreadyExisted: true)", async () => {
     const { supabase } = makeMockSupabase({
       insertResult: {
         data: null,
@@ -102,6 +102,26 @@ describe("useCatRegistration", () => {
     if (res?.kind === "ok") {
       expect(res.catId).toBe("cat-existing");
       expect(res.photoUploaded).toBe(false);
+      /* fix R4-2 M3 — recheck 매칭 시 alreadyExisted=true. */
+      expect(res.alreadyExisted).toBe(true);
+    }
+  });
+
+  it("2.1) INSERT 성공 → alreadyExisted: false (신규 등록)", async () => {
+    const { supabase } = makeMockSupabase({
+      insertResult: { data: { id: "cat-new" }, error: null },
+    });
+    const { result } = renderHook(() =>
+      useCatRegistration({ homeId: "home-1", supabaseClient: supabase }),
+    );
+    let res: Awaited<ReturnType<typeof result.current.submit>> | undefined;
+    await act(async () => {
+      res = await result.current.submit(VALID_DRAFT);
+    });
+    expect(res?.kind).toBe("ok");
+    if (res?.kind === "ok") {
+      /* fix R4-2 M3 — 정상 INSERT 시 alreadyExisted=false. */
+      expect(res.alreadyExisted).toBe(false);
     }
   });
 
@@ -143,6 +163,55 @@ describe("useCatRegistration", () => {
     expect(res?.kind).toBe("error");
     if (res?.kind === "error") {
       expect(res.code).toBe("TIMEOUT");
+    }
+  });
+
+  it("5) fix R4-2 C2 — supabase throw → UNKNOWN (status 영구 lock 방지)", async () => {
+    /* INSERT 자체가 throw 하는 케이스. submit 의 try/catch 가 status 풀어줘야 함. */
+    const insertBuilder = {
+      insert: vi.fn().mockReturnThis(),
+      select: vi.fn().mockReturnThis(),
+      single: vi.fn().mockRejectedValue(new Error("network down")),
+    };
+    const supabase = {
+      from: vi.fn().mockReturnValue(insertBuilder),
+    } as unknown as SupabaseClient;
+    const { result } = renderHook(() =>
+      useCatRegistration({ homeId: "home-1", supabaseClient: supabase }),
+    );
+    let res: Awaited<ReturnType<typeof result.current.submit>> | undefined;
+    await act(async () => {
+      res = await result.current.submit(VALID_DRAFT);
+    });
+    expect(res?.kind).toBe("error");
+    if (res?.kind === "error") {
+      expect(res.code).toBe("UNKNOWN");
+    }
+    /* status 가 error 로 전환되어 다음 submit 가능 (영구 submitting lock 아님). */
+    expect(result.current.state).toBe("error");
+  });
+
+  it("6) fix R4-2 M4 — INSERT 실패 message 가 영어 stack trace 미포함", async () => {
+    const { supabase } = makeMockSupabase({
+      insertResult: {
+        data: null,
+        error: { code: "42P01", message: "relation cats does not exist" },
+      },
+    });
+    const { result } = renderHook(() =>
+      useCatRegistration({ homeId: "home-1", supabaseClient: supabase }),
+    );
+    let res: Awaited<ReturnType<typeof result.current.submit>> | undefined;
+    await act(async () => {
+      res = await result.current.submit(VALID_DRAFT);
+    });
+    expect(res?.kind).toBe("error");
+    if (res?.kind === "error") {
+      /* generic 한국어 메시지만 — raw "relation cats does not exist" 미포함. */
+      expect(res.message).not.toContain("relation cats does not exist");
+      expect(res.message).not.toContain("42P01");
+      /* CAT_MESSAGES.insertFailedGeneric 일부 포함 ("등록에 실패"). */
+      expect(res.message).toContain("등록에 실패");
     }
   });
 });

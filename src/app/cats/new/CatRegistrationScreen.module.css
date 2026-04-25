@@ -286,6 +286,38 @@
   font-size: 13px;
 }
 
+/* fix R4-2 M2 — UPLOAD_FAILED 후 retry / 사진 없이 완료하기 액션 버튼 영역. */
+.errorActions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+
+.errorActions button {
+  flex: 1;
+  min-width: 120px;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 8px;
+  border: 1px solid #fecaca;
+  background: #ffffff;
+  color: #991b1b;
+  cursor: pointer;
+  transition: background 0.15s;
+  font-family: inherit;
+}
+
+.errorActions button:hover:not(:disabled) {
+  background: #fef2f2;
+}
+
+.errorActions button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 /* ── 하단 버튼 영역 ── */
 .footer {
   display: flex;
