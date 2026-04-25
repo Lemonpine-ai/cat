@@ -34,13 +34,16 @@ export const HSV_VAL_THRESHOLD = 0.15;
 /** 업로드 가능한 최대 파일 크기 (5 MB). */
 export const MAX_FILE_BYTES = 5 * 1024 * 1024;
 
-/** 허용 MIME 타입 (jpeg / png / webp / heic / heif). */
+/**
+ * 허용 MIME 타입 (jpeg / png / webp).
+ *
+ * fix R5-2 R7-2 — HEIC/HEIF 는 magic byte 단계에서 어차피 거부되므로
+ * 1차 통과시키고 2차에서 거부하는 fragile 구조 제거. 메시지 정합성 회복.
+ */
 export const ALLOWED_MIME = [
   "image/jpeg",
   "image/png",
   "image/webp",
-  "image/heic",
-  "image/heif",
 ] as const;
 
 export type AllowedMime = (typeof ALLOWED_MIME)[number];

@@ -29,6 +29,7 @@ import { NAME_MAX, BREED_MAX } from "@/lib/cat/constants";
 import { useCatDraftUpdater } from "@/hooks/useCatDraftUpdater";
 import { CatPhotoPicker } from "./CatPhotoPicker";
 import { CatTextField } from "./CatTextField";
+import { CatRadioGroup } from "./CatRadioGroup";
 import styles from "./CatRegistrationScreen.module.css";
 
 /* fix R3 R5-E3 — onChange 시그니처를 React.Dispatch<SetStateAction<CatDraft>> 로 확장.
@@ -50,26 +51,24 @@ function CatProfileFormImpl({ draft, onChange, errors }: CatProfileFormProps) {
   const nameError = getFieldError(errors, "name");
   const breedError = getFieldError(errors, "breed");
   const birthError = getFieldError(errors, "birthDate");
-  /* fix R4-3 m18 — Picker 의 photoFile validation 에러 표시 (부모가 미전달이던 결함). */
+  /* fix R4-3 m18 — Picker 의 photoFile validation 에러 표시. */
   const photoError = getFieldError(errors, "photoFile");
 
-  /* fix R4-3 M1 — useCatDraftUpdater 헬퍼로 통일.
-   * 자식 컴포넌트도 동일 패턴 사용해야 React.memo 효과 회복 (m1 결함). */
+  /* fix R4-3 M1 — 함수형 setter 통일 (자식 React.memo 효과 회복). */
   const update = useCatDraftUpdater(onChange);
 
-  /* fix R2 R6-1 — CatPhotoPicker (React.memo) 가 매 렌더 onChange ref 변동으로 깨지지 않도록
-   * useCallback 으로 안정화. fix R3 R5-E3 효과로 update 도 안정 → handlePhotoChange 도 1회만 생성. */
+  /* useCallback 어댑터 — 자식 (memo) 의 ref 변동 차단. */
   const handlePhotoChange = useCallback(
-    (file: File | null) => {
-      update("photoFile", file);
-    },
+    (file: File | null) => update("photoFile", file),
     [update],
   );
-
-  /* CatTextField 가 단순 string onChange 시그니처를 받도록 어댑터.
-   * useCallback 으로 안정화 — CatTextField (memo) 가 ref 변동으로 깨지지 않도록. */
   const handleNameChange = useCallback((v: string) => update("name", v), [update]);
   const handleBreedChange = useCallback((v: string) => update("breed", v), [update]);
+  /* fix R5-2 R3-2 — CatRadioGroup onChange (string → CatSex narrow). */
+  const handleSexChange = useCallback(
+    (next: string) => update("sex", next as CatSex),
+    [update],
+  );
 
   return (
     <div className={styles.section}>
@@ -128,26 +127,14 @@ function CatProfileFormImpl({ draft, onChange, errors }: CatProfileFormProps) {
         )}
       </div>
 
-      {/* 성별 라디오 */}
-      <div className={styles.field}>
-        <div className={styles.label}>
-          성별 <span className={styles.required}>*</span>
-        </div>
-        <div className={styles.radioGroup}>
-          {SEX_OPTIONS.map((opt) => (
-            <label key={opt.value} className={styles.radioLabel}>
-              <input
-                type="radio"
-                name="cat-sex"
-                value={opt.value}
-                checked={draft.sex === opt.value}
-                onChange={() => update("sex", opt.value)}
-              />
-              <span>{opt.label}</span>
-            </label>
-          ))}
-        </div>
-      </div>
+      {/* 성별 라디오 — fix R5-2 R3-2: CatRadioGroup 추출. */}
+      <CatRadioGroup
+        name="cat-sex"
+        options={SEX_OPTIONS}
+        value={draft.sex}
+        onChange={handleSexChange}
+        legend="성별 *"
+      />
 
       {/* 사진 (R6-1: 안정화된 handlePhotoChange + R4-3 m18 errorMessage 전달). */}
       <CatPhotoPicker

@@ -89,4 +89,25 @@ describe("logger PII 마스킹 (fix R4-4 m11)", () => {
     expect(ctx.homeId).toBe("home***");
     expect(ctx.ownerId).toBe("owne***");
   });
+
+  it("8) R5-2 R7-3 — Storage path 마스킹 (homeId/profiles/catId 평문 누출 차단)", () => {
+    logger.error("test", new Error("oops"), {
+      path: "abcdefgh-home/profiles/cat-uuid_123.jpg",
+    });
+    const ctx = errorSpy.mock.calls[0][1] as { path?: unknown };
+    /* path 는 PII_KEYS 에 추가됨 — 앞 4자 + *** 로 마스킹. */
+    expect(ctx.path).toBe("abcd***");
+  });
+
+  it("9) R5-2 R7-3 — catId / cat_id / url 모두 PII_KEYS 마스킹", () => {
+    logger.warn("test", "msg", {
+      catId: "uuid-cat-12345",
+      cat_id: "snake-cat-67890",
+      url: "https://supabase.co/storage/v1/object/public/cat-moments/x.jpg",
+    });
+    const ctx = warnSpy.mock.calls[0][1] as Record<string, unknown>;
+    expect(ctx.catId).toBe("uuid***");
+    expect(ctx.cat_id).toBe("snak***");
+    expect(ctx.url).toBe("http***");
+  });
 });

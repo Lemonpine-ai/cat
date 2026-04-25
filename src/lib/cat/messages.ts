@@ -39,7 +39,7 @@ export const CAT_MESSAGES = {
   photoUpdateFailedPrefix: "사진은 올렸지만 프로필에 반영하지 못했어요.",
   // photo
   photoDecodeFailed: "사진을 읽지 못했어요. 다른 사진으로 시도해 주세요.",
-  photoMimeInvalid: "지원하지 않는 파일 형식이에요. JPG/PNG/WebP/HEIC 만 가능합니다.",
+  photoMimeInvalid: "지원하지 않는 파일 형식이에요. JPG/PNG/WebP 사진으로 다시 시도해 주세요.",
 } as const;
 
 export type CatMessageKey = keyof typeof CAT_MESSAGES;

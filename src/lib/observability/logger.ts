@@ -32,6 +32,13 @@ const PII_KEYS = new Set<string>([
   "ownerId",
   "userId",
   "phoneNumber",
+  // fix R5-2 R7-3 — Storage path / catId / publicUrl 마스킹.
+  // path = "${homeId}/profiles/${catId}_..." 가 디버깅에 유용하지만 home/cat 식별자
+  // 평문 노출은 PII 누출. 앞 4자만 노출 (디버깅 가능 + 개인정보 보호).
+  "path",
+  "catId",
+  "cat_id",
+  "url",
 ]);
 
 /**

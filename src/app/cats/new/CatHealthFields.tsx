@@ -13,13 +13,15 @@
 
 "use client";
 
-import { memo, type Dispatch, type SetStateAction } from "react";
+import { memo, useCallback, type Dispatch, type SetStateAction } from "react";
 import type { CatDraft, CatNeuteredStatus } from "@/types/cat";
 import {
   getFieldError,
   type ValidationError,
 } from "@/lib/cat/validateCatDraft";
 import { useCatDraftUpdater } from "@/hooks/useCatDraftUpdater";
+import { CatRadioGroup } from "./CatRadioGroup";
+import { CatTextArea } from "./CatTextArea";
 import styles from "./CatRegistrationScreen.module.css";
 
 /* fix R3 R5-E3 — 부모 setDraft 와 호환되는 시그니처. */
@@ -38,32 +40,39 @@ const NEUTERED_OPTIONS: ReadonlyArray<{ value: CatNeuteredStatus; label: string 
 function CatHealthFieldsImpl({ draft, onChange, errors }: CatHealthFieldsProps) {
   const weightError = getFieldError(errors, "weightKg");
 
-  /* fix R4-3 M1 — useCatDraftUpdater 헬퍼로 deps=[onChange] 만 (이전 [draft, onChange] → memo 무효).
-   * 함수형 setter (prev => ...) 패턴 강제. */
+  /* fix R4-3 M1 — 함수형 setter 통일 (자식 React.memo 효과 회복). */
   const update = useCatDraftUpdater(onChange);
+
+  /* fix R5-2 R3-3 — 자식 (memo) 의 ref 변동 차단용 useCallback 어댑터들. */
+  const handleNeuteredChange = useCallback(
+    (next: string) => update("isNeutered", next as CatNeuteredStatus),
+    [update],
+  );
+  const handleMedicalNotesChange = useCallback(
+    (v: string) => update("medicalNotes", v),
+    [update],
+  );
+  const handleMedicationsChange = useCallback(
+    (v: string) => update("medications", v),
+    [update],
+  );
+  const handleSupplementsChange = useCallback(
+    (v: string) => update("supplements", v),
+    [update],
+  );
 
   return (
     <>
-      {/* 중성화 여부 */}
-      <div className={styles.field}>
-        <div className={styles.label}>중성화 여부</div>
-        <div className={styles.radioGroup}>
-          {NEUTERED_OPTIONS.map((opt) => (
-            <label key={opt.value} className={styles.radioLabel}>
-              <input
-                type="radio"
-                name="cat-neutered"
-                value={opt.value}
-                checked={draft.isNeutered === opt.value}
-                onChange={() => update("isNeutered", opt.value)}
-              />
-              <span>{opt.label}</span>
-            </label>
-          ))}
-        </div>
-      </div>
+      {/* 중성화 여부 — fix R5-2 R3-3: CatRadioGroup 추출. */}
+      <CatRadioGroup
+        name="cat-neutered"
+        options={NEUTERED_OPTIONS}
+        value={draft.isNeutered}
+        onChange={handleNeuteredChange}
+        legend="중성화 여부"
+      />
 
-      {/* 체중 */}
+      {/* 체중 (input type=number — CatTextField/CatTextArea 미사용, native 위젯 유지). */}
       <div className={styles.field}>
         <label htmlFor="cat-weight" className={styles.label}>
           체중 (kg)
@@ -89,53 +98,38 @@ function CatHealthFieldsImpl({ draft, onChange, errors }: CatHealthFieldsProps) 
         )}
       </div>
 
-      {/* 기저질환 */}
-      <div className={styles.field}>
-        <label htmlFor="cat-medical" className={styles.label}>
-          기저질환 / 주의사항
-        </label>
-        <textarea
-          id="cat-medical"
-          value={draft.medicalNotes}
-          onChange={(e) => update("medicalNotes", e.target.value)}
-          rows={3}
-          maxLength={500}
-          placeholder="예: 신장 수치 주의, 알러지 있음..."
-          className={styles.textarea}
-        />
-      </div>
+      {/* 기저질환 / 주의사항 — fix R5-2 R3-3: CatTextArea 추출. */}
+      <CatTextArea
+        id="cat-medical"
+        label="기저질환 / 주의사항"
+        value={draft.medicalNotes}
+        onChange={handleMedicalNotesChange}
+        rows={3}
+        maxLength={500}
+        placeholder="예: 신장 수치 주의, 알러지 있음..."
+      />
 
-      {/* 복용약 */}
-      <div className={styles.field}>
-        <label htmlFor="cat-meds" className={styles.label}>
-          복용 중인 약
-        </label>
-        <textarea
-          id="cat-meds"
-          value={draft.medications}
-          onChange={(e) => update("medications", e.target.value)}
-          rows={2}
-          maxLength={300}
-          placeholder="예: 아침 반알 / 저녁 반알"
-          className={styles.textarea}
-        />
-      </div>
+      {/* 복용 중인 약. */}
+      <CatTextArea
+        id="cat-meds"
+        label="복용 중인 약"
+        value={draft.medications}
+        onChange={handleMedicationsChange}
+        rows={2}
+        maxLength={300}
+        placeholder="예: 아침 반알 / 저녁 반알"
+      />
 
-      {/* 영양제 */}
-      <div className={styles.field}>
-        <label htmlFor="cat-supplements" className={styles.label}>
-          영양제
-        </label>
-        <textarea
-          id="cat-supplements"
-          value={draft.supplements}
-          onChange={(e) => update("supplements", e.target.value)}
-          rows={2}
-          maxLength={300}
-          placeholder="예: 관절 영양제, 눈물 자국 완화"
-          className={styles.textarea}
-        />
-      </div>
+      {/* 영양제. */}
+      <CatTextArea
+        id="cat-supplements"
+        label="영양제"
+        value={draft.supplements}
+        onChange={handleSupplementsChange}
+        rows={2}
+        maxLength={300}
+        placeholder="예: 관절 영양제, 눈물 자국 완화"
+      />
     </>
   );
 }

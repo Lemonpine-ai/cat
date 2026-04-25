@@ -24,7 +24,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { stripExifFromImage } from "./stripExifFromImage";
 import { detectImageMagic } from "./detectImageMagic";
-import { ALLOWED_MIME } from "./constants";
+import { ALLOWED_MIME, MAX_FILE_BYTES } from "./constants";
 import { CAT_MESSAGES } from "./messages";
 import { logger } from "@/lib/observability/logger";
 
@@ -33,12 +33,15 @@ function sanitizeForPath(name: string): string {
   return name.replace(/[^a-zA-Z0-9_.-]/g, "_").slice(0, 50);
 }
 
-/** MIME → 확장자 매핑 (없으면 jpg 기본). */
+/**
+ * MIME → 확장자 매핑 (없으면 jpg 기본).
+ *
+ * fix R5-2 R7-2 — HEIC 분기 제거. ALLOWED_MIME 변경 시 본 매핑도 동기 갱신.
+ */
 function extFromMime(mime: string): string {
   if (mime === "image/jpeg") return "jpg";
   if (mime === "image/png") return "png";
   if (mime === "image/webp") return "webp";
-  if (mime === "image/heic" || mime === "image/heif") return "heic";
   return "jpg";
 }
 
@@ -76,6 +79,19 @@ export async function uploadCatProfilePhoto(args: {
   skipStrip?: boolean;
 }): Promise<UploadResult> {
   const { supabase, homeId, catId, file, skipStrip = false } = args;
+
+  // 0) fix R5-2 R7-1 — size 가드 (defense-in-depth, picker UI 우회 차단).
+  //    picker 가 이미 size 체크하지만, 호출자 측 우회/직접 호출 가능성 차단 + DoS 방지.
+  if (file.size > MAX_FILE_BYTES) {
+    logger.warn("uploadCatProfilePhoto.size", "MAX_FILE_BYTES 초과", {
+      size: file.size,
+    });
+    return {
+      kind: "error",
+      code: "INVALID_FORMAT",
+      message: CAT_MESSAGES.photoSizeTooLarge,
+    };
+  }
 
   // 1) MIME 1차 가드 (호환 — file.type 위조 가능, 다음 단계 magic 검증 필수).
   if (!ALLOWED_MIME.includes(file.type as (typeof ALLOWED_MIME)[number])) {

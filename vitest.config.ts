@@ -62,6 +62,13 @@ export default defineConfig({
       "src/app/cats/new/__tests__/CatTextField.test.tsx",
       // cat-identity Tier 1 fix R4-4 (운영 — logger PII 마스킹):
       "src/lib/observability/__tests__/logger.test.ts",
+      // cat-identity Tier 1 fix R5-2 (R3 단순화 + R7 보안 — 신규 18 케이스):
+      "src/hooks/__tests__/useCatPhotoUpload.test.ts",
+      "src/hooks/__tests__/useCatSubmitFlow.test.ts",
+      "src/app/cats/new/__tests__/CatRadioGroup.test.tsx",
+      "src/app/cats/new/__tests__/CatTextArea.test.tsx",
+      "src/lib/cat/__tests__/messages.test.ts",
+      "src/lib/cat/__tests__/constants.test.ts",
     ],
     exclude: ["node_modules", "tests", "staging/tests/node_modules"],
     // jsdom 으로 전환: sampling 테스트가 document.hidden / visibilitychange / setInterval 을 사용.
