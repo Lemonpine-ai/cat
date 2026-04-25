@@ -9,8 +9,19 @@
  * 실제 hue 히스토그램 정확성은 Worker 단위 테스트의 영역 (현재는 Worker import 만).
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from "vitest";
 import { extractHsvFromPhoto } from "@/lib/cat/extractHsvFromPhoto";
+
+/**
+ * fix R4-5 m12 — jsdom HTMLCanvasElement.getContext stderr noise 제거.
+ * 정상 비트맵 path 가 jsdom 의 'Not implemented: HTMLCanvasElement.prototype.getContext'
+ * 를 stderr 로 출력하는 noise 차단. 본 mock 은 ctx 동작 미지원 환경 가정 (null 반환).
+ */
+beforeAll(() => {
+  if (typeof HTMLCanvasElement !== "undefined") {
+    HTMLCanvasElement.prototype.getContext = vi.fn(() => null) as never;
+  }
+});
 
 describe("extractHsvFromPhoto", () => {
   const originalCreateImageBitmap = (globalThis as { createImageBitmap?: unknown })

@@ -111,7 +111,14 @@ async function computeOnMainThreadIdle(imageData: ImageData): Promise<HsvColorPr
     else setTimeout(resolve, 0);
   });
   const top3 = computeDominantHuesFromImageData(imageData);
-  return { dominant_hues: top3, sample_count: 1, version: "v1" };
+  /* fix R4-5 m20 — top3 가 비어있으면 sample_count=0 (의미 일치).
+   * 이전엔 top3=[] 이어도 sample_count=1 → "1 sample 분석했는데 dominant 없음" 의미 모순 →
+   * Tier 2 의 sample_count > 0 매칭이 의도와 다르게 동작. */
+  return {
+    dominant_hues: top3,
+    sample_count: top3.length > 0 ? 1 : 0,
+    version: "v1",
+  };
 }
 
 /**

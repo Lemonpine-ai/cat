@@ -110,4 +110,12 @@ describe("computeDominantHuesFromImageData", () => {
     const top3 = computeDominantHuesFromImageData(data as ImageData);
     expect(top3).toEqual([]);
   });
+
+  it("7) fix R4-5 m20 — top3=[] 인 ImageData 는 호출자가 sample_count=0 으로 매핑 (회귀 방지 ref)", () => {
+    /* 본 함수는 top3 만 반환. sample_count 매핑은 호출자 (worker / extractHsvFromPhoto) 책임.
+     * top3 = [] 임을 확인 → 호출자가 이걸 sample_count=0 으로 매핑할 것. */
+    const data = makeImageData(128, 128, 128); // 회색
+    const top3 = computeDominantHuesFromImageData(data as ImageData);
+    expect(top3.length).toBe(0);
+  });
 });

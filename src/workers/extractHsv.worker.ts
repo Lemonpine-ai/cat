@@ -49,7 +49,8 @@ self.onmessage = (event: MessageEvent<WorkerInMessage>) => {
     const top3 = computeDominantHuesFromImageData(imageData);
     const profile: HsvColorProfile = {
       dominant_hues: top3,
-      sample_count: 1,
+      /* fix R4-5 m20 — top3 비어있으면 sample_count=0 (의미 일치). */
+      sample_count: top3.length > 0 ? 1 : 0,
       version: "v1",
     };
     const out: WorkerOutMessage = { kind: "ok", profile };
