@@ -60,6 +60,8 @@ export default defineConfig({
       "src/lib/cat/__tests__/computeDominantHues.test.ts",
       "src/lib/cat/__tests__/catDraftToInsertPayload.test.ts",
       "src/app/cats/new/__tests__/CatTextField.test.tsx",
+      // cat-identity Tier 1 fix R4-4 (운영 — logger PII 마스킹):
+      "src/lib/observability/__tests__/logger.test.ts",
     ],
     exclude: ["node_modules", "tests", "staging/tests/node_modules"],
     // jsdom 으로 전환: sampling 테스트가 document.hidden / visibilitychange / setInterval 을 사용.

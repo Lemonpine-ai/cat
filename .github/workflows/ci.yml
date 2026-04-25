@@ -1,0 +1,45 @@
+name: CI
+
+# cat-identity Tier 1 fix R4-4 m10 — PR 머지 전 빌드/타입/테스트 강제.
+#
+# 본 workflow 는 다음을 검증:
+#   1) tsc --noEmit (TypeScript 타입 체크)
+#   2) vitest run (단위 테스트 — cat-identity 포함)
+#   3) verify:routes (라우트 manifest 무결성)
+#   4) next build (production 빌드 가능)
+#
+# 환경변수 NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY 는
+# CI 빌드 통과만을 위한 placeholder (Vercel production env 와 무관).
+#
+# 운영 정책 (CLAUDE.md):
+#   - PR 머지 전 본 workflow green 필수.
+#   - cat-identity 영역 회귀 0건 자동 검증 (R4-1 ~ R4-5 신규 테스트 포함).
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: TypeScript check
+        run: npx tsc --noEmit
+      - name: Vitest run
+        run: npx vitest run
+      - name: Verify routes manifest
+        run: npm run verify:routes
+      - name: Next build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://dummy.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: dummy
+        run: npx next build

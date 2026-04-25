@@ -2,8 +2,12 @@
 -- 0kg 은 현실적으로 무의미 (입력 실수 차단).
 --
 -- 베타 모드 (사용자 7명) — 기존 row 영향:
---   apply 전 SELECT count(*) FROM cats WHERE weight_kg = 0; 이 0 인지 사전 확인 필요.
+--   fix R4-4 m9 — apply 전 SELECT count(*) FROM cats WHERE weight_kg IS NOT NULL AND weight_kg < 0.1;
+--   가 0 인지 사전 확인 필요.
+--   ( weight_kg < 0.1 인 row 가 있으면 새 CHECK 위반 → 마이그 실패. 발견 시 row 검토 후 결정. )
 --   (현재 등록된 cats 모두 weight_kg IS NULL 또는 정상 값 — Tier 1 직후이므로 안전.)
+--
+-- DOWN 마이그: sql/20260425c_cats_weight_min_rollback.sql (>= 0 으로 원복).
 
 ALTER TABLE public.cats
   DROP CONSTRAINT IF EXISTS cats_weight_kg_valid;
