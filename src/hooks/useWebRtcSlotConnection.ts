@@ -20,6 +20,7 @@ import {
   encodePlainSdpForDatabaseColumn,
 } from "@/lib/webrtc/sessionDescriptionPayload";
 import { resolveWebRtcPeerConnectionConfiguration } from "@/lib/webrtc/getWebRtcIceServersForPeerConnection";
+import { getIceConnectionTimeoutMs } from "@/lib/webrtc/iceConnectionTimeoutMs";
 import { ViewerReconnectEngine } from "@/lib/webrtc/viewerReconnectEngine";
 import {
   logWebRtcEvent,
@@ -457,14 +458,16 @@ export function useWebRtcSlotConnection({
           await applyIce(row.candidate as RTCIceCandidateInit);
         }
 
-        /* 15초 타임아웃 — stale 세션을 빨리 제거하여 다른 세션에 양보 */
+        /* ICE 협상 타임아웃 — stale 세션을 빨리 제거하여 다른 세션에 양보.
+         * ENV NEXT_PUBLIC_ICE_TIMEOUT_MS 로 조정 (기본 15000ms, 미설정 시 100% 동일 동작) */
+        const iceTimeoutMs = getIceConnectionTimeoutMs();
         connectTimeoutRef.current = setTimeout(() => {
           if (pcRef.current && pcRef.current.connectionState !== "connected") {
-            console.warn("[CameraSlot] 연결 타임아웃 (15초)", sessionId);
+            console.warn(`[CameraSlot] 연결 타임아웃 (${iceTimeoutMs}ms)`, sessionId);
             updatePhase("error");
             void cleanup();
           }
-        }, 15_000);
+        }, iceTimeoutMs);
       } catch (err) {
         console.error("[CameraSlot] 연결 실패:", err);
         const msg = err instanceof Error ? err.message : String(err);
