@@ -2,6 +2,7 @@
   "name": "frontend",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "npm@11.9.0",
   "scripts": {
     "dev": "next dev",
     "build": "node scripts/copy-onnx-wasm.js && next build",
@@ -11,7 +12,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:playwright": "playwright test",
-    "test:playwright:smoke": "playwright test tests/broadcast-smoke.spec.ts"
+    "test:playwright:smoke": "playwright test tests/broadcast-smoke.spec.ts",
+    "verify:routes": "node scripts/verify-routes-manifest.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.88.0",

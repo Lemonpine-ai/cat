@@ -149,8 +149,11 @@
   display: none;
 }
 
+/* fix R1 #2 CLS 방지 — placeholder 와 preview 가 동일 비율 사전 예약. */
 .photoPlaceholder {
   width: 100%;
+  aspect-ratio: 4 / 3;
+  min-height: 240px;
   padding: 32px 16px;
   background: #f0fdfa;
   border: 2px dashed #5eead4;
@@ -160,6 +163,7 @@
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   gap: 4px;
   cursor: pointer;
   transition: background 0.15s;
@@ -177,6 +181,9 @@
 .photoPreviewWrap {
   position: relative;
   width: 100%;
+  /* fix R1 #2 CLS 방지 — placeholder 와 동일 비율 사전 예약. */
+  aspect-ratio: 4 / 3;
+  min-height: 240px;
   border-radius: 12px;
   overflow: hidden;
   background: #e2e8f0;
@@ -184,10 +191,25 @@
 
 .photoPreview {
   width: 100%;
-  height: auto;
-  max-height: 240px;
+  height: 100%;
   object-fit: cover;
   display: block;
+}
+
+/* fix R2 R6-6 — aspect-ratio 미지원 브라우저 (iOS Safari ≤ 14, 구형 Android) 폴백.
+ * padding-bottom 트릭으로 4:3 비율 사전 예약 — CLS 차단. */
+@supports not (aspect-ratio: 1) {
+  .photoPlaceholder,
+  .photoPreviewWrap {
+    position: relative;
+  }
+
+  .photoPlaceholder::before,
+  .photoPreviewWrap::before {
+    content: "";
+    display: block;
+    padding-bottom: 75%; /* 4:3 비율 → 3/4 = 0.75 */
+  }
 }
 
 .photoRemoveBtn {
@@ -201,6 +223,21 @@
   border-radius: 20px;
   font-size: 12px;
   cursor: pointer;
+}
+
+/* fix R1 #2 — 옵션 섹션 transition (재마운트 비용 절감 + 자연스러운 펼침). */
+.optionalSection {
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  transition: max-height 0.25s ease, opacity 0.2s ease;
+}
+
+.optionalSection.open {
+  /* fix R2 R6-5 — 2000px 고정 → 200vh.
+   * 모바일 글꼴 확대 / 긴 콘텐츠 (옵션 7 필드 모두 펼침) 시 잘리는 문제 방지. */
+  max-height: 200vh;
+  opacity: 1;
 }
 
 /* ── 옵션 아코디언 토글 ── */
@@ -221,6 +258,14 @@
   background: #ccfbf1;
 }
 
+/* fix R1 #6 — 글자수 카운터 (이름/품종). */
+.charCounter {
+  font-size: 11px;
+  color: #94a3b8;
+  text-align: right;
+  margin-top: 2px;
+}
+
 /* ── 에러 ── */
 .fieldError {
   font-size: 12px;
@@ -229,12 +274,48 @@
 }
 
 .errorBanner {
+  /* fix R1 #3 — 에러 배너 sticky (모바일에서 키보드/스크롤 시에도 가시). */
+  position: sticky;
+  top: 0;
+  z-index: 10;
   background: #fef2f2;
   border: 1px solid #fecaca;
   color: #991b1b;
   padding: 12px 14px;
   border-radius: 10px;
   font-size: 13px;
+}
+
+/* fix R4-2 M2 — UPLOAD_FAILED 후 retry / 사진 없이 완료하기 액션 버튼 영역. */
+.errorActions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+
+.errorActions button {
+  flex: 1;
+  min-width: 120px;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 8px;
+  border: 1px solid #fecaca;
+  background: #ffffff;
+  color: #991b1b;
+  cursor: pointer;
+  transition: background 0.15s;
+  font-family: inherit;
+}
+
+.errorActions button:hover:not(:disabled) {
+  background: #fef2f2;
+}
+
+.errorActions button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 /* ── 하단 버튼 영역 ── */

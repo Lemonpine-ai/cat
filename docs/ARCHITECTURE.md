@@ -1016,7 +1016,7 @@ grep -rn "60000" .next/static/chunks/ | grep -v sourcemap | head -3
 | 필수 | 성별 | 3 라디오 (남/여/모름) |
 | 사진 (옵션) | 정면 사진 | `<input type=file accept=image/* capture=environment>` (5MB / JPEG/PNG/WebP/HEIC) |
 | 옵션 | 중성화 | 3 라디오 (예/아니오/모름) |
-| 옵션 | 체중 (kg) | `<input type=number>` (0~30 CHECK) |
+| 옵션 | 체중 (kg) | `<input type=number>` (0.1~30 CHECK, fix R1 #6 강화) |
 | 옵션 | 기저질환 | textarea |
 | 옵션 | 복용약 | textarea |
 | 옵션 | 영양제 | textarea |
@@ -1026,7 +1026,7 @@ grep -rn "60000" .next/static/chunks/ | grep -v sourcemap | head -3
 #### 11.1.1 색상 calibration 옵션 B (Tier 1 자동 추출)
 
 사용자 인지 X. 등록 사진 1장에서 자동으로 HSV 색상 프로파일 추출 → `cats.color_profile` JSONB.
-- 알고리즘: 중앙 50% 영역 샘플링 → RGB→HSV → 채도 0.2 이상 픽셀만 → Hue 18 bin 히스토그램 → 상위 3 hue 반환
+- 알고리즘: 중앙 50% 영역 샘플링 → RGB→HSV → 채도 0.2 이상 + 명도 0.15 이상 픽셀만 → Hue 18 bin 히스토그램 → 상위 3 hue 반환
 - Tier 2 에서 카메라 스트림 20장 기반 정교화로 대체 (sample_count 증가)
 
 #### 11.1.2 Try A — Orphan 방지 순서
@@ -1049,15 +1049,22 @@ useCatRegistration.submit():
 `sql/20260425_cats_tier1_fields.sql`:
 - ALTER TABLE cats ADD COLUMN × 9 (모두 nullable)
 - 기존 재사용: `birth_date`, `medical_notes`, `photo_front_url`
-- 신규 옵션: `is_neutered`, `weight_kg` + CHECK(0..30), `medications`, `supplements`, `litter_type`, `food_type`
+- 신규 옵션: `is_neutered`, `weight_kg` + CHECK(0.1..30) (fix R1 #6 강화), `medications`, `supplements`, `litter_type`, `food_type`
 - 신규 색상: `color_profile` JSONB, `color_sample_count` INTEGER, `color_updated_at` TIMESTAMPTZ
 - CLAUDE.md #14 트리거 X (단순 nullable 추가).
 
 #### 11.1.4 홈 진입점 (CTA)
 
-`src/components/catvisor/HomeCatCards.tsx`:
-- cats=0 인 빈 상태: 기존 3-step 안내(운영자 참고용) 유지 + 하단 "🐱 앱에서 바로 등록하기 →" CTA 추가
-- cats>0: 카드 그리드 하단 "＋ 고양이 추가하기" CTA (다묘 등록 허용)
+진입점 표 (fix R1 #7 갱신):
+
+| 위치 | 컴포넌트 | 동작 |
+|---|---|---|
+| 홈 상단 cat 프로필 row | `src/components/home/HomeProfileRow.tsx` | cats=0 → "🐱 고양이 등록하기" / cats>0 → 우측 끝 "＋ 추가" → `/cats/new` 직접 이동 |
+| 홈 카드 그리드 (옵션) | `src/components/catvisor/HomeCatCards.tsx` | "＋ 고양이 추가하기" CTA → `/cats/new` |
+
+이전엔 `/settings` 우회 경로였으나 Tier 1 이후 `/cats/new` 직접 이동으로 통일.
+
+추가 기능 (fix R1 #3): 등록 성공 시 `sessionStorage["cat-welcome-name"]` 설정 → `HomeProfileRow` `useEffect` 가 환영 토스트 3.5초 표시 후 자동 제거.
 
 ### 11.2 Tier 2 — 식별 + 정교한 calibration (예정)
 
@@ -1079,3 +1086,81 @@ R12 PR 와 동일 패턴. staging/{components,hooks,lib}/cat-identity 는 re-exp
 ### 11.5 cat_behavior_events 와의 연결
 
 cat_behavior_events.cat_id 는 nullable. Tier 1 등록 후에도 자동 매칭 안 됨 — Tier 2 식별 도입 후 매칭 시점에 채움. 즉 cat-identity 머지가 Phase B (행동) 머지를 막거나 깨지 않음 (orthogonal).
+
+### 11.6 보안 정책 (Tier 1 fix R1 / R4)
+
+Tier 1 STRICT QA R7 에서 발견된 보안 결함 + fix R4-1 4건 (HEIC EXIF / RLS idempotent / homes 사전 검증 / magic byte) 의 정책 정리.
+
+#### 11.6.1 RLS — cats 테이블 4개 정책
+
+`sql/20260425b_cats_rls_policies.sql` 적용 후 모든 CRUD 가 `homes.owner_id = auth.uid()` 조건을 통과해야 한다. 가족 외 사용자가 다른 home 의 cats 를 조회/수정/삭제하지 못한다.
+
+- `cats_select_by_home_owner` — SELECT
+- `cats_insert_by_home_owner` — INSERT WITH CHECK
+- `cats_update_by_home_owner` — UPDATE USING + WITH CHECK
+- `cats_delete_by_home_owner` — DELETE
+
+운영 절차 (CLAUDE.md #14 atomic deploy, fix R4-1 + R5-3 R8-1 — 5단계 → 5a~5e 분할):
+  1) PR 머지 (단일 커밋, 단일 PR — sql/* 와 src/* 동시).
+  2) Vercel `getDeployments` 로 production READY+PROMOTED 확인 (commit ID 메모).
+  3) homes RLS 사전 검증 4건 (A/B/C/D — sql/20260425b_cats_rls_policies.sql 헤더 참조)
+     모두 PASS 확인. 실패 시 STOP, PR revert 후 사장님 보고.
+  4) Supabase MCP `apply_migration` 으로 sql/20260425b_cats_rls_policies.sql 적용
+     (단일 트랜잭션 — 부분 적용 불가).
+
+  5a) SELECT smoke — `SELECT id, home_id FROM public.cats LIMIT 1;`
+      사장님 본인 home (homes.owner_id = auth.uid()) 의 row 만 반환되어야 한다.
+      다른 home_id 의 row 가 노출되면 정책 위반 — 즉시 STOP → 5e rollback.
+
+  5b) INSERT smoke — test row INSERT (사장님 home 으로):
+      `INSERT INTO public.cats(home_id, name) VALUES ('<my-home-id>', '__rls_test__') RETURNING id;`
+      성공 시 다음 단계. WITH CHECK 위반 (다른 home_id 시도) 차단도 별도 verify
+      — staging 환경에서 다른 user 로 INSERT 시도 → 거부 확인 (가능한 경우).
+
+  5c) UPDATE smoke — 5b 의 test row 를 UPDATE:
+      `UPDATE public.cats SET name='__rls_test_updated__' WHERE id='<test-id>' RETURNING id;`
+      내 home 의 row 만 UPDATE 가능. 다른 home 시도 시 0 row 갱신 확인 (RLS USING 차단).
+
+  5d) DELETE smoke — 5b 의 test row 를 DELETE (5c 통과 후 정리):
+      `DELETE FROM public.cats WHERE id='<test-id>' RETURNING id;`
+      내 home → 1 row 삭제, 다른 home → 0 row 확인.
+
+  5e) 모두 통과 시 commit (BEGIN/COMMIT 사용 시 COMMIT). 하나라도 실패 시:
+      - BEGIN 안에 있으면 ROLLBACK.
+      - 이미 COMMIT 됐으면 sql/20260425b_cats_rls_policies_rollback.sql 적용 +
+        Vercel Instant Rollback (직전 production commit ID, .github/PULL_REQUEST_TEMPLATE.md
+        베이스라인 메모 라인 참조).
+
+  6) 5e 통과 후 5분 모니터링 — Vercel `getDeployments` + Supabase MCP `list_tables` 로
+     error rate / row 수 추세 관찰. 이상 시 즉시 5e 의 rollback 절차 실행.
+
+#### 11.6.2 EXIF strip — 사용자 사진 GPS leak 방지
+
+`src/lib/cat/stripExifFromImage.ts` — Canvas 재인코딩 (JPEG 0.92) 으로 EXIF 메타데이터 제거 후 Storage 업로드. fix R4-1 C1 — 디코드 실패 시 union error (`{ kind: "error", code: "EXIF_STRIP_FAILED" }`) 반환. 호출자 (`uploadCatProfilePhoto`) 가 `INVALID_FORMAT` 으로 변환해 사용자에게 "JPG/PNG/WebP 로 다시 시도해 주세요" 안내. 원본 fallback 금지 (HEIC 의 EXIF 가 살아있는 채로 Storage 로 흘러가는 경로 차단).
+
+`src/lib/cat/detectImageMagic.ts` (fix R4-1 C6) — 파일 첫 12 byte 의 magic 비교로 MIME 위조 차단. JPEG/PNG/WebP 만 통과, HEIC/HEIF 는 null → 거부.
+
+#### 11.6.3 dangerouslySetInnerHTML 금지
+
+cat-identity 화면 어디서도 `dangerouslySetInnerHTML` 사용 금지. 사용자 입력 (이름/품종/메모) 은 React 의 기본 텍스트 escape 만 사용. 추가 sanitize 라이브러리도 도입하지 않음 (XSS surface 자체를 만들지 않는다).
+
+#### 11.6.4 의료 정보 암호화 (후속 PR)
+
+`medical_notes` / `medications` / `supplements` 컬럼은 평문 저장. Tier 3 다묘 관리 PR 에서 client-side AES 암호화 + 사용자 비공개 키 도입 계획 (FR HIPAA 수준은 아님 — 가족 공유 의료 메모 수준).
+
+#### 11.6.5 체중 최소값 0.1 — 입력 실수 차단
+
+`cats.weight_kg` 의 CHECK 가 `>= 0.1` (sql/20260425c_cats_weight_min.sql).
+0kg 입력은 사용자 실수 (단위 혼동, 0 자릿수 누락) 가 대부분 — 의미 있는 데이터 없음.
+0.1 미만은 신생아도 200g (= 0.2kg) 초과이므로 현실적 하한.
+
+코드 단일 출처: `src/lib/cat/constants.ts` 의 `WEIGHT_MIN = 0.1`.
+- `validateCatDraft` (fix R1)
+- `catDraftToInsertPayload` (fix R4-3 M7)
+- `messages.ts.weightOutOfRange`
+- ARCHITECTURE §11.1 표
+- sql/20260425c_cats_weight_min.sql CHECK
+
+모두 0.1 사용. 임계값 변경 시 본 5곳 동시 갱신 필요 (그러지 않으면 validate 통과 ↔ payload null 모순 재발).
+
+롤백 SQL: `sql/20260425c_cats_weight_min_rollback.sql` (CHECK 0..30 원복).

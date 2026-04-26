@@ -6,7 +6,7 @@ import {
 
 test.describe("WebRTC ICE 설정 (방화벽·NAT 대비)", () => {
   test("기본: STUN 서버만 포함되고 개수가 일정하다", () => {
-    const servers = buildWebRtcIceServers({});
+    const servers = buildWebRtcIceServers({ NODE_ENV: "test" });
     expect(servers.length).toBeGreaterThanOrEqual(3);
     const stunLike = servers.filter((entry) => {
       const urls = entry.urls;
@@ -18,6 +18,7 @@ test.describe("WebRTC ICE 설정 (방화벽·NAT 대비)", () => {
 
   test("TURN env가 있으면 relay용 항목이 추가된다", () => {
     const servers = buildWebRtcIceServers({
+      NODE_ENV: "test",
       NEXT_PUBLIC_WEBRTC_TURN_URLS:
         "turn:example-turn.local:3478,turns:example-turn.local:5349",
       NEXT_PUBLIC_WEBRTC_TURN_USERNAME: "test-user",
@@ -44,7 +45,7 @@ test.describe("WebRTC ICE 설정 (방화벽·NAT 대비)", () => {
     page,
   }) => {
     test.setTimeout(60_000);
-    const iceServers = buildWebRtcIceServers({});
+    const iceServers = buildWebRtcIceServers({ NODE_ENV: "test" });
     const result = await page.evaluate(async (servers) => {
       const pc = new RTCPeerConnection({ iceServers: servers });
       const candidateLines: string[] = [];
@@ -85,6 +86,7 @@ test.describe("WebRTC ICE 설정 (방화벽·NAT 대비)", () => {
     page,
   }) => {
     const iceServers = buildWebRtcIceServers({
+      NODE_ENV: "test",
       NEXT_PUBLIC_WEBRTC_TURN_URLS:
         "turn:example.invalid:3478,turns:example.invalid:5349",
       NEXT_PUBLIC_WEBRTC_TURN_USERNAME: "probe-user",
@@ -121,6 +123,7 @@ test.describe("WebRTC ICE 설정 (방화벽·NAT 대비)", () => {
 
   test("TURN URL 전체를 따옴표로 감싼 경우에도 파싱된다", () => {
     const servers = buildWebRtcIceServers({
+      NODE_ENV: "test",
       NEXT_PUBLIC_WEBRTC_TURN_URLS:
         '"turn:quoted.example:3478,turns:quoted.example:5349"',
       NEXT_PUBLIC_WEBRTC_TURN_USERNAME: "u",
@@ -137,9 +140,10 @@ test.describe("WebRTC ICE 설정 (방화벽·NAT 대비)", () => {
   });
 
   test("isWebRtcTurnEnvComplete 는 세 변수가 모두 있을 때만 true", () => {
-    expect(isWebRtcTurnEnvComplete({})).toBe(false);
+    expect(isWebRtcTurnEnvComplete({ NODE_ENV: "test" })).toBe(false);
     expect(
       isWebRtcTurnEnvComplete({
+        NODE_ENV: "test",
         NEXT_PUBLIC_WEBRTC_TURN_URLS: "turn:x:1",
         NEXT_PUBLIC_WEBRTC_TURN_USERNAME: "a",
         NEXT_PUBLIC_WEBRTC_TURN_CREDENTIAL: "b",
@@ -150,6 +154,7 @@ test.describe("WebRTC ICE 설정 (방화벽·NAT 대비)", () => {
   test("WEBRTC_TURN_* 만 있어도 TURN 이 완성된 것으로 본다", () => {
     expect(
       isWebRtcTurnEnvComplete({
+        NODE_ENV: "test",
         WEBRTC_TURN_URLS: "turn:relay.example:3478",
         WEBRTC_TURN_USERNAME: "u",
         WEBRTC_TURN_CREDENTIAL: "c",
@@ -160,12 +165,14 @@ test.describe("WebRTC ICE 설정 (방화벽·NAT 대비)", () => {
   test("NEXT_PUBLIC_WEBRTC_TURN_URL 단수·PASSWORD 별칭도 TURN 세트로 인정한다", () => {
     expect(
       isWebRtcTurnEnvComplete({
+        NODE_ENV: "test",
         NEXT_PUBLIC_WEBRTC_TURN_URL: "turn:relay.example:443",
         NEXT_PUBLIC_WEBRTC_TURN_USERNAME: "u",
         NEXT_PUBLIC_WEBRTC_TURN_PASSWORD: "p",
       }),
     ).toBe(true);
     const servers = buildWebRtcIceServers({
+      NODE_ENV: "test",
       NEXT_PUBLIC_WEBRTC_TURN_URL: "turn:relay.example:443",
       NEXT_PUBLIC_WEBRTC_TURN_USERNAME: "u",
       NEXT_PUBLIC_WEBRTC_TURN_PASSWORD: "p",
@@ -180,6 +187,7 @@ test.describe("WebRTC ICE 설정 (방화벽·NAT 대비)", () => {
 
   test("필드별로 WEBRTC_* 가 NEXT_PUBLIC_* 보다 우선한다", () => {
     const servers = buildWebRtcIceServers({
+      NODE_ENV: "test",
       WEBRTC_TURN_URLS: "turn:preferred.example:3478",
       NEXT_PUBLIC_WEBRTC_TURN_URLS: "turn:ignored.example:3478",
       NEXT_PUBLIC_WEBRTC_TURN_USERNAME: "user",

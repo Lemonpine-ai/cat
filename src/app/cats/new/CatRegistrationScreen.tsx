@@ -1,28 +1,22 @@
 /**
  * cat-identity Tier 1 — 고양이 등록 화면 상위 컨테이너 (Client Component).
  *
- * 책임:
- *  - CatDraft state 소유 (필수 4 + 사진 + 옵션 7 필드 통합)
- *  - 옵션 섹션 아코디언 펼침/닫힘 상태 (한 필드 아끼려고 useState 2개: draft + showOptional)
- *  - validate + useCatRegistration.submit 연결
- *  - 성공 시 router.replace("/") — stack pollution 방지
+ * fix R5-2 R3-1 단순화 — 318줄 (본체 232줄) → 본체 ≤ 100줄:
+ *  - submit / retry / skip / 에러 배너 / 토스트 분기 등 흐름 책임을 useCatSubmitFlow 로 이전.
+ *  - 본 컴포넌트는 draft 상태 + isDirty memo + 옵션 펼침 + JSX 만 담당.
  *
  * CLAUDE.md 준수:
- *  - useState 3개 (draft / showOptional / errors) — 한도 8 내
- *  - useEffect 0개
- *  - 본 파일 단독 LOC 100 라인 근처 유지 (필수/옵션 섹션은 각 서브 컴포넌트로 분리)
+ *  - useState 1개 (draft + showOptional + 단순 boolean) — 한도 8 내
+ *  - useCallback 1개 (onCancel — 라우팅)
+ *  - useEffect 0개 (배너 effect 는 useCatSubmitFlow 로 이전)
  */
 
 "use client";
 
-import { useState, useCallback } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { CatDraft } from "@/types/cat";
-import { useCatRegistration } from "@/hooks/useCatRegistration";
-import {
-  validateCatDraft,
-  type ValidationError,
-} from "@/lib/cat/validateCatDraft";
+import { useCatSubmitFlow } from "@/hooks/useCatSubmitFlow";
 import { CatProfileForm } from "./CatProfileForm";
 import { CatOptionalFields } from "./CatOptionalFields";
 import styles from "./CatRegistrationScreen.module.css";
@@ -52,24 +46,35 @@ export function CatRegistrationScreen({ homeId }: CatRegistrationScreenProps) {
   const router = useRouter();
   const [draft, setDraft] = useState<CatDraft>(INITIAL_DRAFT);
   const [showOptional, setShowOptional] = useState(false);
-  const [errors, setErrors] = useState<ValidationError[]>([]);
-  const { submit, state, errorMessage } = useCatRegistration({ homeId });
 
-  const onSubmit = useCallback(async () => {
-    /* 제출 직전 validation — 훅 안에서도 다시 돌지만 UI 에러 표시는 여기가 담당 */
-    const errs = validateCatDraft(draft);
-    setErrors(errs);
-    if (errs.length > 0) return;
+  /* R5-2 R3-1 — submit/retry/skip 흐름 + 에러 배너 effect 위임. */
+  const flow = useCatSubmitFlow({ homeId, draft, setShowOptional });
+  const { onSubmit, onRetryPhoto, onSkipPhoto, errors, state, errorMessage,
+    uploadFailedCatId, errorBannerRef } = flow;
 
-    const result = await submit(draft);
-    if (result.kind === "ok") {
-      /* 성공: 홈 복귀. newCatId 쿼리는 Tier 4 에서 활용 예정 (현재는 안 함) */
-      router.replace("/");
+  /* R4-5 m21 — isDirty 매 렌더 trim ×10 호출 회피 (useMemo). */
+  const isDirty = useMemo(
+    () =>
+      draft.name.trim() !== "" || draft.breed.trim() !== "" || draft.birthDate !== "" ||
+      draft.photoFile !== null || draft.weightKg.trim() !== "" ||
+      draft.medicalNotes.trim() !== "" || draft.medications.trim() !== "" ||
+      draft.supplements.trim() !== "" || draft.litterType !== "" || draft.foodType.trim() !== "",
+    [draft],
+  );
+
+  const onCancel = useCallback(() => {
+    if (isDirty && typeof window !== "undefined" &&
+        !window.confirm("입력한 내용이 사라져요. 정말 취소할까요?")) {
+      return;
     }
-    /* 실패 시 errorMessage 가 자동으로 배너에 표시됨 (훅이 setState) */
-  }, [draft, submit, router]);
+    router.back();
+  }, [isDirty, router]);
 
   const submitting = state === "submitting";
+  const showValidationBanner = errors.length > 0;
+  const showBanner = !!errorMessage;
+  const showRetryActions =
+    !!uploadFailedCatId && draft.photoFile !== null && !showValidationBanner;
 
   return (
     <main className={styles.root}>
@@ -91,31 +96,35 @@ export function CatRegistrationScreen({ homeId }: CatRegistrationScreenProps) {
         {showOptional ? "▼ 추가 정보 접기" : "▶ 더 자세히 입력하기 (선택)"}
       </button>
 
-      {showOptional && (
+      {/* R1 #2 — 항상 렌더 + max-height transition (재마운트 비용 제거). */}
+      <div
+        className={showOptional ? `${styles.optionalSection} ${styles.open}` : styles.optionalSection}
+        aria-hidden={!showOptional}
+      >
         <CatOptionalFields draft={draft} onChange={setDraft} errors={errors} />
-      )}
+      </div>
 
-      {errorMessage && (
-        <div role="alert" className={styles.errorBanner}>
-          {errorMessage}
+      {showBanner && (
+        <div role="alert" ref={errorBannerRef} className={styles.errorBanner}>
+          <p>{errorMessage}</p>
+          {showRetryActions && (
+            <div className={styles.errorActions}>
+              <button type="button" onClick={onRetryPhoto} disabled={submitting}>
+                사진 다시 시도하기
+              </button>
+              <button type="button" onClick={onSkipPhoto} disabled={submitting}>
+                사진 없이 완료하기
+              </button>
+            </div>
+          )}
         </div>
       )}
 
       <div className={styles.footer}>
-        <button
-          type="button"
-          onClick={() => router.back()}
-          className={styles.btnSecondary}
-          disabled={submitting}
-        >
+        <button type="button" onClick={onCancel} className={styles.btnSecondary} disabled={submitting}>
           취소
         </button>
-        <button
-          type="button"
-          onClick={onSubmit}
-          disabled={submitting}
-          className={styles.btnPrimary}
-        >
+        <button type="button" onClick={onSubmit} disabled={submitting} className={styles.btnPrimary}>
           {submitting ? "등록 중..." : "등록하기"}
         </button>
       </div>

@@ -14,17 +14,13 @@
 
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
+import { MAX_FILE_BYTES, ALLOWED_MIME } from "@/lib/cat/constants";
+import { CAT_MESSAGES } from "@/lib/cat/messages";
 import styles from "./CatRegistrationScreen.module.css";
 
-const MAX_FILE_BYTES = 5 * 1024 * 1024; // 5 MB
-const ALLOWED_MIME = [
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-  "image/heic",
-  "image/heif",
-];
+/* fix R4-3 M6 — 로컬 MAX_FILE_BYTES / ALLOWED_MIME 재정의 제거.
+ * 단일 출처 src/lib/cat/constants.ts 사용 — 변경 시 한 곳만 수정. */
 
 export type CatPhotoPickerProps = {
   /** 현재 선택된 파일 (상위 state). null 이면 비어있음. */
@@ -35,7 +31,9 @@ export type CatPhotoPickerProps = {
   errorMessage?: string | null;
 };
 
-export function CatPhotoPicker({ file, onChange, errorMessage }: CatPhotoPickerProps) {
+/* fix R2 R6-1 — React.memo 로 props 변경 없을 때 리렌더 차단.
+ * 부모 (CatProfileForm) 가 onChange 를 useCallback 으로 안정화해야 효과 발생. */
+function CatPhotoPickerImpl({ file, onChange, errorMessage }: CatPhotoPickerProps) {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -59,14 +57,13 @@ export function CatPhotoPicker({ file, onChange, errorMessage }: CatPhotoPickerP
       onChange(null);
       return;
     }
-    // MIME 검증
-    if (!ALLOWED_MIME.includes(selected.type)) {
-      setLocalError("JPG / PNG / WebP / HEIC 형식만 가능해요");
+    /* fix R4-3 M6 — messages.ts 단일 출처 사용 (inline 한국어 문자열 제거). */
+    if (!ALLOWED_MIME.includes(selected.type as (typeof ALLOWED_MIME)[number])) {
+      setLocalError(CAT_MESSAGES.photoMimeInvalid);
       return;
     }
-    // 크기 검증
     if (selected.size > MAX_FILE_BYTES) {
-      setLocalError("사진은 5MB 이하로 올려주세요");
+      setLocalError(CAT_MESSAGES.photoSizeTooLarge);
       return;
     }
     onChange(selected);
@@ -112,3 +109,6 @@ export function CatPhotoPicker({ file, onChange, errorMessage }: CatPhotoPickerP
     </div>
   );
 }
+
+/* fix R2 R6-1 — memo 래핑 export. */
+export const CatPhotoPicker = memo(CatPhotoPickerImpl);

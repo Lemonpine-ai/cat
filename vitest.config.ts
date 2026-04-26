@@ -45,7 +45,31 @@ export default defineConfig({
       "staging/tests/yoloLatencyTracker.test.ts",
       // R8 §2 (metadata mirror 마커 자동 검증 — staging + src/ 양쪽 grep):
       "staging/tests/metadataFreezeMirror.test.ts",
-      // ICE timeout LTE 마진 (NEXT_PUBLIC_ICE_TIMEOUT_MS ENV 검증 단위 테스트):
+      // cat-identity Tier 1 fix R1 #5 (validate / hook / hsv 단위):
+      "src/lib/cat/__tests__/catDraftValidation.test.ts",
+      "src/lib/cat/__tests__/useCatRegistration.test.ts",
+      "src/lib/cat/__tests__/extractHsvFromPhoto.test.ts",
+      // cat-identity Tier 1 fix R4-1 (보안 — magic byte / strip union / upload INVALID_FORMAT):
+      "src/lib/cat/__tests__/detectImageMagic.test.ts",
+      "src/lib/cat/__tests__/stripExifFromImage.test.ts",
+      "src/lib/cat/__tests__/uploadCatProfilePhoto.test.ts",
+      // cat-identity Tier 1 fix R4-2 (사용자 흐름 — submittingRef / alreadyExisted / UPLOAD_FAILED 액션):
+      "src/app/cats/new/__tests__/CatRegistrationScreen.test.tsx",
+      // cat-identity Tier 1 fix R4-3 (단순화 — useCatDraftUpdater / computeDominantHues / payload weight / CatTextField):
+      "src/hooks/__tests__/useCatDraftUpdater.test.ts",
+      "src/lib/cat/__tests__/computeDominantHues.test.ts",
+      "src/lib/cat/__tests__/catDraftToInsertPayload.test.ts",
+      "src/app/cats/new/__tests__/CatTextField.test.tsx",
+      // cat-identity Tier 1 fix R4-4 (운영 — logger PII 마스킹):
+      "src/lib/observability/__tests__/logger.test.ts",
+      // cat-identity Tier 1 fix R5-2 (R3 단순화 + R7 보안 — 신규 18 케이스):
+      "src/hooks/__tests__/useCatPhotoUpload.test.ts",
+      "src/hooks/__tests__/useCatSubmitFlow.test.ts",
+      "src/app/cats/new/__tests__/CatRadioGroup.test.tsx",
+      "src/app/cats/new/__tests__/CatTextArea.test.tsx",
+      "src/lib/cat/__tests__/messages.test.ts",
+      "src/lib/cat/__tests__/constants.test.ts",
+      // ICE timeout LTE 마진 (NEXT_PUBLIC_ICE_TIMEOUT_MS ENV 검증 단위 테스트 — PR #4 회복):
       "src/lib/webrtc/__tests__/iceConnectionTimeoutMs.test.ts",
       // Broadcaster signaling 타임아웃 ENV 검증 단위 테스트
       // (NEXT_PUBLIC_BROADCASTER_SIGNALING_TIMEOUT_MS, viewer ICE timeout 과 짝):
@@ -57,5 +81,10 @@ export default defineConfig({
     // Phase A 레거시 + 기존 R2 테스트가 `declare const describe: any` 패턴으로 전역 API 기대 →
     // vitest `globals: true` 로 inject. 신규 R3 테스트도 import 로 쓰지만 양립 가능.
     globals: true,
+    // fix R7-1 — QA-6차 R1 후속: 글로벌 logger noop mock 으로 stderr noise 0 보장.
+    //   상세 배경 / 채택 사유 / 후보 비교는 ./vitest.setup.ts JSDoc 참조.
+    //   logger 자체 PII 마스킹 검증은 src/lib/observability/__tests__/logger.test.ts 가
+    //   vi.unmock 으로 모듈 단위로 mock 을 해제하여 보존한다.
+    setupFiles: ["./vitest.setup.ts"],
   },
 });
