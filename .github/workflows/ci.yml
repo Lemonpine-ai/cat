@@ -53,10 +53,11 @@ jobs:
         run: npx tsc --noEmit
       - name: Vitest run
         run: npx vitest run
-      - name: Verify routes manifest
-        run: npm run verify:routes
       - name: Next build
+        # verify:routes 는 .next/routes-manifest.json 을 읽으므로 build 후 실행.
         env:
           NEXT_PUBLIC_SUPABASE_URL: https://dummy.supabase.co
           NEXT_PUBLIC_SUPABASE_ANON_KEY: dummy
         run: npx next build
+      - name: Verify routes manifest
+        run: npm run verify:routes
