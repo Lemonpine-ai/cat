@@ -975,6 +975,25 @@ grep -rn "30000" .next/static/chunks/ | grep -v sourcemap | head -3
 # → ICE timeout 관련 chunk 에서 literal "30000" 발견되어야 함
 ```
 
+### 10.10 WebRTC broadcaster 환경변수
+
+broadcaster (방송폰) 측 signaling 타임아웃을 ENV 로 조정 가능하게 함. helper `src/lib/webrtc/broadcasterSignalingTimeoutMs.ts` (순수 함수, 0 의존성) 가 검증 + fallback 담당. 폴링 모듈 `src/hooks/useBroadcasterSignalingPoll.ts` 가 기존 hardcode `15_000` 대신 helper 결과 사용. viewer 의 §10.9 `NEXT_PUBLIC_ICE_TIMEOUT_MS` 와 짝을 이뤄, LTE 환경에서 viewer 가 ICE 협상을 마치기 전에 broadcaster 가 세션을 폐기/재생성하여 발생하던 DB 폭증 + `camera_sessions` 행 lock 경합을 방지한다.
+
+| ENV | scope | 값 | 의미 |
+|-----|-------|---|------|
+| `NEXT_PUBLIC_BROADCASTER_SIGNALING_TIMEOUT_MS` | Production | `15000` (default, ENV 미설정 시 자동) / `30000` (LTE 권장) / `60000` (G7 LTE 안전값, viewer 와 동기화) | broadcaster 측 signaling (offer→answer) 타임아웃 (ms). 허용 범위 `[1000, 300000]`. NaN/0 이하/음수/범위 초과 → 15000 fallback + `console.warn`. CLAUDE.md #13 무손상: 미설정 시 기존 15초 동작 100% 유지. |
+
+**주의:** §10.2.4 §880 의 `NEXT_PUBLIC_*` 빌드타임 주입 주의 동일 적용 (Vercel ENV 변경 후 빈 커밋 push 로 강제 재빌드 필수).
+
+**helper 구현 제약 — Next.js DefinePlugin literal access 강제:** helper STEP 1 은 반드시 `process.env.NEXT_PUBLIC_BROADCASTER_SIGNALING_TIMEOUT_MS` (literal property access) 형태로 read 한다. 동적 indexing (`source[ENV_NAME]`) 은 client bundle 에서 process polyfill 로 fallback 되어 항상 undefined 가 되므로 사용 금지. 머지 + Vercel ENV 설정 + 재배포 후 다음 명령으로 client bundle inline 검증:
+```bash
+NEXT_PUBLIC_BROADCASTER_SIGNALING_TIMEOUT_MS=60000 pnpm build
+grep -rn "60000" .next/static/chunks/ | grep -v sourcemap | head -3
+# → broadcaster signaling timeout 관련 chunk 에서 literal "60000" 발견되어야 함
+```
+
+**검증 마커:** broadcaster 마운트 시 콘솔 1회 출력 `[broadcaster] 코드 버전: v4-signaling-timeout-env` 로 빌드 적용 여부 확인. timeout 발동 시 `[broadcaster] signaling 타임아웃 (Nms) — 세션 재생성` 출력 — 미발동 (정상 연결) 이 정상 상태.
+
 ---
 
 ## 11. cat-identity (고양이 등록 + 식별, 2026-04-25~)

@@ -47,6 +47,9 @@ export default defineConfig({
       "staging/tests/metadataFreezeMirror.test.ts",
       // ICE timeout LTE 마진 (NEXT_PUBLIC_ICE_TIMEOUT_MS ENV 검증 단위 테스트):
       "src/lib/webrtc/__tests__/iceConnectionTimeoutMs.test.ts",
+      // Broadcaster signaling 타임아웃 ENV 검증 단위 테스트
+      // (NEXT_PUBLIC_BROADCASTER_SIGNALING_TIMEOUT_MS, viewer ICE timeout 과 짝):
+      "src/lib/webrtc/__tests__/broadcasterSignalingTimeoutMs.test.ts",
     ],
     exclude: ["node_modules", "tests", "staging/tests/node_modules"],
     // jsdom 으로 전환: sampling 테스트가 document.hidden / visibilitychange / setInterval 을 사용.

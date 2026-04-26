@@ -9,7 +9,7 @@ import { configurePeerConnectionHandlers } from "@/lib/webrtc/configurePeerConne
 import { setupSignalingAndNotify } from "@/hooks/useBroadcasterSignalingPoll";
 import { logBroadcasterWebRtcEvent, type WebRtcLogEvent } from "@/lib/webrtc/webrtcConnectionLogger";
 
-const BROADCAST_CODE_VERSION = "v3-signaling-timeout";
+const BROADCAST_CODE_VERSION = "v4-signaling-timeout-env";
 /** 방송 상태 페이즈 */
 export type BroadcastPhase = "loading" | "unpaired" | "idle" | "acquiring" | "ready" | "connecting" | "live" | "error";
 /** 디바이스 인증 정보 */

@@ -8,6 +8,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { decodeSdpFromDatabaseColumn, encodePlainSdpForDatabaseColumn } from "@/lib/webrtc/sessionDescriptionPayload";
 import { normalizeBroadcasterSignalingRpcPayload, parseViewerIceCandidatesFromRpcPayload } from "@/lib/webrtc/broadcasterSignalingRpcPayload";
+import { getBroadcasterSignalingTimeoutMs } from "@/lib/webrtc/broadcasterSignalingTimeoutMs";
 import type { BroadcastPhase } from "@/hooks/useBroadcasterSignaling";
 
 /** setupSignalingAndNotify 에 필요한 파라미터 */
@@ -192,17 +193,24 @@ export async function setupSignalingAndNotify(params: SetupSignalingAndNotifyPar
     void pollSignalingOnce();
   }, 400);
 
-  /* ── ④ signaling 타임아웃 — 15초 이내에 answer 미수신 시 세션 재생성 ── */
+  /* ── ④ signaling 타임아웃 — answer 미수신 시 세션 재생성 ──
+   * 목적: viewer 가 LTE 등 느린 망에서 ICE 협상 + answer 회신을 마치기 전에
+   *       broadcaster 가 세션을 폐기/재생성하면 DB 폭증 + lock 경합이 발생.
+   * ENV : NEXT_PUBLIC_BROADCASTER_SIGNALING_TIMEOUT_MS (단위: ms)
+   * 단위: ms (Number 정수, 허용 범위 [1000, 300000])
+   * fallback: 미설정/비정상 시 15000ms — CLAUDE.md #13 무손상 (기존 동작 유지). */
+  const signalingTimeoutMs = getBroadcasterSignalingTimeoutMs();
   if (signalingTimeoutRef.current) clearTimeout(signalingTimeoutRef.current);
   signalingTimeoutRef.current = setTimeout(() => {
     signalingTimeoutRef.current = null;
     if (peerConnectionRef.current?.connectionState !== "connected") {
+      console.warn(`[broadcaster] signaling 타임아웃 (${signalingTimeoutMs}ms) — 세션 재생성`);
       void (async () => {
         await cleanupPeerResourcesOnly(true);
         restartBroadcast();
       })();
     }
-  }, 15_000);
+  }, signalingTimeoutMs);
 
   /* ── ⑤ 뷰어에게 새 세션 정보를 즉시 전달 (DB 폴링 대기 없이 바로 연결 가능) ── */
   if (effectiveHomeId) {
